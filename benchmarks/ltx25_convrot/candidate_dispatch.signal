@@ -1,0 +1,3 @@
+pilot: candidate-e-v100-fp32rot-v1
+reference: R0 run 43311535571 (PASS)
+strict: one candidate; no pip; no concurrent workflows; known failing shape N4096 K2048 excluded; bounded temporary FP16 expansion; static numerical adapter preflight before model load.

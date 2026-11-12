@@ -39,8 +39,8 @@ SETTINGS = {
     "audio_prompt_type": "",
     "video_prompt_type": "",
     "image_mode": 0,
-    "spatial_upsampling": "disabled",
-    "temporal_upsampling": "disabled",
+    "spatial_upsampling": "",
+    "temporal_upsampling": "",
 }
 
 

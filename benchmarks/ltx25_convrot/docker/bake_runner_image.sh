@@ -30,23 +30,32 @@ assert torchaudio.__version__.startswith("2.10.0+cu128")
 print("Current tested runtime:",torch.__version__)
 PY
 
-echo "=== Snapshot only installed Python wheels (not runner credentials/models) ==="
-CONTEXT="$(mktemp -d "${LTX25_BUILD_ROOT:-$HOME}/ltx25-bake.XXXXXXXX")"
-echo "Build context: $CONTEXT"
-SITE="$(docker exec "$CONTAINER" "$SRC_VENV/bin/python" -c \
-  'import site; print(next(p for p in site.getsitepackages() if p.endswith("site-packages")))')"
-[[ "$SITE" == "$SRC_VENV/lib/python3.12/site-packages" ]] || die "Unexpected venv package path: $SITE"
-mkdir -p "$CONTEXT/site-packages"
-docker cp "$CONTAINER:$SITE/." "$CONTEXT/site-packages/"
-docker exec "$CONTAINER" "$SRC_VENV/bin/python" -m pip freeze --all > "$CONTEXT/freeze.txt"
+echo "=== Stage package snapshot (never copy runner credentials/models) ==="
+if [[ -n "${LTX25_BUILD_CONTEXT:-}" ]]; then
+  CONTEXT="$LTX25_BUILD_CONTEXT"
+  [[ -d "$CONTEXT/site-packages" && -s "$CONTEXT/freeze.txt" ]] || \
+    die "Incomplete reusable context: $CONTEXT"
+  echo "Reusing existing package snapshot: $CONTEXT"
+else
+  CONTEXT="$(mktemp -d "${LTX25_BUILD_ROOT:-$HOME}/ltx25-bake.XXXXXXXX")"
+  echo "New build context: $CONTEXT"
+  SITE="$(docker exec "$CONTAINER" "$SRC_VENV/bin/python" -c \
+    'import site; print(next(p for p in site.getsitepackages() if p.endswith("site-packages")))')"
+  [[ "$SITE" == "$SRC_VENV/lib/python3.12/site-packages" ]] || \
+    die "Unexpected venv package path: $SITE"
+  mkdir -p "$CONTEXT/site-packages"
+  docker cp "$CONTAINER:$SITE/." "$CONTEXT/site-packages/"
+  docker exec "$CONTAINER" "$SRC_VENV/bin/python" -m pip freeze --all > "$CONTEXT/freeze.txt"
+fi
 cp "$SCRIPT_DIR/Dockerfile.snapshot" "$CONTEXT/Dockerfile"
 
 echo "=== Build versioned runner image $TAG ==="
 DOCKER_BUILDKIT=1 docker build --progress=plain \
   --build-arg "BASE_IMAGE=$BASE" -t "$TAG" \
   -f "$CONTEXT/Dockerfile" "$CONTEXT"
-docker run --rm --entrypoint "$DEST_VENV/bin/python" "$TAG" \
-  -c 'import torch,matplotlib,onnxruntime; print("BAKED",torch.__version__)'
+# BuildKit has no GPU; the runtime test is the correct place for SM70.
+docker run --rm --gpus all --entrypoint "$DEST_VENV/bin/python" "$TAG" \
+  -c 'import torch,matplotlib,onnxruntime; assert torch.cuda.is_available(); caps=[torch.cuda.get_device_capability(i) for i in range(torch.cuda.device_count())]; assert (7,0) in caps, caps; assert "sm_70" in torch.cuda.get_arch_list(), torch.cuda.get_arch_list(); print("BAKED_SM70_OK",torch.__version__,caps)'
 
 echo "=== Prepare existing runner, without restart or changing its mounts ==="
 docker exec -u root "$CONTAINER" bash -lc '

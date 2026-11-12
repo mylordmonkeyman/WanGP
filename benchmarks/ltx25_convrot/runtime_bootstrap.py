@@ -47,6 +47,7 @@ GROUPS = [
 
 KNOWN_MISSING = {
     "psutil": "psutil",
+    "onnxruntime": "onnxruntime>=1.22.0",
     "diffusers": "diffusers==0.36.0",
     "transformers": "transformers==4.54.0",
     "accelerate": "accelerate==1.9.0",
@@ -83,6 +84,21 @@ KNOWN_MISSING = {
     "speechbrain": "speechbrain==1.0.3",
     "transformers": "transformers==4.54.0",
     "decord": "decord",
+    "mido": "mido==1.3.3",
+    "symusic": "symusic==0.6.0",
+    "pretty_midi": "pretty_midi==0.2.11.post0",
+    "mir_eval": "mir_eval==0.8.2",
+    "pyloudnorm": "pyloudnorm",
+    "einshape": "einshape==1.0",
+    "mcp": "mcp==1.30.0",
+    "ffmpeg": "ffmpeg-python",
+    "requests": "requests",
+    "skimage": "scikit-image>=0.26",
+    "segment_anything": "segment-anything",
+    "xatlas": "xatlas",
+    "fast_simplification": "fast-simplification",
+    "numba": "numba",
+    "pydantic": "pydantic==2.11.10",
     "ftfy": "ftfy",
     "sentence_transformers": "sentence-transformers",
     "tokenizers": "tokenizers",
@@ -123,6 +139,7 @@ PROBES = [
     "models.ltx2.ltx_core.model.transformer",
     "models.ltx2.ltx_pipelines.distilled",
     "models.ltx2.ltx2",
+    "wgp_cli_help",
 ]
 
 
@@ -154,6 +171,10 @@ def pip_install(packages, pyindex=None):
 
 
 def probe_import(module):
+    if module == "wgp_cli_help":
+        # Headless --help exits after import/CLI option registration,
+        # without loading checkpoints, generating, or starting a web server.
+        return run([PYTHON, "wgp.py", "--help"], timeout=120)
     script = "import importlib; importlib.import_module(" + repr(module) + ");print('IMPORT_OK')"
     return run([PYTHON, "-c", script], timeout=100)
 

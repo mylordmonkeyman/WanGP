@@ -1,0 +1,88 @@
+name: LTX-2.5 V100 Candidate E opt-in video pilot
+
+# Explicitly triggered. Ordinary pushes of CUDA/Python sources start no GPU job.
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths:
+      - benchmarks/ltx25_convrot/candidate_dispatch.signal
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    name: Explicit FP32-rotation cuBLAS Candidate E, bounded transient scratch
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 120
+    env:
+      WAN2GP_LTX25_CUBLAS_E_MODE: fp32rot
+      LTX25_BENCH_VARIANT: e_fp32rot
+      LTX25_CUBLAS_E_LIB: ${{ runner.temp }}/libltx25_cublas_e.so
+    steps:
+      - name: Checkout frozen candidate code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Check known-good baseline and runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(nvidia-smi --query-gpu=uuid --format=csv,noheader | wc -l)" -eq 1
+          nvidia-smi -L
+          test -s /cache/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test -s /cache/ltx25/checkpoints/ltx-2.5-temporal-upscaler-x2-1.0_bf16.safetensors
+          test -s /cache/ltx25/checkpoints/ltx-2.5-22b_diffusion_video_vae_bf16.safetensors
+          find /cache/ltx25/videos/r0_baseline -maxdepth 1 -type f -name '*.mp4' | grep -q .
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/runtime_validate_baked.py
+
+      - name: Compile SM70 cuBLAS FP16-input FP32-output Candidate E
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_cublas_e.cu \
+            -lcublas -o "$LTX25_CUBLAS_E_LIB"
+          test -s "$LTX25_CUBLAS_E_LIB"
+
+      - name: Generate matched-seed separate Candidate E clip
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/wgp_baseline.py
+
+      - name: Publish candidate result without touching R0 report
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 benchmarks/ltx25_convrot/publish_candidate_status.py
+
+      - name: Assert actual candidate ConvRot calls and one generated video
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          f=Path("/cache/ltx25/results") / f"runtime_candidate_{os.environ['GITHUB_SHA'][:12]}.json"
+          assert f.is_file(), f"Candidate report missing: {f}"
+          r=json.loads(f.read_text())
+          print("CANDIDATE_STATUS",r.get("status"),"COUNTERS",r.get("candidate_counters"))
+          assert r.get("status")=="PASS",r.get("blocker",r.get("status"))
+          assert r.get("candidate_counters",{}).get("used",0)>0,"No Candidate E forwards were used"
+          assert len(r.get("videos",[]))==1,"Expected one new candidate video"
+          PY

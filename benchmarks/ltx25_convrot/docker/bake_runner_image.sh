@@ -30,45 +30,6 @@ assert torchaudio.__version__.startswith("2.10.0+cu128")
 print("Current tested runtime:",torch.__version__)
 PY
 
-echo "=== Verify and stage pinned missing LTX-2.5 HDR weights (outside image) ==="
-docker exec -i "$CONTAINER" "$SRC_VENV/bin/python" - <<'PY'
-import hashlib, shutil
-from pathlib import Path
-from huggingface_hub import HfApi, hf_hub_download
-repo="DeepBeepMeep/LTX-2"
-rev="0e281e1132633c9ff66e1891c045c533e785ce67"
-names=[
-  "ltx-2.5-22b-ic-lora-sdr-to-hdr-scene-emb.safetensors",
-  "ltx-2.5-22b-ic-lora-sdr-to-hdr-1.0.safetensors",
-]
-dest=Path("/cache/ltx25/checkpoints")
-dest.mkdir(parents=True,exist_ok=True)
-index={s.rfilename:s for s in HfApi().model_info(repo,revision=rev,files_metadata=True).siblings}
-total=0
-for name in names:
-    entry=index.get(name)
-    if not entry: raise RuntimeError(f"Missing from pinned revision: {name}")
-    if not entry.lfs or not entry.lfs.get("sha256"): raise RuntimeError(f"No LFS SHA256: {name}")
-    total+=entry.size or entry.lfs["size"]
-if total>8*1024**3: raise RuntimeError("8 GiB HDR download cap exceeded")
-if shutil.disk_usage(dest).free < total+2*1024**3:
-    raise RuntimeError("Insufficient disk for HDR assets")
-for name in names:
-    entry=index[name]; size=entry.size or entry.lfs["size"]
-    sha=entry.lfs["sha256"]; path=dest/name
-    if path.is_symlink(): raise RuntimeError(f"Refusing symlink: {path}")
-    if not path.is_file() or path.stat().st_size!=size:
-        print("Downloading", name, f"{size:,} bytes",flush=True)
-        got=Path(hf_hub_download(repo_id=repo,revision=rev,filename=name,local_dir=str(dest)))
-        if got!=path: raise RuntimeError(f"Unexpected path: {got}")
-    if path.stat().st_size!=size: raise RuntimeError(f"Bad size: {name}")
-    h=hashlib.sha256()
-    with path.open("rb") as f:
-        for b in iter(lambda:f.read(16*1024*1024),b""):h.update(b)
-    if h.hexdigest()!=sha: raise RuntimeError(f"SHA256 mismatch: {name}")
-    print("VERIFIED",name,flush=True)
-PY
-
 echo "=== Snapshot only installed Python wheels (not runner credentials/models) ==="
 CONTEXT="$(mktemp -d "${LTX25_BUILD_ROOT:-$HOME}/ltx25-bake.XXXXXXXX")"
 echo "Build context: $CONTEXT"

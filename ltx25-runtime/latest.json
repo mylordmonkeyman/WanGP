@@ -1,36 +1,40 @@
 {
   "baseline": {
-    "blocker": "Full LTX-2.5 import prerequisites not yet satisfied",
+    "blocker": "",
     "candidate_e_enabled": false,
     "checkpoint_visible": true,
     "configured_dryrun": {
-      "elapsed_seconds": null,
-      "returncode": null,
-      "tail": ""
+      "elapsed_seconds": 12.5,
+      "returncode": 0,
+      "tail": "\u001b[1m\u001b[93m*********************** WanGP v19.291 - Copyright (c) 2024-2026 DeepBeepMeep ***********************\u001b[0m\n\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\n[RAM] MMGP RAM Allocator: the RAM of freed CPU tensors goes back to the system\n[VRAM] MMGP Optimized VRAM Allocator, spilling into RAM when VRAM is full\n/tmp/tmp3mujl1iw/cuda_utils.c:7:10: fatal error: Python.h: No such file or directory\n    7 | #include <Python.h>\n      |          ^~~~~~~~~~\ncompilation terminated.\nSwitching to FP16 models when possible as GPU architecture doesn't support optimed BF16 Kernels\n[INT8] Backend: PyTorch (setting: disabled).\n[FP8] Backend: PyTorch (setting: pytorch).\nWanGP CLI Mode - Processing settings: /cache/ltx25/baseline_49frame_settings.json\nOutput directory: /cache/ltx25/videos/r0_baseline\n[load_settings] Loading settings from: /cache/ltx25/baseline_49frame_settings.json\n[load_settings] Task 1/1 ready, ID: 1, model: ltx2_25_22B_distilled\nLoaded 1 task(s)\n\n[DRY-RUN] Queue validation:\n  Task 1: model=ltx2_25_22B_distilled, steps=8, frames=49\n          prompt: A sunlit coastal boardwalk in the early morning. A...\n          [OK]\n\n[DRY-RUN] Validation complete. 1/1 task(s) valid.\n"
     },
     "frames": 49,
     "gemma_checkpoint_visible": true,
     "generation": {
-      "elapsed_seconds": null,
-      "returncode": null,
-      "tail": ""
+      "elapsed_seconds": 13.7,
+      "returncode": 1,
+      "tail": "\u001b[1m\u001b[93m*********************** WanGP v19.291 - Copyright (c) 2024-2026 DeepBeepMeep ***********************\u001b[0m\n\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\n[RAM] MMGP RAM Allocator: the RAM of freed CPU tensors goes back to the system\n[VRAM] MMGP Optimized VRAM Allocator, spilling into RAM when VRAM is full\n/tmp/tmpeyyn_jse/cuda_utils.c:7:10: fatal error: Python.h: No such file or directory\n    7 | #include <Python.h>\n      |          ^~~~~~~~~~\ncompilation terminated.\nSwitching to FP16 models when possible as GPU architecture doesn't support optimed BF16 Kernels\n[INT8] Backend: PyTorch (setting: disabled).\n[FP8] Backend: PyTorch (setting: pytorch).\nWanGP CLI Mode - Processing settings: /cache/ltx25/baseline_49frame_settings.json\nOutput directory: /cache/ltx25/videos/r0_baseline\n[load_settings] Loading settings from: /cache/ltx25/baseline_49frame_settings.json\n[load_settings] Task 1/1 ready, ID: 1, model: ltx2_25_22B_distilled\nLoaded 1 task(s)\n\n[Task 1/1] A sunlit coastal boardwalk in the early morning. A small red...\nltx-2.5-22b-ic-lora-sdr-to-hdr-scene-emb.safetensors is missing and WanGP runs offline (--offline): copy it into a checkpoints folder, or run once without --offline to download it\nDownload URL: https://huggingface.co/DeepBeepMeep/LTX-2/resolve/main/ltx-2.5-22b-ic-lora-sdr-to-hdr-scene-emb.safetensors\nLoading...\n\n  [0/1] Loading - Preparing Models\n  [ERROR] ltx-2.5-22b-ic-lora-sdr-to-hdr-scene-emb.safetensors is missing and WanGP runs offline (--offline): copy it into a checkpoints folder, or run once without --offline to download it\nDownload URL: https://huggingface.co/DeepBeepMeep/LTX-2/resolve/main/ltx-2.5-22b-ic-lora-sdr-to-hdr-scene-emb.safetensors\n\n==================================================\nQueue completed: 0/1 tasks in 1.1s\n"
     },
-    "gpu_preflight": null,
+    "gpu_preflight": {
+      "busy": false,
+      "entries": [],
+      "reason": ""
+    },
     "initial_dryrun": {
-      "returncode": null,
-      "tail": ""
+      "returncode": 0,
+      "tail": "nto RAM when VRAM is full\n/tmp/tmp5u_6nl4m/cuda_utils.c:7:10: fatal error: Python.h: No such file or directory\n    7 | #include <Python.h>\n      |          ^~~~~~~~~~\ncompilation terminated.\nSwitching to FP16 models when possible as GPU architecture doesn't support optimed BF16 Kernels\n[INT8] Backend: PyTorch (setting: disabled).\n[FP8] Backend: PyTorch (setting: pytorch).\nWanGP CLI Mode - Processing settings: /cache/ltx25/baseline_49frame_settings.json\nOutput directory: /cache/ltx25/videos/r0_baseline\n[load_settings] Loading settings from: /cache/ltx25/baseline_49frame_settings.json\n[load_settings] Task 1/1 ready, ID: 1, model: ltx2_25_22B_distilled\nLoaded 1 task(s)\n\n[DRY-RUN] Queue validation:\n  Task 1: model=ltx2_25_22B_distilled, steps=8, frames=49\n          prompt: A sunlit coastal boardwalk in the early morning. A...\n          [OK]\n\n[DRY-RUN] Validation complete. 1/1 task(s) valid.\n"
     },
     "model_type": "ltx2_25_22B_distilled",
     "resolution": "576x320",
     "seed": 20261112,
-    "status": "BLOCKED",
+    "status": "GENERATION_BLOCKED",
     "video_dir": "/cache/ltx25/videos/r0_baseline",
     "videos": []
   },
   "job_status_at_publish": "success",
   "note": "Only the original WanGP INT8 fallback was used for any output; Candidate E remains disabled.",
-  "run_id": "43301779314",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43301779314",
+  "run_id": "43302477091",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43302477091",
   "runtime_bootstrap": {
     "error": "",
     "imports": [
@@ -60,36 +64,36 @@
         "status": "PASS"
       },
       {
-        "detail": "RAM of freed CPU tensors goes back to the system\n[VRAM] MMGP Optimized VRAM Allocator, spilling into RAM when VRAM is full\n/tmp/tmp0j_oohjr/cuda_utils.c:7:10: fatal error: Python.h: No such file or directory\n    7 | #include <Python.h>\n      |          ^~~~~~~~~~\ncompilation terminated.\nSwitching to FP16 models when possible as GPU architecture doesn't support optimed BF16 Kernels\n[INT8] Backend: PyTorch (setting: disabled).\n[FP8] Backend: PyTorch (setting: pytorch).\nWanGP CLI Mode - Processing settings: /cache/ltx25/baseline_49frame_settings.json\nOutput directory: /cache/ltx25/videos/r0_baseline\n[load_settings] Loading settings from: /cache/ltx25/baseline_49frame_settings.json\n[load_settings] Spatial upsampling method 'disabled' is not supported by the current WanGP install for task #1. Skipping.\n[ERROR] Spatial upsampling method 'disabled' is not supported by the current WanGP install\n",
+        "detail": "nto RAM when VRAM is full\n/tmp/tmpeo_hipjf/cuda_utils.c:7:10: fatal error: Python.h: No such file or directory\n    7 | #include <Python.h>\n      |          ^~~~~~~~~~\ncompilation terminated.\nSwitching to FP16 models when possible as GPU architecture doesn't support optimed BF16 Kernels\n[INT8] Backend: PyTorch (setting: disabled).\n[FP8] Backend: PyTorch (setting: pytorch).\nWanGP CLI Mode - Processing settings: /cache/ltx25/baseline_49frame_settings.json\nOutput directory: /cache/ltx25/videos/r0_baseline\n[load_settings] Loading settings from: /cache/ltx25/baseline_49frame_settings.json\n[load_settings] Task 1/1 ready, ID: 1, model: ltx2_25_22B_distilled\nLoaded 1 task(s)\n\n[DRY-RUN] Queue validation:\n  Task 1: model=ltx2_25_22B_distilled, steps=8, frames=49\n          prompt: A sunlit coastal boardwalk in the early morning. A...\n          [OK]\n\n[DRY-RUN] Validation complete. 1/1 task(s) valid.\n",
         "name": "wgp_cli_dryrun",
-        "status": "ERROR"
+        "status": "PASS"
       }
     ],
-    "status": "BLOCKED",
+    "status": "PASS",
     "steps": [
       {
         "detail": "",
         "name": "torch_vision",
         "returncode": 0,
-        "seconds": 2.3
+        "seconds": 2.4
       },
       {
         "detail": "",
         "name": "hub_compat",
         "returncode": 0,
-        "seconds": 2.2
+        "seconds": 2.3
       },
       {
         "detail": "",
         "name": "model_runtime",
         "returncode": 0,
-        "seconds": 3.1
+        "seconds": 3.2
       },
       {
         "detail": "",
         "name": "media",
         "returncode": 0,
-        "seconds": 2.4
+        "seconds": 2.5
       },
       {
         "detail": "",
@@ -101,5 +105,5 @@
     "torch_after": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n",
     "torch_initial": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n"
   },
-  "source_sha": "75500e2bc6490d669dbb4352f095dcd6be818721"
+  "source_sha": "915e8e61347a3bb9f98165ccb94dcd300a9efecd"
 }

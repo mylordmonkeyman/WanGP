@@ -1,5 +1,4 @@
-run: v7
-previous_run: 43301779314
-cause: CLI validation rejected spatial_upsampling='disabled'; fixed to empty strings for both spatial and temporal upsampling.
-purpose: one serialized bootstrap, real CLI dry-run and at most one unmodified R0 49-frame generation.
-no_retries: true
+run: v8
+previous_run: 43302477091
+purpose: First runtime baseline after verified pre-baked SM70 environment, Python headers, and checksum-verified missing HDR weights.
+policy: one workflow, no package installation, no retries, only one reference clip.

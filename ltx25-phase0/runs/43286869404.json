@@ -1,0 +1,84 @@
+{
+  "actual_model_shapes_observed": false,
+  "capability": "7.0",
+  "checkpoint_blocker": "Checkpoint not visible to runner; mount existing host weights read-only at /models or intentionally stage at /cache/ltx25/checkpoints.",
+  "checkpoint_inventory_error": "",
+  "checkpoint_layer_count": null,
+  "checkpoint_metadata_verified": false,
+  "checkpoint_visible": false,
+  "cuda": "12.8",
+  "full_pipeline_measured": false,
+  "gpu": "Tesla V100-PCIE-32GB",
+  "job_status": "success",
+  "note": "Synthetic diagnostic only; not an LTX-2.5 model benchmark or production accuracy gate.",
+  "phase0_probe_present": true,
+  "rotation_pass_count": 6,
+  "rotation_results": [
+    {
+      "K": 4096,
+      "M": 16,
+      "error": "",
+      "group_size": 16,
+      "max_abs": 0.0096435546875,
+      "median_ms": 0.0911,
+      "p99_abs": 0.0062255859375,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 256,
+      "error": "",
+      "group_size": 16,
+      "max_abs": 0.0152587890625,
+      "median_ms": 0.0973,
+      "p99_abs": 0.006103515625,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 16,
+      "error": "",
+      "group_size": 64,
+      "max_abs": 0.01068115234375,
+      "median_ms": 0.0983,
+      "p99_abs": 0.00616455078125,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 256,
+      "error": "",
+      "group_size": 64,
+      "max_abs": 0.01526641845703125,
+      "median_ms": 0.0993,
+      "p99_abs": 0.0061092376708984375,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 16,
+      "error": "",
+      "group_size": 256,
+      "max_abs": 0.007809638977050781,
+      "median_ms": 0.0911,
+      "p99_abs": 0.0060983747243881226,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 256,
+      "error": "",
+      "group_size": 256,
+      "max_abs": 0.015533447265625,
+      "median_ms": 0.1352,
+      "p99_abs": 0.006099700927734375,
+      "status": "PASS"
+    }
+  ],
+  "rotation_test_count": 6,
+  "run_id": "43286869404",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43286869404",
+  "source_sha": "aadec52c51aab9d6daa546eafdab31c1f53423b9",
+  "timestamp_utc": "2026-11-12T19:07:42.475191+00:00",
+  "torch": "2.10.0+cu128"
+}

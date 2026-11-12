@@ -2,42 +2,73 @@
   "baseline": {
     "blocker": "",
     "candidate_e_enabled": false,
-    "checkpoint_visible": null,
+    "checkpoint_visible": true,
     "configured_dryrun": {
-      "elapsed_seconds": null,
-      "returncode": null,
-      "tail": ""
+      "elapsed_seconds": 24.1,
+      "returncode": 0,
+      "tail": "/ltx2/ltx-2.5-22b-ic-lora-sdr-to-hdr-1.0.safetensors'\n[INT8] Backend: PyTorch (setting: disabled).\n[FP8] Backend: PyTorch (setting: pytorch).\n\nDownloading ffmpeg-master-latest-linux64-gpl-shared.tar.xz:   0%|          | 0.00/71.8M [00:00<?, ?B/s]\nDownloading ffmpeg-master-latest-linux64-gpl-shared.tar.xz:   1%|          | 819k/71.8M [00:00<00:08, 8.17MB/s]\nDownloading ffmpeg-master-latest-linux64-gpl-shared.tar.xz:   3%|\u258e         | 2.42M/71.8M [00:00<00:05, 12.8MB/s]\nDownloading ffmpeg-master-latest-linux64-gpl-shared.tar.xz:   7%|\u258b         | 5.03M/71.8M [00:00<00:03, 18.8MB/s]\nDownloading ffmpeg-master-latest-linux64-gpl-shared.tar.xz:  13%|\u2588\u258e        | 9.18M/71.8M [00:00<00:02, 27.7MB/s]\nDownloading ffmpeg-master-latest-linux64-gpl-shared.tar.xz:  22%|\u2588\u2588\u258f       | 15.9M/71.8M [00:00<00:01, 42.0MB/s]\nDownloading ffmpeg-master-latest-linux64-gpl-shared.tar.xz:  35%|\u2588\u2588\u2588\u258d      | 24.8M/71.8M [00:00<00:00, 58.0MB/s]\nDownloading ffmpeg-master-latest-linux64-gpl-shared.tar.xz:  55%|\u2588\u2588\u2588\u2588\u2588\u258d    | 39.2M/71.8M [00:00<00:00, 85.8MB/s]\nDownloading ffmpeg-master-latest-linux64-gpl-shared.tar.xz:  77%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258b  | 55.0M/71.8M [00:00<00:00, 109MB/s] \nDownloading ffmpeg-master-latest-linux64-gpl-shared.tar.xz:  99%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258a| 70.9M/71.8M [00:00<00:00, 125MB/s]\nDownloading ffmpeg-master-latest-linux64-gpl-shared.tar.xz: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 71.8M/71.8M [00:00<00:00, 79.1MB/s]\nWanGP CLI Mode - Processing settings: /cache/ltx25/baseline_49frame_settings.json\nOutput directory: /cache/ltx25/videos/r0_baseline\n[load_settings] Loading settings from: /cache/ltx25/baseline_49frame_settings.json\n[load_settings] Task 1/1 ready, ID: 1, model: ltx2_25_22B_distilled\nLoaded 1 task(s)\n\n[DRY-RUN] Queue validation:\n  Task 1: model=ltx2_25_22B_distilled, steps=8, frames=49\n          prompt: A sunlit coastal boardwalk in the early morning. A...\n          [OK]\n\n[DRY-RUN] Validation complete. 1/1 task(s) valid.\n"
     },
-    "frames": null,
-    "gemma_checkpoint_visible": null,
+    "frames": 49,
+    "gemma_checkpoint_visible": true,
     "generation": {
-      "elapsed_seconds": null,
-      "returncode": null,
-      "tail": ""
+      "elapsed_seconds": 113.3,
+      "returncode": 0,
+      "tail": "48.3s / 48.3s\n  [0/3] Denoising Second Phase | 48.3s\n  0%|          | 0/3 [00:00<?, ?it/s]\n  [0/3] Denoising Second Phase | 53.3s\n                                     \nAutomatic VRAM preload of 'transformer': 0 of its 64 blocks to keep in VRAM (the budget's preload until measured)\n\n  0%|          | 0/3 [00:05<?, ?it/s]\n                                     \nStaging ring of 1107.3 MB for the blocks that are not pinned (largest 369.1 MB)\n\n  0%|          | 0/3 [00:06<?, ?it/s]\n  [0/3] Denoising Second Phase | 55.0s\n  [0/3] Denoising Second Phase | 56.0s\n  [0/3] Denoising Second Phase | 57.0s\n  [0/3] Denoising Second Phase | 58.0s\n  [0/3] Denoising Second Phase | 59.0s\n  [0/3] Denoising Second Phase | 60.0s\n  [1/3] Denoising Second Phase | 1m 00s / 1m 26s\n 33%|\u2588\u2588\u2588\u258e      | 1/3 [00:12<00:25, 12.64s/it]\n                                             \nAutomatic VRAM preload of 'transformer': 64 of its 64 blocks to keep in VRAM (358 MB of activations measured)\n\n 33%|\u2588\u2588\u2588\u258e      | 1/3 [00:12<00:25, 12.64s/it]\n  [1/3] Denoising Second Phase | 1m 02s / 1m 26s\n  [1/3] Denoising Second Phase | 1m 03s / 1m 26s\n  [1/3] Denoising Second Phase | 1m 04s / 1m 26s\n  [1/3] Denoising Second Phase | 1m 05s / 1m 26s\n  [1/3] Denoising Second Phase | 1m 06s / 1m 26s\n 67%|\u2588\u2588\u2588\u2588\u2588\u2588\u258b   | 2/3 [00:18<00:08,  8.77s/it]\n  [2/3] Denoising Second Phase | 1m 07s / 1m 16s\n                                             \nAutomatic VRAM preload of 'transformer': 64 of its 64 blocks to keep in VRAM (360 MB of activations measured)\n\n 67%|\u2588\u2588\u2588\u2588\u2588\u2588\u258b   | 2/3 [00:18<00:08,  8.77s/it]\n  [2/3] Denoising Second Phase | 1m 08s / 1m 16s\n  [2/3] Denoising Second Phase | 1m 09s / 1m 16s\n  [2/3] Denoising Second Phase | 1m 10s / 1m 16s\n  [2/3] Denoising Second Phase | 1m 11s / 1m 16s\n  [2/3] Denoising Second Phase | 1m 12s / 1m 16s\n100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:24<00:00,  7.51s/it]\n100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:24<00:00,  8.24s/it]\n\n  [3/3] VAE Decoding | 1m 13s / 1m 13s          \n  [0/7] VAE Decoding | 1m 13s         \n[Kernels] Streamed Conv3D: pytorch (fast).\n\n  [1/7] VAE Decoding | 1m 14s / 1m 19s\n[Kernels] PixelNorm + SiLU: pytorch (fast).\n\n  [1/7] VAE Decoding | 1m 17s / 1m 19s\n  [7/7] VAE Decoding | 1m 17s / 1m 17s\n  [0/1] Audio VAE Decoding            \n  [0/1] Saving File 2026-11-12-2... slowly crosses the blue harbor.mp4\n  [0/1] Saving File 2026-11-12-2... slowly crosses the blue harbor.mp4\nError saving metadata to MP4 /cache/ltx25/videos/r0_baseline/2026-11-12-21h37m13s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4: No module named 'mutagen'\nVideo file saved to Path: /cache/ltx25/videos/r0_baseline/2026-11-12-21h37m13s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4\n\n\n  Task 1 completed\n\n==================================================\nQueue completed: 1/1 tasks in 1m 37s\n"
     },
-    "gpu_preflight": null,
+    "gpu_preflight": {
+      "busy": false,
+      "entries": [],
+      "reason": ""
+    },
     "initial_dryrun": {
       "returncode": null,
       "tail": ""
     },
-    "model_type": null,
-    "resolution": null,
-    "seed": null,
-    "status": "not_run",
-    "video_dir": null,
-    "videos": []
+    "model_type": "ltx2_25_22B_distilled",
+    "resolution": "576x320",
+    "seed": 20261112,
+    "status": "PASS",
+    "video_dir": "/cache/ltx25/videos/r0_baseline",
+    "videos": [
+      {
+        "filename": "2026-11-12-21h37m13s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+        "path": "/cache/ltx25/videos/r0_baseline/2026-11-12-21h37m13s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+        "size_bytes": 755625
+      }
+    ]
   },
-  "job_status_at_publish": "failure",
+  "job_status_at_publish": "success",
   "note": "Only the original WanGP INT8 fallback was used for any output; Candidate E remains disabled.",
-  "run_id": "43311215908",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43311215908",
+  "run_id": "43311535571",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43311535571",
   "runtime_bootstrap": {
     "error": "",
-    "imports": [],
-    "status": "not_run",
+    "imports": [
+      {
+        "detail": "",
+        "name": "mmgp.offload",
+        "status": "PASS"
+      },
+      {
+        "detail": "",
+        "name": "models.ltx2.ltx_core.model.transformer",
+        "status": "PASS"
+      },
+      {
+        "detail": "",
+        "name": "models.ltx2.ltx_pipelines.distilled",
+        "status": "PASS"
+      },
+      {
+        "detail": "",
+        "name": "models.ltx2.ltx2",
+        "status": "PASS"
+      }
+    ],
+    "status": "PASS",
     "steps": [],
-    "torch_after": "",
+    "torch_after": "SM70_TORCH_OK 2.10.0+cu128 Python.h=/usr/include/python3.12/Python.h",
     "torch_initial": ""
   },
-  "source_sha": "1112aa285a452401488edfcb4b0d8af49c08f5da"
+  "source_sha": "8b07434191f9a70a774799259b8b69f1e2a181cd"
 }

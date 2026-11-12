@@ -53,6 +53,13 @@ jobs:
             -lcublas -o "$LTX25_CUBLAS_E_LIB"
           test -s "$LTX25_CUBLAS_E_LIB"
 
+      - name: Gate adapter wiring and known-failing-shape exclusion before model loading
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/candidate_adapter_preflight.py
+
       - name: Generate matched-seed separate Candidate E clip
         shell: bash
         run: |

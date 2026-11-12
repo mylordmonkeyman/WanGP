@@ -186,7 +186,7 @@ def main():
             # Adapter logs at interpreter exit. Never label a clip as
             # accelerated when eligible calls did not actually execute.
             import re
-            matches = re.findall(r"\\[LTX25_CUBLAS_E\\] (\\{[^\\n]+\\})",
+            matches = re.findall(r"\[LTX25_CUBLAS_E\] (\{[^\n]+\})",
                                  result["log_tail"])
             if matches:
                 try:

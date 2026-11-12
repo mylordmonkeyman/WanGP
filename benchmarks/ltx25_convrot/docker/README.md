@@ -48,8 +48,8 @@ Use **`deploy_noncompose_runner.py`**, not the old Compose-specific
 `deploy_complete_runner.sh`. The non-Compose script is **dry-run by
 default** and checks that GitHub Actions has no queued/running jobs,
 that this runner is idle, and that the exact expected V100 UUID, bridge
-network, user, entrypoint, restart policy and three host bind mounts
-match the inspected configuration. It carries the existing runner
+network, user, entrypoint, restart policy, CPU/NUMA cpuset restrictions,
+and three host bind mounts match the inspected configuration. It carries the existing runner
 environment through a temporary permission-restricted env file
 without printing credential values, and deletes that file afterward.
 The old container is stopped and renamed with a rollback suffix;

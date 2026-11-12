@@ -1,0 +1,83 @@
+name: LTX-2.5 runtime baseline batch
+
+# One explicitly chosen commit starts this batch. Changes to benchmark code or
+# this workflow do NOT start further GPU jobs. The preexisting smoke and support
+# workflows remain manual-only.
+on:
+  push:
+    branches:
+      - perf/ltx25-convrot-sm70
+    paths:
+      - benchmarks/ltx25_convrot/run_batch_20261112.signal
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  baseline:
+    name: Consolidated Python runtime + optional R0 video baseline
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 150
+    steps:
+      - name: Checkout exact committed batch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify selected V100 and persistent checkpoint cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(nvidia-smi --query-gpu=uuid --format=csv,noheader | wc -l)" -eq 1
+          nvidia-smi -L
+          test -f /cache/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test -f /cache/ltx25/checkpoints/gemma4-12b-ltx-v1/gemma4-12b-ltx-v1_int8_convrot.safetensors
+          /cache/venvs/ltx25-torch210-cu128/bin/python -c 'import torch; assert torch.__version__.startswith("2.10.0+cu128"); assert "sm_70" in torch.cuda.get_arch_list()'
+
+      - name: Consolidated dependency bootstrap and targeted model imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python \
+            benchmarks/ltx25_convrot/runtime_bootstrap.py
+
+      - name: Isolated unmodified WanGP CLI dry-run and one small video baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python \
+            benchmarks/ltx25_convrot/wgp_baseline.py
+
+      - name: Publish sanitized full-batch result
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 benchmarks/ltx25_convrot/publish_runtime_status.py
+
+      - name: Assert runtime and baseline gate after reporting
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          sha=os.environ["GITHUB_SHA"][:12]
+          root=Path("/cache/ltx25/results")
+          boot=json.loads((root/f"runtime_bootstrap_{sha}.json").read_text())
+          base=json.loads((root/f"runtime_baseline_{sha}.json").read_text())
+          print("Bootstrap:",boot.get("status"))
+          print("Baseline:",base.get("status"))
+          if boot.get("status")!="PASS" or base.get("status")!="PASS":
+              raise SystemExit("Runtime or baseline incomplete; see results-branch report (no retries started).")
+          PY

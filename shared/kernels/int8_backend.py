@@ -851,6 +851,18 @@ class _Int8RowProjection:
     @staticmethod
     def supports(module, x):
         qtype = getattr(module, "weight_qtype", None)
+        # The opt-in V100 Candidate E pilot must visit QLinear.forward, not
+        # the MMGP output-row implementation that pre-rotates activations.
+        # Disable that shortcut ONLY for previously passing candidate shapes;
+        # all other shapes (including the failed 4096x2048 family) retain R0.
+        if (os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").lower() == "fp32rot"
+                and qtype is not None and qtype.name == "qint8_convrot"
+                and getattr(module, "_convrot_group_size", 0) == 256
+                and tuple(module.qweight._data.shape) in {
+                    (2048,2048), (4096,4096), (2048,4096),
+                    (4096,16384), (16384,4096), (2048,8192), (8192,2048),
+                }):
+            return False
         if (_backend not in ("pytorch", "triton") or qtype is None or qtype.name not in ("qint8", "qint8_convrot")
                 or triton._is_fake_tensor(x) or torch.compiler.is_compiling() or getattr(module, "activation_qtype", None) is not None):
             return False

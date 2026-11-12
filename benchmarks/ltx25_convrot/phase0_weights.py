@@ -20,6 +20,10 @@ import os
 from pathlib import Path
 import statistics
 import time
+import sys
+
+# GitHub Actions invokes this file by path, so add repository root explicitly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import torch
 import torch.nn.functional as F

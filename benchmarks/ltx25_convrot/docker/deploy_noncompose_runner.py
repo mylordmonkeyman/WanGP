@@ -90,9 +90,16 @@ def require_default(host, config):
     is_default("CpuShares", (0, None))
     is_default("CpuQuota", (0, None))
     is_default("CpuPeriod", (0, None))
-    is_default("CpusetCpus", ("", None))
-    is_default("CpusetMems", ("", None))
-    is_default("PidsLimit", (0, None))
+    # CPU/NUMA affinity is preserved explicitly by main(); never silently
+    # drop cpuset restrictions that keep the V100 on the local NUMA node.
+    for field in ("CpusetCpus", "CpusetMems"):
+        value = host.get(field)
+        if value not in ("", None) and not (
+            isinstance(value, str)
+            and re.fullmatch(r"[0-9]+(?:-[0-9]+)?(?:,[0-9]+(?:-[0-9]+)?)*", value)
+        ):
+            fatal("Unexpected Docker HostConfig." + field + " format")
+    is_default("PidsLimit", (0, -1, None))
     for key in ("Devices", "DeviceCgroupRules", "CapAdd", "CapDrop",
                 "SecurityOpt", "Ulimits", "GroupAdd", "ExtraHosts",
                 "Dns", "DnsOptions", "DnsSearch", "Links", "VolumesFrom",
@@ -181,6 +188,8 @@ def main():
     print("User/entrypoint: runner /usr/local/bin/start-runner.sh")
     print("Mounts:", ", ".join(f"{dst} <- {src}" for dst, src in sorted(actual.items())))
     print("Network/restart: bridge / unless-stopped")
+    print("CPU affinity:", host.get("CpusetCpus") or "unrestricted")
+    print("NUMA mem affinity:", host.get("CpusetMems") or "unrestricted")
     print("Existing environment: preserving", len(vals), "variables without displaying values")
     print("Image size:", img["Size"], "bytes")
     if dry_run:
@@ -199,8 +208,14 @@ def main():
         'assert torch.cuda.is_available() and torch.cuda.get_device_capability(0)==(7,0); '
         'print("COMPLETE_IMAGE_PREFLIGHT_OK",torch.__version__,len(m["files"]))'
     )
+    affinity_args = []
+    for field, flag in (("CpusetCpus", "--cpuset-cpus"),
+                        ("CpusetMems", "--cpuset-mems")):
+        if host.get(field):
+            affinity_args += [flag, host[field]]
     run(["docker", "run", "--rm", "--gpus", "device=" + EXPECTED_GPU,
-         "--entrypoint", "/opt/venvs/ltx25-cu128/bin/python", IMAGE, "-c", check])
+         *affinity_args, "--entrypoint",
+         "/opt/venvs/ltx25-cu128/bin/python", IMAGE, "-c", check])
     # Recheck immediately before stopping old runner.
     safe_github_idle()
 
@@ -210,6 +225,7 @@ def main():
         "--user", "runner", "--entrypoint", "/usr/local/bin/start-runner.sh",
         "--restart", "unless-stopped", "--network", "bridge",
         "--gpus", "device=" + EXPECTED_GPU,
+        *affinity_args,
     ]
     if cfg.get("WorkingDir"):
         command += ["--workdir", cfg["WorkingDir"]]
@@ -244,6 +260,9 @@ def main():
                 fatal("New container missing/incorrect image or not running")
             if new["HostConfig"]["DeviceRequests"][0]["DeviceIDs"] != [EXPECTED_GPU]:
                 fatal("New runner GPU differs")
+            for field in ("CpusetCpus", "CpusetMems"):
+                if (new["HostConfig"].get(field) or "") != (host.get(field) or ""):
+                    fatal("New runner CPU/NUMA affinity differs: " + field)
             if {m["Destination"]: m["Source"] for m in new["Mounts"]} != actual:
                 fatal("New container lost a bind mount")
             run(["docker", "exec", CONTAINER,

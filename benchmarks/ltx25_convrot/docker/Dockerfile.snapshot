@@ -31,8 +31,11 @@ import optimum.quanto
 assert torch.__version__.startswith("2.10.0+cu128"), torch.__version__
 assert torchaudio.__version__.startswith("2.10.0+cu128"), torchaudio.__version__
 assert torchvision.__version__.startswith("0.25.0+cu128"), torchvision.__version__
-assert "sm_70" in torch.cuda.get_arch_list(), torch.cuda.get_arch_list()
-print("LTX25_IMAGE_VERIFIED", sys.executable, torch.__version__, header)
+# Docker BuildKit does not expose NVIDIA GPU devices inside RUN steps.
+# Check CUDA *build support* here; check runtime SM70 only with --gpus.
+assert torch.backends.cuda.is_built(), "PyTorch has no CUDA build"
+assert torch.version.cuda == "12.8", torch.version.cuda
+print("LTX25_IMAGE_VERIFIED_NO_GPU", sys.executable, torch.__version__, header)
 PY
 
 # Keep the base runner's entrypoint and credentials/mount handling unchanged.

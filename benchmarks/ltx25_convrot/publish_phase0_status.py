@@ -61,6 +61,8 @@ def main():
     remote_file = Path(f"/cache/ltx25/results/phase0_remote_header_{sha[:12]}.json")
     remote = json.loads(remote_file.read_text()) if remote_file.exists() else {}
     remote_inv = remote.get("inventory", {})
+    import_path = Path(f"/cache/ltx25/results/runtime_import_{sha[:12]}.json")
+    import_report = json.loads(import_path.read_text()) if import_path.exists() else {}
     manifest_file = Path(f"/cache/ltx25/results/support_manifest_{sha[:12]}.json")
     manifest = json.loads(manifest_file.read_text()) if manifest_file.exists() else {}
     e_path = Path(f"/cache/ltx25/results/phase1_cublas_e_{sha[:12]}.json")
@@ -83,6 +85,14 @@ def main():
         "cuda": report.get("torch_cuda"),
         "phase0_probe_present": bool(report),
         "checkpoint_visible": checkpoint.get("present"),
+        "runtime_import": {
+            "status": import_report.get("status", "not_run"),
+            "weights_loaded": False,
+            "modules": [{"name": x["name"], "status": x["status"],
+                         "error": x.get("error", "")[:300],
+                         "traceback_tail": x.get("traceback_tail", [])}
+                        for x in import_report.get("modules", [])]
+        },
         "support_manifest": {
             "status": manifest.get("status", "not_run"),
             "error": manifest.get("error", "")[:400],

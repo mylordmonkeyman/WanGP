@@ -140,7 +140,7 @@ def main():
             "transformer_quantization": "int8",
             "text_encoder_quantization": "int8",
             "int8_kernels": "disabled",
-            "fp8_kernels": "disabled",
+            "fp8_kernels": "pytorch",
             "transformer_types": ["ltx2_25_22B_distilled"],
             "profile": 0, "video_profile": 0,
             "attention_mode": "sdpa",

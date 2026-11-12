@@ -121,6 +121,14 @@ jobs:
           /cache/venvs/ltx25-torch210-cu128/bin/python \
             benchmarks/ltx25_convrot/phase1_cublas_e.py
 
+      - name: Inventory supporting LTX-2.5/Gemma4 checkpoint sizes (no downloads)
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python -m pip install -q 'huggingface_hub[hf_xet]'
+          /cache/venvs/ltx25-torch210-cu128/bin/python \
+            benchmarks/ltx25_convrot/support_manifest.py
+
       - name: Publish sanitized report to isolated results branch
         if: ${{ always() }}
         env:

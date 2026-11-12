@@ -61,6 +61,8 @@ def main():
     remote_file = Path(f"/cache/ltx25/results/phase0_remote_header_{sha[:12]}.json")
     remote = json.loads(remote_file.read_text()) if remote_file.exists() else {}
     remote_inv = remote.get("inventory", {})
+    audit_file = Path(f"/cache/ltx25/results/precision_audit_{sha[:12]}.json")
+    audit = json.loads(audit_file.read_text()) if audit_file.exists() else {}
     dispatch_path = Path(f"/cache/ltx25/results/phase0_dispatch_{sha[:12]}.json")
     dispatch = json.loads(dispatch_path.read_text()) if dispatch_path.exists() else {}
     import_path = Path(f"/cache/ltx25/results/runtime_import_{sha[:12]}.json")
@@ -87,6 +89,24 @@ def main():
         "cuda": report.get("torch_cuda"),
         "phase0_probe_present": bool(report),
         "checkpoint_visible": checkpoint.get("present"),
+        "precision_audit": {
+            "status": audit.get("status", "not_run"),
+            "error": audit.get("error", "")[:350],
+            "test_cases": audit.get("total_cases"),
+            "gate_passes": audit.get("gate_passes"),
+            "gate_failures": audit.get("gate_failures"),
+            "execution_errors": audit.get("execution_errors"),
+            "real_model_activations": False,
+            "by_shape": [{
+                "N": layer["N"], "K": layer["K"], "name": layer["name"],
+                "total": len(layer.get("cases", [])),
+                "passed": sum(bool(t.get("gate")) for t in layer.get("cases", [])),
+                "failed_seeds": [{"M":t["M"],"seed":t["seed"],
+                                  "R0_p99":t.get("R0_p99"),
+                                  "E_p99":t.get("candidate_p99")}
+                                 for t in layer.get("cases", []) if not t.get("gate", False)][:3],
+            } for layer in audit.get("results", [])]
+        },
         "isolated_dispatch": {
             "status": dispatch.get("status", "not_run"),
             "error": dispatch.get("error", "")[:300],

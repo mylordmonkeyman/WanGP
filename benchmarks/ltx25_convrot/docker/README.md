@@ -65,6 +65,27 @@ layers, builds and tests the image with access to the GPU, and configures
 the existing runner **without replacing the runner container**. Only
 run while all LTX-2.5 workflows are inactive.
 
+## After a successful image build but failed live-runner apt setup
+
+If `docker build` completed and printed `BAKED_SM70_OK` but the script
+then failed with `setgroups ... Operation not permitted`, do **not**
+rebuild. The currently running GitHub runner has a restricted security
+context that prevents apt from dropping privileges to its `_apt` user.
+
+Run the independent activation script:
+
+```bash
+git -C /tmp/ltx25-bake-src.dmHY1b/WanGP pull --ff-only
+bash /tmp/ltx25-bake-src.dmHY1b/WanGP/benchmarks/ltx25_convrot/docker/activate_baked_runner.sh
+```
+
+It copies only the already-built Python 3.12 development headers from the
+clean image into the current runner and aliases the tested persistent venv
+to `/opt/venvs/ltx25-cu128`. It verifies CUDA SM70, Python imports, and a
+native C compile. There are **no** apt calls, pip installs, image builds, or
+runner restarts. The image remains available for a planned future
+Compose/service recreation.
+
 ## Quick verification / next run
 
 ```bash

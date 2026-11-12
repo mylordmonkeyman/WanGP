@@ -2772,6 +2772,17 @@ family_handlers.append("models.hi3d.hi3d_handler")
 family_handlers.append("models.supratex.supratex_handler")
 family_handlers.append("models.TTS.nemotron_transcribe.nemotron_transcribe_handler")
 family_handlers.append("models.glb_coder.glb_coder_handler")
+
+# Phase 0 isolated, headless LTX-2.5 profiling only.
+# This does NOT alter the LTX pipeline, math, kernels, MMGP profile or
+# model weights; it only prevents importing unrelated model families while
+# using the dedicated self-hosted benchmark runner. Normal WanGP is unchanged.
+if os.environ.get("WAN2GP_LTX25_PHASE0_ONLY") == "1":
+    if not getattr(args, "process", ""):
+        raise RuntimeError("WAN2GP_LTX25_PHASE0_ONLY requires --process headless mode")
+    family_handlers = ["models.ltx2.ltx2_handler"]
+    print("[LTX25 Phase 0] Isolated LTX2-only model family registry enabled.")
+
 DEFAULT_LORA_ROOT = "loras" #"models.cosmos3.cosmos3_handler",
 
 def get_lora_root():

@@ -13,6 +13,7 @@ on:
       - benchmarks/ltx25_convrot/run_batch_20261112_v3.signal
       - benchmarks/ltx25_convrot/run_batch_20261112_v4.signal
       - benchmarks/ltx25_convrot/run_batch_20261112_v5.signal
+      - benchmarks/ltx25_convrot/dispatch.signal
   workflow_dispatch:
 
 permissions:

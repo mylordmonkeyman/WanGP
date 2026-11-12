@@ -1,0 +1,135 @@
+{
+  "actual_model_shapes_observed": false,
+  "capability": "7.0",
+  "checkpoint_blocker": "",
+  "checkpoint_inventory_error": "",
+  "checkpoint_layer_count": 1344,
+  "checkpoint_metadata_verified": true,
+  "checkpoint_visible": true,
+  "cuda": "12.8",
+  "full_pipeline_measured": false,
+  "gpu": "Tesla V100-PCIE-32GB",
+  "job_status": "success",
+  "note": "Synthetic diagnostic only; not an LTX-2.5 model benchmark or production accuracy gate.",
+  "phase0_probe_present": true,
+  "remote_group_candidates": {
+    "256": 1344
+  },
+  "remote_header_error": "",
+  "remote_header_status": "PASS",
+  "remote_header_top_shapes": [
+    {
+      "K": 2048,
+      "N": 2048,
+      "count": 576
+    },
+    {
+      "K": 4096,
+      "N": 4096,
+      "count": 384
+    },
+    {
+      "K": 4096,
+      "N": 2048,
+      "count": 144
+    },
+    {
+      "K": 16384,
+      "N": 4096,
+      "count": 48
+    },
+    {
+      "K": 4096,
+      "N": 16384,
+      "count": 48
+    },
+    {
+      "K": 8192,
+      "N": 2048,
+      "count": 48
+    },
+    {
+      "K": 2048,
+      "N": 8192,
+      "count": 48
+    },
+    {
+      "K": 2048,
+      "N": 4096,
+      "count": 48
+    }
+  ],
+  "remote_hf_revision": "0e281e1132633c9ff66e1891c045c533e785ce67",
+  "remote_int8_matrix_count": 1344,
+  "remote_int8_missing_fp32_scale": 0,
+  "remote_published_lfs_sha256": "ae777a7d5ea1830a9d0acdf784a1af278bfe421f109a8a8e2f0e1f2b03af34ef",
+  "rotation_pass_count": 6,
+  "rotation_results": [
+    {
+      "K": 4096,
+      "M": 16,
+      "error": "",
+      "group_size": 16,
+      "max_abs": 0.0096435546875,
+      "median_ms": 0.0952,
+      "p99_abs": 0.0062255859375,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 256,
+      "error": "",
+      "group_size": 16,
+      "max_abs": 0.0152587890625,
+      "median_ms": 0.0993,
+      "p99_abs": 0.006103515625,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 16,
+      "error": "",
+      "group_size": 64,
+      "max_abs": 0.01068115234375,
+      "median_ms": 0.0983,
+      "p99_abs": 0.00616455078125,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 256,
+      "error": "",
+      "group_size": 64,
+      "max_abs": 0.01526641845703125,
+      "median_ms": 0.0973,
+      "p99_abs": 0.0061092376708984375,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 16,
+      "error": "",
+      "group_size": 256,
+      "max_abs": 0.007809638977050781,
+      "median_ms": 0.0942,
+      "p99_abs": 0.0060983747243881226,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 256,
+      "error": "",
+      "group_size": 256,
+      "max_abs": 0.015533447265625,
+      "median_ms": 0.1352,
+      "p99_abs": 0.006099700927734375,
+      "status": "PASS"
+    }
+  ],
+  "rotation_test_count": 6,
+  "run_id": "43289681593",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43289681593",
+  "source_sha": "09b9aa75c6e69ef173dcf0ffe47bad7ff51e93a6",
+  "timestamp_utc": "2026-11-12T19:23:52.031003+00:00",
+  "torch": "2.10.0+cu128"
+}

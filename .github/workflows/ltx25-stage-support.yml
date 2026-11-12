@@ -23,18 +23,11 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Install downloader into runner's existing isolated venv
-        shell: bash
-        run: |
-          set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python -m pip install -q \
-            'huggingface_hub[hf_xet]'
-
       - name: Download and SHA256 verify frozen supporting weights
         shell: bash
         run: |
           set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python \
+          /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/prepare_support.py
 
       - name: Publish sanitized download receipt

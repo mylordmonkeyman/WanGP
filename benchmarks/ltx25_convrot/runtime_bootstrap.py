@@ -188,6 +188,16 @@ def main():
             if tor["returncode"]:
                 report["status"] = "TORCHAUDIO_BLOCKED"
                 return
+        # Install a torchvision wheel paired to the exact CUDA 12.8 torch.
+        # The image/video media path imports torchvision at module import.
+        vision = pip_install(["torchvision==0.25.0+cu128"],
+                             "https://download.pytorch.org/whl/cu128")
+        report["steps"].append({"group": "torch_vision", **vision})
+        print("RUNTIME_INSTALL " + json.dumps({"name":"torch_vision",**vision})[:1800], flush=True)
+        if vision["returncode"]:
+            report["status"] = "TORCHVISION_BLOCKED"
+            return
+
         for name, packages in GROUPS:
             result = pip_install(packages)
             report["steps"].append({"group": name, **result})

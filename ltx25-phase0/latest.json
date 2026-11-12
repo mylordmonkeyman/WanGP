@@ -71,7 +71,7 @@
       "error": "",
       "group_size": 16,
       "max_abs": 0.0096435546875,
-      "median_ms": 0.0901,
+      "median_ms": 0.0952,
       "p99_abs": 0.0062255859375,
       "status": "PASS"
     },
@@ -81,7 +81,7 @@
       "error": "",
       "group_size": 16,
       "max_abs": 0.0152587890625,
-      "median_ms": 0.0952,
+      "median_ms": 0.0993,
       "p99_abs": 0.006103515625,
       "status": "PASS"
     },
@@ -91,7 +91,7 @@
       "error": "",
       "group_size": 64,
       "max_abs": 0.01068115234375,
-      "median_ms": 0.0962,
+      "median_ms": 0.0983,
       "p99_abs": 0.00616455078125,
       "status": "PASS"
     },
@@ -101,7 +101,7 @@
       "error": "",
       "group_size": 64,
       "max_abs": 0.01526641845703125,
-      "median_ms": 0.0942,
+      "median_ms": 0.0973,
       "p99_abs": 0.0061092376708984375,
       "status": "PASS"
     },
@@ -111,7 +111,7 @@
       "error": "",
       "group_size": 256,
       "max_abs": 0.007809638977050781,
-      "median_ms": 0.0973,
+      "median_ms": 0.0942,
       "p99_abs": 0.0060983747243881226,
       "status": "PASS"
     },
@@ -121,15 +121,15 @@
       "error": "",
       "group_size": 256,
       "max_abs": 0.015533447265625,
-      "median_ms": 0.1311,
+      "median_ms": 0.1352,
       "p99_abs": 0.006099700927734375,
       "status": "PASS"
     }
   ],
   "rotation_test_count": 6,
-  "run_id": "43288457137",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43288457137",
-  "source_sha": "4132b72144df1b39cb6fa0a471c7d12a2840ef66",
-  "timestamp_utc": "2026-11-12T19:16:48.398230+00:00",
+  "run_id": "43289681593",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43289681593",
+  "source_sha": "09b9aa75c6e69ef173dcf0ffe47bad7ff51e93a6",
+  "timestamp_utc": "2026-11-12T19:23:52.031003+00:00",
   "torch": "2.10.0+cu128"
 }

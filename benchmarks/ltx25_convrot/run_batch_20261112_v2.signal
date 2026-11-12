@@ -1,0 +1,4 @@
+Explicit second consolidated runtime validation after fully completed first run 43295627853.
+Fixes: add CPU onnxruntime to rembg import chain and check WanGP CLI imports.
+Runs at most once when this specific file is created. Do not edit marker.
+No auto-retry, no concurrent job replacements.

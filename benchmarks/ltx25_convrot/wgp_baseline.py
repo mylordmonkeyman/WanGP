@@ -21,9 +21,14 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = Path("/cache/ltx25/results")
 BASE = Path("/cache/ltx25")
 PY = os.environ.get("LTX25_PYTHON", "/opt/venvs/ltx25-cu128/bin/python")
-CFG = BASE / "config-baseline"
-VIDEOS = BASE / "videos" / "r0_baseline"
-PARAMS = BASE / "baseline_49frame_settings.json"
+# The pilot uses independent config and output paths but the *identical*
+# model, prompt, seed, frame count, resolution, and R0 fallback settings.
+VARIANT = os.environ.get("LTX25_BENCH_VARIANT", "r0_baseline")
+if VARIANT not in ("r0_baseline", "e_fp32rot"):
+    raise ValueError(f"Unsupported LTX25_BENCH_VARIANT: {VARIANT!r}")
+CFG = BASE / ("config-baseline" if VARIANT == "r0_baseline" else "config-e-fp32rot")
+VIDEOS = BASE / "videos" / VARIANT
+PARAMS = BASE / f"{VARIANT}_49frame_settings.json"
 SRC = BASE / "checkpoints"
 MODEL_FILE = SRC / "ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors"
 TEXT_FILE = SRC / "gemma4-12b-ltx-v1/gemma4-12b-ltx-v1_int8_convrot.safetensors"
@@ -106,17 +111,18 @@ def main():
     bootstrap = json.loads(bootstrap_file.read_text()) if bootstrap_file.exists() else {}
     report = {
         "sha": sha, "utc": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "kind": "Unmodified WanGP end-to-end R0 CLI baseline",
+        "kind": "WanGP R0 baseline" if VARIANT == "r0_baseline" else "Explicit experimental Candidate E fp32rot pilot",
+        "variant": VARIANT,
         "model_type": SETTINGS["model_type"],
         "seed": SETTINGS["seed"], "frames": SETTINGS["video_length"],
         "resolution": SETTINGS["resolution"], "num_inference_steps": SETTINGS["num_inference_steps"],
         "checkpoint_visible": MODEL_FILE.is_file(),
         "gemma_checkpoint_visible": TEXT_FILE.is_file(),
-        "candidate_e_enabled": False,
+        "candidate_e_enabled": VARIANT == "e_fp32rot",
         "video_dir": str(VIDEOS), "config_dir": str(CFG),
         "runtime_bootstrap_status": bootstrap.get("status", "not_run"),
     }
-    result_path = OUT / f"runtime_baseline_{sha[:12]}.json"
+    result_path = OUT / f"runtime_{'baseline' if VARIANT == 'r0_baseline' else 'candidate'}_{sha[:12]}.json"
     try:
         if bootstrap.get("status") != "PASS":
             report.update(status="BLOCKED", blocker="Full LTX-2.5 import prerequisites not yet satisfied")
@@ -176,6 +182,20 @@ def main():
             for p in sorted(files, key=lambda x: x.stat().st_mtime, reverse=True)[:6]
         ]
         report["status"] = "PASS" if result["returncode"] == 0 and report["videos"] else "GENERATION_BLOCKED"
+        if VARIANT == "e_fp32rot":
+            # Adapter logs at interpreter exit. Never label a clip as
+            # accelerated when eligible calls did not actually execute.
+            import re
+            matches = re.findall(r"\\[LTX25_CUBLAS_E\\] (\\{[^\\n]+\\})",
+                                 result["log_tail"])
+            if matches:
+                try:
+                    report["candidate_counters"] = json.loads(matches[-1])
+                except json.JSONDecodeError:
+                    pass
+            if report["status"] == "PASS" and report.get("candidate_counters", {}).get("used", 0) <= 0:
+                report["status"] = "NO_CANDIDATE_CALLS"
+                report["blocker"] = "A clip was generated but no ConvRot Candidate E calls were recorded"
     except Exception as err:
         report.update(status="ERROR", error_type=type(err).__name__, error=str(err)[:800])
     finally:

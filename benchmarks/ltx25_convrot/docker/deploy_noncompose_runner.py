@@ -289,11 +289,24 @@ def main():
             for field in ("CpusetCpus", "CpusetMems"):
                 if (new["HostConfig"].get(field) or "") != (host.get(field) or ""):
                     fatal("New runner CPU/NUMA affinity differs: " + field)
-            for field in ("CapDrop", "SecurityOpt"):
-                old_values = host.get(field) or []
-                new_values = new["HostConfig"].get(field) or []
-                if sorted(old_values) != sorted(new_values):
-                    fatal("New runner security restrictions differ: " + field)
+            # Docker may normalize capitalization and the implicit :true
+            # suffix. Compare the restrictions semantically, not formatting.
+            def normalized_cap(value):
+                value = value.upper()
+                return value[4:] if value.startswith("CAP_") else value
+            old_drops = sorted(normalized_cap(x) for x in (host.get("CapDrop") or []))
+            new_drops = sorted(normalized_cap(x) for x in
+                               (new["HostConfig"].get("CapDrop") or []))
+            if old_drops != new_drops:
+                fatal("New runner dropped Linux capabilities differ")
+            def normalized_security(value):
+                return ("no-new-privileges:true"
+                        if value == "no-new-privileges" else value)
+            old_opts = sorted(normalized_security(x) for x in (host.get("SecurityOpt") or []))
+            new_opts = sorted(normalized_security(x) for x in
+                              (new["HostConfig"].get("SecurityOpt") or []))
+            if old_opts != new_opts:
+                fatal("New runner security options differ")
             if {m["Destination"]: m["Source"] for m in new["Mounts"]} != actual:
                 fatal("New container lost a bind mount")
             run(["docker", "exec", CONTAINER,

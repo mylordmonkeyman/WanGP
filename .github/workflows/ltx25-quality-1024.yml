@@ -1,17 +1,18 @@
 name: LTX-2.5 V100 1024x576 matched video quality
 
-# Manual only. The complete checkpoint Docker image must be installed before
-# starting either run. GPU jobs cannot fetch or SHA256 any safetensors files.
+# No model downloads or runtime SHA256. This workflow requires the immutable
+# checkpoint-complete runner image; source-code pushes never auto-start a job.
 on:
   push:
-    branches: [perf/ltx25-convrot-sm70]
+    branches:
+      - perf/ltx25-convrot-sm70
     paths:
       - benchmarks/ltx25_convrot/quality_r0_dispatch.signal
       - benchmarks/ltx25_convrot/quality_e_dispatch.signal
   workflow_dispatch:
     inputs:
       variant:
-        description: 'Choose the full model run (R0 first, then experimental E)'
+        description: 'One matched run: R0 first, experimental E second'
         type: choice
         required: true
         default: r0_quality_1024
@@ -28,7 +29,7 @@ concurrency:
 
 jobs:
   quality:
-    name: 1024x576 LTX-2.5 single matched run
+    name: 1024x576 LTX-2.5 one matched run
     runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
     timeout-minutes: 180
     env:
@@ -38,104 +39,19 @@ jobs:
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
     steps:
-      - name: Checkout benchmark code
+      - name: Checkout exact benchmark code and signal commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
           fetch-depth: 2
 
-      - name: Resolve single dispatch-signal variant without starting a second run
+      - name: Resolve branch-specific push signal variant
         shell: bash
         run: |
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
             changed="$(git diff-tree --no-commit-id --name-only -r HEAD |
-              grep '^benchmarks/ltx25_convrot/quality_.*_dispatch.signal and image-baked checkpoint manifest (no hash or download)
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(nvidia-smi --query-gpu=uuid --format=csv,noheader | wc -l)" -eq 1
-          nvidia-smi -L
-          test "$LTX25_CHECKPOINT_ROOT" = /opt/ltx25/checkpoints
-          test -f /opt/ltx25/model-image-manifest.json
-          test -x /opt/venvs/ltx25-cu128/bin/python
-          /opt/venvs/ltx25-cu128/bin/python \
-            benchmarks/ltx25_convrot/runtime_validate_baked.py
-
-      - name: Set explicit ConvRot pilot mode (never auto-select)
-        shell: bash
-        run: |
-          set -euo pipefail
-          case "$LTX25_BENCH_VARIANT" in
-            r0_quality_1024)
-              echo "WAN2GP_LTX25_CUBLAS_E_MODE=" >> "$GITHUB_ENV"
-              ;;
-            e_quality_1024)
-              echo "WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot" >> "$GITHUB_ENV"
-              ;;
-            *)
-              echo "Invalid LTX25_BENCH_VARIANT: $LTX25_BENCH_VARIANT" >&2
-              exit 1
-              ;;
-          esac
-
-      - name: Compile SM70 cuBLAS adapter only for Candidate E
-        if: ${{ env.LTX25_BENCH_VARIANT == 'e_quality_1024' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
-            benchmarks/ltx25_convrot/ltx25_cublas_e.cu \
-            -lcublas -o "$LTX25_CUBLAS_E_LIB"
-          test -s "$LTX25_CUBLAS_E_LIB"
-
-      - name: Synthetic adapter/shape preflight only for Candidate E
-        if: ${{ env.LTX25_BENCH_VARIANT == 'e_quality_1024' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          /opt/venvs/ltx25-cu128/bin/python \
-            benchmarks/ltx25_convrot/candidate_adapter_preflight.py
-
-      - name: Generate one 49-frame 1024x576 video offline from baked weights
-        shell: bash
-        run: |
-          set -euo pipefail
-          /opt/venvs/ltx25-cu128/bin/python \
-            benchmarks/ltx25_convrot/wgp_baseline.py
-
-      - name: Publish quality result independently of 576x320 baseline
-        if: ${{ always() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          JOB_STATUS: ${{ job.status }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 benchmarks/ltx25_convrot/publish_quality_status.py
-
-      - name: Gate newly generated quality video, and actual Candidate E calls
-        if: ${{ always() }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          /opt/venvs/ltx25-cu128/bin/python - <<'PY'
-          import json, os
-          from pathlib import Path
-          variant = os.environ["LTX25_BENCH_VARIANT"]
-          suffix = {"r0_quality_1024":"quality_r0","e_quality_1024":"quality_e"}[variant]
-          sha = os.environ["GITHUB_SHA"][:12]
-          path = Path("/cache/ltx25/results")/f"runtime_{suffix}_{sha}.json"
-          assert path.is_file(), f"Result report absent: {path}"
-          r = json.loads(path.read_text())
-          print("QUALITY_GATES",r.get("status"),r.get("resolution"),r.get("candidate_counters"))
-          assert r.get("status") == "PASS", r.get("blocker", r.get("error", "Incomplete run"))
-          assert r.get("resolution") == "1024x576"
-          assert len(r.get("videos", [])) == 1
-          if variant == "e_quality_1024":
-              assert r.get("candidate_counters",{}).get("used",0) > 0, "No Candidate E calls"
-          PY
- || true)"
+              grep '^benchmarks/ltx25_convrot/quality_.*_dispatch.signal$' || true)"
             case "$changed" in
               benchmarks/ltx25_convrot/quality_r0_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=r0_quality_1024" >> "$GITHUB_ENV"
@@ -144,13 +60,13 @@ jobs:
                 echo "LTX25_BENCH_VARIANT=e_quality_1024" >> "$GITHUB_ENV"
                 ;;
               *)
-                echo "Expected exactly one quality dispatch signal changed; got: $changed" >&2
+                echo "Expected exactly one quality dispatch signal, got: $changed" >&2
                 exit 1
                 ;;
             esac
           fi
 
-      - name: Validate selected V100 and image-baked checkpoint manifest (no hash or download)
+      - name: Verify SM70 GPU and baked checkpoint manifest (no hash or download)
         shell: bash
         run: |
           set -euo pipefail
@@ -174,12 +90,12 @@ jobs:
               echo "WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot" >> "$GITHUB_ENV"
               ;;
             *)
-              echo "Invalid LTX25_BENCH_VARIANT: $LTX25_BENCH_VARIANT" >&2
+              echo "Unsupported variant: $LTX25_BENCH_VARIANT" >&2
               exit 1
               ;;
           esac
 
-      - name: Compile SM70 cuBLAS adapter only for Candidate E
+      - name: Compile SM70 cuBLAS adapter for Candidate E only
         if: ${{ env.LTX25_BENCH_VARIANT == 'e_quality_1024' }}
         shell: bash
         run: |
@@ -189,7 +105,7 @@ jobs:
             -lcublas -o "$LTX25_CUBLAS_E_LIB"
           test -s "$LTX25_CUBLAS_E_LIB"
 
-      - name: Synthetic adapter/shape preflight only for Candidate E
+      - name: Preflight BF16 and FP16 adapter numerical gates for Candidate E
         if: ${{ env.LTX25_BENCH_VARIANT == 'e_quality_1024' }}
         shell: bash
         run: |
@@ -204,7 +120,7 @@ jobs:
           /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/wgp_baseline.py
 
-      - name: Publish quality result independently of 576x320 baseline
+      - name: Publish quality result independently from original baseline
         if: ${{ always() }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -214,7 +130,7 @@ jobs:
           set -euo pipefail
           python3 benchmarks/ltx25_convrot/publish_quality_status.py
 
-      - name: Gate newly generated quality video, and actual Candidate E calls
+      - name: Assert completed new output and Candidate E calls if selected
         if: ${{ always() }}
         shell: bash
         run: |
@@ -223,15 +139,15 @@ jobs:
           import json, os
           from pathlib import Path
           variant = os.environ["LTX25_BENCH_VARIANT"]
-          suffix = {"r0_quality_1024":"quality_r0","e_quality_1024":"quality_e"}[variant]
+          suffix = {"r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e"}[variant]
           sha = os.environ["GITHUB_SHA"][:12]
-          path = Path("/cache/ltx25/results")/f"runtime_{suffix}_{sha}.json"
-          assert path.is_file(), f"Result report absent: {path}"
+          path = Path("/cache/ltx25/results") / f"runtime_{suffix}_{sha}.json"
+          assert path.is_file(), f"Result report missing: {path}"
           r = json.loads(path.read_text())
-          print("QUALITY_GATES",r.get("status"),r.get("resolution"),r.get("candidate_counters"))
-          assert r.get("status") == "PASS", r.get("blocker", r.get("error", "Incomplete run"))
+          print("QUALITY_GATE", r.get("status"), r.get("resolution"), r.get("candidate_counters"))
+          assert r.get("status") == "PASS", r.get("blocker", r.get("error", "Incomplete generation"))
           assert r.get("resolution") == "1024x576"
-          assert len(r.get("videos", [])) == 1
+          assert len(r.get("videos", [])) == 1, "Expected one new quality video"
           if variant == "e_quality_1024":
-              assert r.get("candidate_counters",{}).get("used",0) > 0, "No Candidate E calls"
+              assert r.get("candidate_counters", {}).get("used", 0) > 0, "No Candidate E calls"
           PY

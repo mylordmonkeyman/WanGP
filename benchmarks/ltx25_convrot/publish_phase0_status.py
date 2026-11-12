@@ -58,6 +58,9 @@ def main():
     run_id = os.environ["GITHUB_RUN_ID"]
     probe_file = Path(f"/cache/ltx25/results/phase0_probe_{sha[:12]}.json")
     report = json.loads(probe_file.read_text()) if probe_file.exists() else {}
+    remote_file = Path(f"/cache/ltx25/results/phase0_remote_header_{sha[:12]}.json")
+    remote = json.loads(remote_file.read_text()) if remote_file.exists() else {}
+    remote_inv = remote.get("inventory", {})
     rotations = report.get("rotation", [])
     checkpoint = report.get("checkpoint", {})
     summary = {
@@ -72,6 +75,14 @@ def main():
         "cuda": report.get("torch_cuda"),
         "phase0_probe_present": bool(report),
         "checkpoint_visible": checkpoint.get("present"),
+        "remote_header_status": remote.get("status", "not_run"),
+        "remote_header_error": remote.get("error", "")[:300],
+        "remote_hf_revision": remote.get("hf_revision"),
+        "remote_published_lfs_sha256": remote.get("published_lfs_sha256"),
+        "remote_int8_matrix_count": remote_inv.get("int8_matrix_count"),
+        "remote_group_candidates": remote_inv.get("shape_group_candidates"),
+        "remote_int8_missing_fp32_scale": remote_inv.get("int8_missing_fp32_scale"),
+        "remote_header_top_shapes": remote_inv.get("matrix_shape_frequencies", [])[:12],
         "checkpoint_metadata_verified": checkpoint.get("checkpoint_metadata_verified", False),
         "checkpoint_layer_count": checkpoint.get("int8_2d_weight_count"),
         "checkpoint_blocker": checkpoint.get("blocker", "")[:300],

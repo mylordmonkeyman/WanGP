@@ -218,7 +218,8 @@ def main():
     for name, value in (cfg.get("Labels") or {}).items():
         command += ["--label", name + "=" + value]
     for dst, src in sorted(actual.items()):
-        command += ["--mount", "type=bind,src=" + src + ",dst=" + dst + ",rw"]
+        # Docker --mount is read-write unless readonly is specified.
+        command += ["--mount", "type=bind,src=" + src + ",dst=" + dst]
     # An --env-file means secrets NEVER enter argv/ps or command output.
     with tempfile.TemporaryDirectory(prefix="ltx25-docker-env-") as folder:
         ef = Path(folder) / "env"
@@ -253,7 +254,12 @@ def main():
         except Exception:
             print("DEPLOYMENT_FAILED: attempting automatic rollback (no images/volumes deleted)",
                   file=sys.stderr)
-            if created:
+            # docker run can create a container and then return failure.
+            # Inspect the name even if run() never returned successfully.
+            probe = subprocess.run(["docker", "inspect", CONTAINER],
+                                   check=False, stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL)
+            if renamed and probe.returncode == 0:
                 subprocess.run(["docker", "rm", "-f", CONTAINER], check=False,
                                stdout=subprocess.DEVNULL)
             if renamed:

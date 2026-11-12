@@ -1,0 +1,101 @@
+{
+  "baseline": {
+    "blocker": "Full LTX-2.5 import prerequisites not yet satisfied",
+    "candidate_e_enabled": false,
+    "checkpoint_visible": true,
+    "configured_dryrun": {
+      "elapsed_seconds": null,
+      "returncode": null,
+      "tail": ""
+    },
+    "frames": 49,
+    "gemma_checkpoint_visible": true,
+    "generation": {
+      "elapsed_seconds": null,
+      "returncode": null,
+      "tail": ""
+    },
+    "gpu_preflight": null,
+    "initial_dryrun": {
+      "returncode": null,
+      "tail": ""
+    },
+    "model_type": "ltx2_25_22B_distilled",
+    "resolution": "576x320",
+    "seed": 20261112,
+    "status": "BLOCKED",
+    "video_dir": "/cache/ltx25/videos/r0_baseline",
+    "videos": []
+  },
+  "job_status_at_publish": "success",
+  "note": "Only the original WanGP INT8 fallback was used for any output; Candidate E remains disabled.",
+  "run_id": "43295627853",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43295627853",
+  "runtime_bootstrap": {
+    "error": "",
+    "imports": [
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "mmgp.offload",
+        "status": "PASS"
+      },
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "models.ltx2.ltx_core.model.transformer",
+        "status": "PASS"
+      },
+      {
+        "detail": " File \"/work/WanGP/WanGP/models/ltx2/ltx_pipelines/distilled.py\", line 37, in <module>\n    from .utils.helpers import (\n  File \"/work/WanGP/WanGP/models/ltx2/ltx_pipelines/utils/helpers.py\", line 39, in <module>\n    from .media_io import decode_image, load_image_conditioning, load_video_conditioning, resize_aspect_ratio_preserving\n  File \"/work/WanGP/WanGP/models/ltx2/ltx_pipelines/utils/media_io.py\", line 17, in <module>\n    from shared.utils.utils import guide_to_float\n  File \"/work/WanGP/WanGP/shared/utils/utils.py\", line 14, in <module>\n    from rembg import remove\n  File \"/cache/venvs/ltx25-torch210-cu128/lib/python3.12/site-packages/rembg/__init__.py\", line 5, in <module>\n    from .bg import remove\n  File \"/cache/venvs/ltx25-torch210-cu128/lib/python3.12/site-packages/rembg/bg.py\", line 7, in <module>\n    import onnxruntime as ort\nModuleNotFoundError: No module named 'onnxruntime'\n",
+        "name": "models.ltx2.ltx_pipelines.distilled",
+        "status": "ERROR"
+      },
+      {
+        "detail": "d_unlocked\n  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked\n  File \"<frozen importlib._bootstrap_external>\", line 995, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"/work/WanGP/WanGP/models/ltx2/ltx2.py\", line 49, in <module>\n    from .inpainting import (\n  File \"/work/WanGP/WanGP/models/ltx2/inpainting.py\", line 6, in <module>\n    from shared.utils.utils import guide_mask_to_float, guide_to_float\n  File \"/work/WanGP/WanGP/shared/utils/utils.py\", line 14, in <module>\n    from rembg import remove\n  File \"/cache/venvs/ltx25-torch210-cu128/lib/python3.12/site-packages/rembg/__init__.py\", line 5, in <module>\n    from .bg import remove\n  File \"/cache/venvs/ltx25-torch210-cu128/lib/python3.12/site-packages/rembg/bg.py\", line 7, in <module>\n    import onnxruntime as ort\nModuleNotFoundError: No module named 'onnxruntime'\n",
+        "name": "models.ltx2.ltx2",
+        "status": "ERROR"
+      }
+    ],
+    "status": "BLOCKED",
+    "steps": [
+      {
+        "detail": "",
+        "name": "torch_vision",
+        "returncode": 0,
+        "seconds": 4.5
+      },
+      {
+        "detail": "",
+        "name": "hub_compat",
+        "returncode": 0,
+        "seconds": 2.8
+      },
+      {
+        "detail": "",
+        "name": "model_runtime",
+        "returncode": 0,
+        "seconds": 37.7
+      },
+      {
+        "detail": "",
+        "name": "media",
+        "returncode": 0,
+        "seconds": 25.0
+      },
+      {
+        "detail": "",
+        "name": "wan_ui",
+        "returncode": 0,
+        "seconds": 24.7
+      },
+      {
+        "detail": "",
+        "name": "missing_import:rembg",
+        "returncode": 0,
+        "seconds": 5.3
+      }
+    ],
+    "torch_after": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n",
+    "torch_initial": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n"
+  },
+  "source_sha": "f4bc5a725907b7f06bb3b7d4ada9d5c6a069c979"
+}

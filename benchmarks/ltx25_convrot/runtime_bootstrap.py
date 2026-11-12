@@ -50,6 +50,10 @@ KNOWN_MISSING = {
     "onnxruntime": "onnxruntime>=1.22.0",
     "markdown": "Markdown",
     "easydict": "easydict",
+    "matplotlib": "matplotlib>=3.9,<4",
+    "facexlib": "facexlib==0.3.0",
+    "misaki": "misaki",
+    "vector_quantize_pytorch": "vector-quantize-pytorch==1.27.19",
     "kornia": "kornia",
     "webdataset": "webdataset",
     "open_clip": "open_clip_torch",
@@ -290,13 +294,20 @@ def main():
                 break
 
         tried = set()
+        previous = {}
         for attempt in range(40):
             results = []
             for module in PROBES:
+                # Skip previously passed imports; they do not need to rerun
+                # merely because another package was installed.
+                if previous.get(module, {}).get("status") == "PASS":
+                    results.append(previous[module])
+                    continue
                 result = probe_import(module)
                 data = {"name": module, "status": "PASS" if not result["returncode"] else "ERROR",
                         "tail": result["tail"][-1100:]}
                 results.append(data)
+                previous[module] = data
             report["probes"] = results
             print("RUNTIME_PROBES " + json.dumps(results)[:9000], flush=True)
             missing = None

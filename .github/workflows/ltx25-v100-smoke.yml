@@ -143,6 +143,15 @@ jobs:
           /cache/venvs/ltx25-torch210-cu128/bin/python \
             benchmarks/ltx25_convrot/phase0_dispatch_probe.py
 
+      - name: Audit FP32-rotation precision on multiple checkpoint layers and seeds
+        env:
+          LTX25_CUBLAS_E_LIB: ${{ runner.temp }}/libltx25_cublas_e.so
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python \
+            benchmarks/ltx25_convrot/precision_audit.py
+
       - name: Publish sanitized report to isolated results branch
         if: ${{ always() }}
         env:

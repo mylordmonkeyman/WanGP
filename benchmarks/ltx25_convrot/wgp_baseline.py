@@ -24,9 +24,18 @@ PY = os.environ.get("LTX25_PYTHON", "/opt/venvs/ltx25-cu128/bin/python")
 # The pilot uses independent config and output paths but the *identical*
 # model, prompt, seed, frame count, resolution, and R0 fallback settings.
 VARIANT = os.environ.get("LTX25_BENCH_VARIANT", "r0_baseline")
-if VARIANT not in ("r0_baseline", "e_fp32rot"):
+VARIANTS = {
+    "r0_baseline": ("576x320", False),
+    "e_fp32rot": ("576x320", True),
+    "r0_quality_1024": ("1024x576", False),
+    "e_quality_1024": ("1024x576", True),
+}
+if VARIANT not in VARIANTS:
     raise ValueError(f"Unsupported LTX25_BENCH_VARIANT: {VARIANT!r}")
-CFG = BASE / ("config-baseline" if VARIANT == "r0_baseline" else "config-e-fp32rot")
+RESOLUTION, IS_CANDIDATE = VARIANTS[VARIANT]
+if IS_CANDIDATE != (os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").lower() == "fp32rot"):
+    raise ValueError("Candidate mode and selected benchmark variant disagree")
+CFG = BASE / f"config-{VARIANT}"
 VIDEOS = BASE / "videos" / VARIANT
 PARAMS = BASE / f"{VARIANT}_49frame_settings.json"
 SRC = Path(os.environ.get("LTX25_CHECKPOINT_ROOT", "/opt/ltx25/checkpoints"))
@@ -41,7 +50,7 @@ SETTINGS = {
     "seed": 20261112,
     "num_inference_steps": 8,
     "video_length": 49,
-    "resolution": "576x320",
+    "resolution": RESOLUTION,
     "audio_prompt_type": "",
     "video_prompt_type": "",
     "image_mode": 0,
@@ -112,18 +121,20 @@ def main():
     bootstrap = json.loads(bootstrap_file.read_text()) if bootstrap_file.exists() else {}
     report = {
         "sha": sha, "utc": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "kind": "WanGP R0 baseline" if VARIANT == "r0_baseline" else "Explicit experimental Candidate E fp32rot pilot",
+        "kind": "Experimental Candidate E fp32rot" if IS_CANDIDATE else "Unmodified WanGP R0",
         "variant": VARIANT,
         "model_type": SETTINGS["model_type"],
         "seed": SETTINGS["seed"], "frames": SETTINGS["video_length"],
         "resolution": SETTINGS["resolution"], "num_inference_steps": SETTINGS["num_inference_steps"],
         "checkpoint_visible": MODEL_FILE.is_file(),
         "gemma_checkpoint_visible": TEXT_FILE.is_file(),
-        "candidate_e_enabled": VARIANT == "e_fp32rot",
+        "candidate_e_enabled": IS_CANDIDATE,
         "video_dir": str(VIDEOS), "config_dir": str(CFG),
         "runtime_bootstrap_status": bootstrap.get("status", "not_run"),
     }
-    result_path = OUT / f"runtime_{'baseline' if VARIANT == 'r0_baseline' else 'candidate'}_{sha[:12]}.json"
+    result_kind = {"r0_baseline": "baseline", "e_fp32rot": "candidate",
+                   "r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e"}[VARIANT]
+    result_path = OUT / f"runtime_{result_kind}_{sha[:12]}.json"
     try:
         if bootstrap.get("status") != "PASS":
             report.update(status="BLOCKED", blocker="Full LTX-2.5 import prerequisites not yet satisfied")
@@ -174,7 +185,8 @@ def main():
             report.update(status="GPU_BUSY", blocker="Other GPU workload detected; baseline generation skipped")
             return
 
-        # Permit one 49-frame reference video; never loop or repeat on failure.
+        # Permit one 49-frame reference clip at the variant's exact resolution;
+        # never loop or repeat on failure.
         # Require a *new* output from this invocation, not a stale clip from a
         # previous attempt in the same persistent results directory.
         before = {p.resolve() for p in VIDEOS.rglob("*.mp4")}
@@ -186,7 +198,7 @@ def main():
             for p in sorted(files, key=lambda x: x.stat().st_mtime, reverse=True)[:6]
         ]
         report["status"] = "PASS" if result["returncode"] == 0 and report["videos"] else "GENERATION_BLOCKED"
-        if VARIANT == "e_fp32rot":
+        if IS_CANDIDATE:
             # Adapter logs at interpreter exit. Never label a clip as
             # accelerated when eligible calls did not actually execute.
             import re

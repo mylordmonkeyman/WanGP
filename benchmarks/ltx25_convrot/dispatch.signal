@@ -1,4 +1,4 @@
-run: v8
-previous_run: 43302477091
-purpose: First runtime baseline after verified pre-baked SM70 environment, Python headers, and checksum-verified missing HDR weights.
-policy: one workflow, no package installation, no retries, only one reference clip.
+run: v9
+previous_run: 43310652803
+purpose: SHA256 stage temporal upscaler + diffusion video VAE from pinned source, then one real 49-frame R0 WanGP baseline with no pip installation.
+constraints: no concurrent GPU jobs; no retries; no Candidate E activation.

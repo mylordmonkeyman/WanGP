@@ -10,6 +10,7 @@ on:
     paths:
       - benchmarks/ltx25_convrot/run_batch_20261112.signal
       - benchmarks/ltx25_convrot/run_batch_20261112_v2.signal
+      - benchmarks/ltx25_convrot/run_batch_20261112_v3.signal
   workflow_dispatch:
 
 permissions:

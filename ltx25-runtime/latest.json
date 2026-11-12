@@ -29,8 +29,8 @@
   },
   "job_status_at_publish": "success",
   "note": "Only the original WanGP INT8 fallback was used for any output; Candidate E remains disabled.",
-  "run_id": "43295627853",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43295627853",
+  "run_id": "43296408514",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43296408514",
   "runtime_bootstrap": {
     "error": "",
     "imports": [
@@ -45,13 +45,18 @@
         "status": "PASS"
       },
       {
-        "detail": " File \"/work/WanGP/WanGP/models/ltx2/ltx_pipelines/distilled.py\", line 37, in <module>\n    from .utils.helpers import (\n  File \"/work/WanGP/WanGP/models/ltx2/ltx_pipelines/utils/helpers.py\", line 39, in <module>\n    from .media_io import decode_image, load_image_conditioning, load_video_conditioning, resize_aspect_ratio_preserving\n  File \"/work/WanGP/WanGP/models/ltx2/ltx_pipelines/utils/media_io.py\", line 17, in <module>\n    from shared.utils.utils import guide_to_float\n  File \"/work/WanGP/WanGP/shared/utils/utils.py\", line 14, in <module>\n    from rembg import remove\n  File \"/cache/venvs/ltx25-torch210-cu128/lib/python3.12/site-packages/rembg/__init__.py\", line 5, in <module>\n    from .bg import remove\n  File \"/cache/venvs/ltx25-torch210-cu128/lib/python3.12/site-packages/rembg/bg.py\", line 7, in <module>\n    import onnxruntime as ort\nModuleNotFoundError: No module named 'onnxruntime'\n",
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
         "name": "models.ltx2.ltx_pipelines.distilled",
-        "status": "ERROR"
+        "status": "PASS"
       },
       {
-        "detail": "d_unlocked\n  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked\n  File \"<frozen importlib._bootstrap_external>\", line 995, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"/work/WanGP/WanGP/models/ltx2/ltx2.py\", line 49, in <module>\n    from .inpainting import (\n  File \"/work/WanGP/WanGP/models/ltx2/inpainting.py\", line 6, in <module>\n    from shared.utils.utils import guide_mask_to_float, guide_to_float\n  File \"/work/WanGP/WanGP/shared/utils/utils.py\", line 14, in <module>\n    from rembg import remove\n  File \"/cache/venvs/ltx25-torch210-cu128/lib/python3.12/site-packages/rembg/__init__.py\", line 5, in <module>\n    from .bg import remove\n  File \"/cache/venvs/ltx25-torch210-cu128/lib/python3.12/site-packages/rembg/bg.py\", line 7, in <module>\n    import onnxruntime as ort\nModuleNotFoundError: No module named 'onnxruntime'\n",
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
         "name": "models.ltx2.ltx2",
+        "status": "PASS"
+      },
+      {
+        "detail": "1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\n[RAM] MMGP RAM Allocator: the RAM of freed CPU tensors goes back to the system\n[VRAM] MMGP Optimized VRAM Allocator, spilling into RAM when VRAM is full\nTraceback (most recent call last):\n  File \"/work/WanGP/WanGP/wgp.py\", line 125, in <module>\n    from shared.deepy import controller as deepy_controller\n  File \"/work/WanGP/WanGP/shared/deepy/controller.py\", line 57, in <module>\n    from shared.deepy.engine import (\n  File \"/work/WanGP/WanGP/shared/deepy/engine.py\", line 72, in <module>\n    from shared.gradio import assistant_chat\n  File \"/work/WanGP/WanGP/shared/gradio/assistant_chat.py\", line 4, in <module>\n    from shared.deepy import chat\n  File \"/work/WanGP/WanGP/shared/deepy/chat.py\", line 16, in <module>\n    import markdown\nModuleNotFoundError: No module named 'markdown'\n",
+        "name": "wgp_cli_help",
         "status": "ERROR"
       }
     ],
@@ -61,41 +66,53 @@
         "detail": "",
         "name": "torch_vision",
         "returncode": 0,
-        "seconds": 4.5
+        "seconds": 2.2
       },
       {
         "detail": "",
         "name": "hub_compat",
         "returncode": 0,
-        "seconds": 2.8
+        "seconds": 2.1
       },
       {
         "detail": "",
         "name": "model_runtime",
         "returncode": 0,
-        "seconds": 37.7
+        "seconds": 3.0
       },
       {
         "detail": "",
         "name": "media",
         "returncode": 0,
-        "seconds": 25.0
+        "seconds": 2.4
       },
       {
         "detail": "",
         "name": "wan_ui",
         "returncode": 0,
-        "seconds": 24.7
+        "seconds": 3.6
       },
       {
         "detail": "",
-        "name": "missing_import:rembg",
+        "name": "missing_import:onnxruntime",
         "returncode": 0,
-        "seconds": 5.3
+        "seconds": 4.2
+      },
+      {
+        "detail": "",
+        "name": "missing_import:whisper",
+        "returncode": 0,
+        "seconds": 7.0
+      },
+      {
+        "detail": "",
+        "name": "missing_import:gguf",
+        "returncode": 0,
+        "seconds": 2.4
       }
     ],
     "torch_after": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n",
     "torch_initial": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n"
   },
-  "source_sha": "f4bc5a725907b7f06bb3b7d4ada9d5c6a069c979"
+  "source_sha": "3871c938affffa4c8c9769e991af8a238b9d7952"
 }

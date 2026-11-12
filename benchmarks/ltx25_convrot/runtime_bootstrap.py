@@ -48,6 +48,40 @@ GROUPS = [
 KNOWN_MISSING = {
     "psutil": "psutil",
     "onnxruntime": "onnxruntime>=1.22.0",
+    "markdown": "Markdown",
+    "s3tokenizer": "s3tokenizer",
+    "ddgs": "ddgs>=9.16.0",
+    "pypdf": "pypdf>=6.0.0",
+    "dashscope": "dashscope",
+    "stringzilla": "stringzilla==4.0.14",
+    "wetext": "wetext==0.1.2",
+    "spacy_pkuseg": "spacy_pkuseg",
+    "piexif": "piexif",
+    "iopath": "iopath>=0.1.10",
+    "audio_separator": "audio-separator==0.36.1",
+    "insightface": "insightface==0.7.3",
+    "keyring": "keyring==25.7.0",
+    "resvg_py": "resvg-py==0.5.0",
+    "pyannote": "pyannote.audio==3.3.2",
+    "nvidia_ml_py": "nvidia-ml-py",
+    "faster_whisper": "faster-whisper",
+    "chumpy": "chumpy",
+    "smplfitter": "smplfitter",
+    "mistral_common": "mistral-common",
+    "mcp": "mcp==1.30.0",
+    "ffmpeg": "ffmpeg-python",
+    "webrtcvad": "webrtcvad",
+    "sounddevice": "sounddevice>=0.4.0",
+    "mutagen": "mutagen",
+    "pyloudnorm": "pyloudnorm",
+    "torchcodec": "torchcodec==0.10.0",
+    "xatlas": "xatlas>=0.0.11",
+    "jax": "jax",
+    "taichi": "taichi",
+    "loguru": "loguru",
+    "gradio_rangeslider": "gradio_rangeslider",
+    "mido": "mido==1.3.3",
+    "mir_eval": "mir_eval==0.8.2",
     "diffusers": "diffusers==0.36.0",
     "transformers": "transformers==4.54.0",
     "accelerate": "accelerate==1.9.0",
@@ -230,7 +264,7 @@ def main():
                 break
 
         tried = set()
-        for attempt in range(18):
+        for attempt in range(40):
             results = []
             for module in PROBES:
                 result = probe_import(module)

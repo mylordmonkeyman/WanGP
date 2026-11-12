@@ -2,7 +2,7 @@
 # Preserve existing Actions runner entrypoint and credential layout.
 # The build context contains no GitHub credentials, checkpoints or model weights.
 ARG BASE_IMAGE=local/gha-v100-ltx25:cuda12.8
-FROM \${BASE_IMAGE}
+FROM ${BASE_IMAGE}
 
 USER root
 ENV DEBIAN_FRONTEND=noninteractive

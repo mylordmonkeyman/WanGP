@@ -164,9 +164,12 @@ def main():
             return
 
         # Permit one 49-frame reference video; never loop or repeat on failure.
+        # Require a *new* output from this invocation, not a stale clip from a
+        # previous attempt in the same persistent results directory.
+        before = {p.resolve() for p in VIDEOS.rglob("*.mp4")}
         result = run(cmd(False), timeout=3600, log_path=OUT / f"baseline_generation_{sha[:12]}.log")
         report["generation"] = result
-        files = list(VIDEOS.rglob("*.mp4"))
+        files = [p for p in VIDEOS.rglob("*.mp4") if p.resolve() not in before]
         report["videos"] = [
             {"path": str(p), "filename": p.name, "size_bytes": p.stat().st_size}
             for p in sorted(files, key=lambda x: x.stat().st_mtime, reverse=True)[:6]

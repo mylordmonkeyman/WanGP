@@ -1,0 +1,370 @@
+{
+  "actual_model_shapes_observed": false,
+  "capability": "7.0",
+  "checkpoint_blocker": "",
+  "checkpoint_inventory_error": "",
+  "checkpoint_layer_count": 1344,
+  "checkpoint_metadata_verified": true,
+  "checkpoint_visible": true,
+  "cuda": "12.8",
+  "full_pipeline_measured": false,
+  "gpu": "Tesla V100-PCIE-32GB",
+  "job_status": "success",
+  "note": "Synthetic diagnostic only; not an LTX-2.5 model benchmark or production accuracy gate.",
+  "phase0_probe_present": true,
+  "remote_group_candidates": {
+    "256": 1344
+  },
+  "remote_header_error": "",
+  "remote_header_status": "PASS",
+  "remote_header_top_shapes": [
+    {
+      "K": 2048,
+      "N": 2048,
+      "count": 576
+    },
+    {
+      "K": 4096,
+      "N": 4096,
+      "count": 384
+    },
+    {
+      "K": 4096,
+      "N": 2048,
+      "count": 144
+    },
+    {
+      "K": 16384,
+      "N": 4096,
+      "count": 48
+    },
+    {
+      "K": 4096,
+      "N": 16384,
+      "count": 48
+    },
+    {
+      "K": 8192,
+      "N": 2048,
+      "count": 48
+    },
+    {
+      "K": 2048,
+      "N": 8192,
+      "count": 48
+    },
+    {
+      "K": 2048,
+      "N": 4096,
+      "count": 48
+    }
+  ],
+  "remote_hf_revision": "0e281e1132633c9ff66e1891c045c533e785ce67",
+  "remote_int8_matrix_count": 1344,
+  "remote_int8_missing_fp32_scale": 0,
+  "remote_published_lfs_sha256": "ae777a7d5ea1830a9d0acdf784a1af278bfe421f109a8a8e2f0e1f2b03af34ef",
+  "rotation_pass_count": 6,
+  "rotation_results": [
+    {
+      "K": 4096,
+      "M": 16,
+      "error": "",
+      "group_size": 16,
+      "max_abs": 0.0096435546875,
+      "median_ms": 0.086,
+      "p99_abs": 0.0062255859375,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 256,
+      "error": "",
+      "group_size": 16,
+      "max_abs": 0.0152587890625,
+      "median_ms": 0.0973,
+      "p99_abs": 0.006103515625,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 16,
+      "error": "",
+      "group_size": 64,
+      "max_abs": 0.01068115234375,
+      "median_ms": 0.1075,
+      "p99_abs": 0.00616455078125,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 256,
+      "error": "",
+      "group_size": 64,
+      "max_abs": 0.01526641845703125,
+      "median_ms": 0.1004,
+      "p99_abs": 0.0061092376708984375,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 16,
+      "error": "",
+      "group_size": 256,
+      "max_abs": 0.007809638977050781,
+      "median_ms": 0.1044,
+      "p99_abs": 0.0060983747243881226,
+      "status": "PASS"
+    },
+    {
+      "K": 4096,
+      "M": 256,
+      "error": "",
+      "group_size": 256,
+      "max_abs": 0.015533447265625,
+      "median_ms": 0.1352,
+      "p99_abs": 0.006099700927734375,
+      "status": "PASS"
+    }
+  ],
+  "rotation_test_count": 6,
+  "run_id": "43290382091",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43290382091",
+  "source_sha": "91ac2336eaca628814c6cbecff790de8e337702e",
+  "timestamp_utc": "2026-11-12T19:28:08.869718+00:00",
+  "torch": "2.10.0+cu128",
+  "weight_diagnostic": {
+    "actual_fallback_dispatch_confirmed": false,
+    "error": "",
+    "layers": [
+      {
+        "K": 2048,
+        "N": 2048,
+        "name": "model.diffusion_model.transformer_blocks.0.audio_attn1.to_k",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
+        "status": "PASS",
+        "tests": [
+          {
+            "M": 1,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.009913325309753418,
+            "R0_median_ms": 0.24883200228214264,
+            "R0_p99_normalized": 0.004106440581381321,
+            "surrogate_median_ms": 0.10851199924945831
+          },
+          {
+            "M": 16,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.014579415321350098,
+            "R0_median_ms": 0.2539519965648651,
+            "R0_p99_normalized": 0.005079272668808699,
+            "surrogate_median_ms": 0.4618239998817444
+          }
+        ]
+      },
+      {
+        "K": 4096,
+        "N": 4096,
+        "name": "model.diffusion_model.transformer_blocks.0.attn1.to_k",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
+        "status": "PASS",
+        "tests": [
+          {
+            "M": 1,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.009717404842376709,
+            "R0_median_ms": 0.3675839900970459,
+            "R0_p99_normalized": 0.005475031211972237,
+            "surrogate_median_ms": 0.14028799533843994
+          },
+          {
+            "M": 16,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.022126883268356323,
+            "R0_median_ms": 0.4342080056667328,
+            "R0_p99_normalized": 0.005979500710964203,
+            "surrogate_median_ms": 0.8304640054702759
+          }
+        ]
+      },
+      {
+        "K": 4096,
+        "N": 2048,
+        "name": "model.diffusion_model.transformer_blocks.0.audio_to_video_attn.to_q",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
+        "status": "PASS",
+        "tests": [
+          {
+            "M": 1,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.013822197914123535,
+            "R0_median_ms": 0.2693119943141937,
+            "R0_p99_normalized": 0.007453256752341986,
+            "surrogate_median_ms": 0.10956799983978271
+          },
+          {
+            "M": 16,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.03011023998260498,
+            "R0_median_ms": 0.27852800488471985,
+            "R0_p99_normalized": 0.007338085677474737,
+            "surrogate_median_ms": 0.8325120210647583
+          }
+        ]
+      },
+      {
+        "K": 16384,
+        "N": 4096,
+        "name": "model.diffusion_model.transformer_blocks.0.ff.net.2",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
+        "status": "PASS",
+        "tests": [
+          {
+            "M": 1,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.009723693132400513,
+            "R0_median_ms": 1.099776029586792,
+            "R0_p99_normalized": 0.005862535908818245,
+            "surrogate_median_ms": 0.26009601354599
+          },
+          {
+            "M": 16,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.03471675515174866,
+            "R0_median_ms": 1.2728320360183716,
+            "R0_p99_normalized": 0.006730115972459316,
+            "surrogate_median_ms": 3.215359926223755
+          }
+        ]
+      },
+      {
+        "K": 4096,
+        "N": 16384,
+        "name": "model.diffusion_model.transformer_blocks.0.ff.net.0.proj",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
+        "status": "PASS",
+        "tests": [
+          {
+            "M": 1,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.01200053095817566,
+            "R0_median_ms": 1.0936319828033447,
+            "R0_p99_normalized": 0.004417562857270241,
+            "surrogate_median_ms": 0.26419198513031006
+          },
+          {
+            "M": 16,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.015240326523780823,
+            "R0_median_ms": 1.252351999282837,
+            "R0_p99_normalized": 0.005024511367082596,
+            "surrogate_median_ms": 1.2727999687194824
+          }
+        ]
+      },
+      {
+        "K": 8192,
+        "N": 2048,
+        "name": "model.diffusion_model.transformer_blocks.0.audio_ff.net.2",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
+        "status": "PASS",
+        "tests": [
+          {
+            "M": 1,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.03159511089324951,
+            "R0_median_ms": 0.3768320083618164,
+            "R0_p99_normalized": 0.011796744540333748,
+            "surrogate_median_ms": 0.130048006772995
+          },
+          {
+            "M": 16,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.04610031843185425,
+            "R0_median_ms": 0.4341759979724884,
+            "R0_p99_normalized": 0.010998187586665154,
+            "surrogate_median_ms": 1.4899200201034546
+          }
+        ]
+      },
+      {
+        "K": 2048,
+        "N": 8192,
+        "name": "model.diffusion_model.transformer_blocks.0.audio_ff.net.0.proj",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
+        "status": "PASS",
+        "tests": [
+          {
+            "M": 1,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.01182636059820652,
+            "R0_median_ms": 0.3553279936313629,
+            "R0_p99_normalized": 0.005432443227618933,
+            "surrogate_median_ms": 0.12492799758911133
+          },
+          {
+            "M": 16,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.023596763610839844,
+            "R0_median_ms": 0.40038400888442993,
+            "R0_p99_normalized": 0.005287282168865204,
+            "surrogate_median_ms": 0.4638719856739044
+          }
+        ]
+      },
+      {
+        "K": 2048,
+        "N": 4096,
+        "name": "model.diffusion_model.transformer_blocks.0.audio_to_video_attn.to_out.0",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
+        "status": "PASS",
+        "tests": [
+          {
+            "M": 1,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.002084076404571533,
+            "R0_median_ms": 0.25299200415611267,
+            "R0_p99_normalized": 0.001316838781349361,
+            "surrogate_median_ms": 0.1085439994931221
+          },
+          {
+            "M": 16,
+            "R0_leaf_error": "",
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.0025556907057762146,
+            "R0_median_ms": 0.2734079957008362,
+            "R0_p99_normalized": 0.0013611563481390476,
+            "surrogate_median_ms": 0.43007999658584595
+          }
+        ]
+      }
+    ],
+    "layers_passed": 8,
+    "real_checkpoint_weights": true,
+    "real_model_activations": false,
+    "selected_matrix_families": 8,
+    "status": "PASS"
+  }
+}

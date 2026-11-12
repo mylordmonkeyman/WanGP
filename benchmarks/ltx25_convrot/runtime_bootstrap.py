@@ -233,6 +233,14 @@ def probe_import(module):
         params.write_text(json.dumps(SETTINGS, indent=2) + "\n")
         cfg = baseline_root / "config-baseline"
         cfg.mkdir(parents=True, exist_ok=True)
+        # A prior dry-run left an invalid FP8 option in the isolated config.
+        # WanGP accepts 'pytorch', not 'disabled', for precise FP8 fallback.
+        config_file = cfg / "wgp_config.json"
+        if config_file.is_file():
+            config = json.loads(config_file.read_text())
+            config["fp8_kernels"] = "pytorch"
+            config["int8_kernels"] = "disabled"
+            config_file.write_text(json.dumps(config, indent=2) + "\\n")
         command = [PYTHON, "wgp.py", "--offline", "--config", str(cfg),
                    "--process", str(params),
                    "--output-dir", str(baseline_root / "videos" / "r0_baseline"),

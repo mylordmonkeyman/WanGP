@@ -29,8 +29,8 @@
   },
   "job_status_at_publish": "success",
   "note": "Only the original WanGP INT8 fallback was used for any output; Candidate E remains disabled.",
-  "run_id": "43300975562",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43300975562",
+  "run_id": "43301779314",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43301779314",
   "runtime_bootstrap": {
     "error": "",
     "imports": [
@@ -60,7 +60,7 @@
         "status": "PASS"
       },
       {
-        "detail": "16 models when possible as GPU architecture doesn't support optimed BF16 Kernels\n[INT8] Backend: PyTorch (setting: disabled).\nTraceback (most recent call last):\n  File \"/work/WanGP/WanGP/wgp.py\", line 3739, in <module>\n    apply_fp8_kernel_setting(fp8_kernels)\n  File \"/work/WanGP/WanGP/wgp.py\", line 269, in apply_fp8_kernel_setting\n    backend = fp8_backend.configure(selection, resolved=resolved)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/work/WanGP/WanGP/shared/kernels/fp8_backend.py\", line 78, in configure\n    (quanto, scaled), reason = resolve_backend(selection) if resolved is None else resolved\n                               ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/work/WanGP/WanGP/shared/kernels/fp8_backend.py\", line 56, in resolve_backend\n    raise ValueError(f\"Unknown FP8 kernel backend: {selection!r}\")\nValueError: Unknown FP8 kernel backend: 'disabled'\n",
+        "detail": "RAM of freed CPU tensors goes back to the system\n[VRAM] MMGP Optimized VRAM Allocator, spilling into RAM when VRAM is full\n/tmp/tmp0j_oohjr/cuda_utils.c:7:10: fatal error: Python.h: No such file or directory\n    7 | #include <Python.h>\n      |          ^~~~~~~~~~\ncompilation terminated.\nSwitching to FP16 models when possible as GPU architecture doesn't support optimed BF16 Kernels\n[INT8] Backend: PyTorch (setting: disabled).\n[FP8] Backend: PyTorch (setting: pytorch).\nWanGP CLI Mode - Processing settings: /cache/ltx25/baseline_49frame_settings.json\nOutput directory: /cache/ltx25/videos/r0_baseline\n[load_settings] Loading settings from: /cache/ltx25/baseline_49frame_settings.json\n[load_settings] Spatial upsampling method 'disabled' is not supported by the current WanGP install for task #1. Skipping.\n[ERROR] Spatial upsampling method 'disabled' is not supported by the current WanGP install\n",
         "name": "wgp_cli_dryrun",
         "status": "ERROR"
       }
@@ -83,7 +83,7 @@
         "detail": "",
         "name": "model_runtime",
         "returncode": 0,
-        "seconds": 3.0
+        "seconds": 3.1
       },
       {
         "detail": "",
@@ -95,17 +95,11 @@
         "detail": "",
         "name": "wan_ui",
         "returncode": 0,
-        "seconds": 3.5
-      },
-      {
-        "detail": "",
-        "name": "missing_import:matplotlib",
-        "returncode": 0,
-        "seconds": 6.7
+        "seconds": 3.6
       }
     ],
     "torch_after": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n",
     "torch_initial": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n"
   },
-  "source_sha": "def7b19e24a7dfd19c3ceed987ba4789b8d2e36c"
+  "source_sha": "75500e2bc6490d669dbb4352f095dcd6be818721"
 }

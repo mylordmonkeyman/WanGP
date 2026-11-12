@@ -49,6 +49,18 @@ KNOWN_MISSING = {
     "psutil": "psutil",
     "onnxruntime": "onnxruntime>=1.22.0",
     "markdown": "Markdown",
+    "easydict": "easydict",
+    "kornia": "kornia",
+    "webdataset": "webdataset",
+    "open_clip": "open_clip_torch",
+    "scikit_image": "scikit-image",
+    "einshape": "einshape==1.0",
+    "sageattention": "sageattention",
+    "flash_attn_interface": "flash-attn",
+    "lightning": "lightning",
+    "pytorch_lightning": "pytorch-lightning",
+    "toml": "toml",
+    "tomli": "tomli",
     "s3tokenizer": "s3tokenizer",
     "ddgs": "ddgs>=9.16.0",
     "pypdf": "pypdf>=6.0.0",
@@ -174,6 +186,7 @@ PROBES = [
     "models.ltx2.ltx_pipelines.distilled",
     "models.ltx2.ltx2",
     "wgp_cli_help",
+    "wgp_cli_dryrun",
 ]
 
 
@@ -209,6 +222,19 @@ def probe_import(module):
         # Headless --help exits after import/CLI option registration,
         # without loading checkpoints, generating, or starting a web server.
         return run([PYTHON, "wgp.py", "--help"], timeout=120)
+    if module == "wgp_cli_dryrun":
+        from wgp_baseline import SETTINGS
+        baseline_root = Path("/cache/ltx25")
+        params = baseline_root / "baseline_49frame_settings.json"
+        params.write_text(json.dumps(SETTINGS, indent=2) + "\n")
+        cfg = baseline_root / "config-baseline"
+        cfg.mkdir(parents=True, exist_ok=True)
+        command = [PYTHON, "wgp.py", "--offline", "--config", str(cfg),
+                   "--process", str(params),
+                   "--output-dir", str(baseline_root / "videos" / "r0_baseline"),
+                   "--profile", "0", "--attention", "sdpa",
+                   "--no-prevent-power-throttling", "--dry-run"]
+        return run(command, timeout=180)
     script = "import importlib; importlib.import_module(" + repr(module) + ");print('IMPORT_OK')"
     return run([PYTHON, "-c", script], timeout=100)
 

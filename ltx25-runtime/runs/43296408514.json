@@ -1,0 +1,118 @@
+{
+  "baseline": {
+    "blocker": "Full LTX-2.5 import prerequisites not yet satisfied",
+    "candidate_e_enabled": false,
+    "checkpoint_visible": true,
+    "configured_dryrun": {
+      "elapsed_seconds": null,
+      "returncode": null,
+      "tail": ""
+    },
+    "frames": 49,
+    "gemma_checkpoint_visible": true,
+    "generation": {
+      "elapsed_seconds": null,
+      "returncode": null,
+      "tail": ""
+    },
+    "gpu_preflight": null,
+    "initial_dryrun": {
+      "returncode": null,
+      "tail": ""
+    },
+    "model_type": "ltx2_25_22B_distilled",
+    "resolution": "576x320",
+    "seed": 20261112,
+    "status": "BLOCKED",
+    "video_dir": "/cache/ltx25/videos/r0_baseline",
+    "videos": []
+  },
+  "job_status_at_publish": "success",
+  "note": "Only the original WanGP INT8 fallback was used for any output; Candidate E remains disabled.",
+  "run_id": "43296408514",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43296408514",
+  "runtime_bootstrap": {
+    "error": "",
+    "imports": [
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "mmgp.offload",
+        "status": "PASS"
+      },
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "models.ltx2.ltx_core.model.transformer",
+        "status": "PASS"
+      },
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "models.ltx2.ltx_pipelines.distilled",
+        "status": "PASS"
+      },
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "models.ltx2.ltx2",
+        "status": "PASS"
+      },
+      {
+        "detail": "1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\n[RAM] MMGP RAM Allocator: the RAM of freed CPU tensors goes back to the system\n[VRAM] MMGP Optimized VRAM Allocator, spilling into RAM when VRAM is full\nTraceback (most recent call last):\n  File \"/work/WanGP/WanGP/wgp.py\", line 125, in <module>\n    from shared.deepy import controller as deepy_controller\n  File \"/work/WanGP/WanGP/shared/deepy/controller.py\", line 57, in <module>\n    from shared.deepy.engine import (\n  File \"/work/WanGP/WanGP/shared/deepy/engine.py\", line 72, in <module>\n    from shared.gradio import assistant_chat\n  File \"/work/WanGP/WanGP/shared/gradio/assistant_chat.py\", line 4, in <module>\n    from shared.deepy import chat\n  File \"/work/WanGP/WanGP/shared/deepy/chat.py\", line 16, in <module>\n    import markdown\nModuleNotFoundError: No module named 'markdown'\n",
+        "name": "wgp_cli_help",
+        "status": "ERROR"
+      }
+    ],
+    "status": "BLOCKED",
+    "steps": [
+      {
+        "detail": "",
+        "name": "torch_vision",
+        "returncode": 0,
+        "seconds": 2.2
+      },
+      {
+        "detail": "",
+        "name": "hub_compat",
+        "returncode": 0,
+        "seconds": 2.1
+      },
+      {
+        "detail": "",
+        "name": "model_runtime",
+        "returncode": 0,
+        "seconds": 3.0
+      },
+      {
+        "detail": "",
+        "name": "media",
+        "returncode": 0,
+        "seconds": 2.4
+      },
+      {
+        "detail": "",
+        "name": "wan_ui",
+        "returncode": 0,
+        "seconds": 3.6
+      },
+      {
+        "detail": "",
+        "name": "missing_import:onnxruntime",
+        "returncode": 0,
+        "seconds": 4.2
+      },
+      {
+        "detail": "",
+        "name": "missing_import:whisper",
+        "returncode": 0,
+        "seconds": 7.0
+      },
+      {
+        "detail": "",
+        "name": "missing_import:gguf",
+        "returncode": 0,
+        "seconds": 2.4
+      }
+    ],
+    "torch_after": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n",
+    "torch_initial": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n"
+  },
+  "source_sha": "3871c938affffa4c8c9769e991af8a238b9d7952"
+}

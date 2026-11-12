@@ -129,6 +129,23 @@ jobs:
           /cache/venvs/ltx25-torch210-cu128/bin/python \
             benchmarks/ltx25_convrot/support_manifest.py
 
+      - name: Install pinned minimal LTX-2.5 inference import prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          VENV=/cache/venvs/ltx25-torch210-cu128
+          "$VENV/bin/python" -m pip install -q \
+            --index-url https://download.pytorch.org/whl/cu128 \
+            'torchaudio==2.10.0'
+          printf 'torch==2.10.0+cu128\\n' > "$RUNNER_TEMP/ltx25-constraints.txt"
+          "$VENV/bin/python" -m pip install -q \
+            --constraint "$RUNNER_TEMP/ltx25-constraints.txt" \
+            'psutil' 'diffusers==0.36.0' \
+            'transformers==4.54.0' 'accelerate>=1.1.1' \
+            'einops' 'omegaconf' 'hydra-core' 'torchdiffeq' \
+            'soundfile' 'pillow'
+          "$VENV/bin/python" -c 'import torch,torchaudio; assert torch.__version__.startswith("2.10.0"); print("torch",torch.__version__,"torchaudio",torchaudio.__version__)'
+
       - name: Probe full WanGP LTX-2.5 model import prerequisites (no inference)
         shell: bash
         run: |

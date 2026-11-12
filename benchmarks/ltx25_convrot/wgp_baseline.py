@@ -29,7 +29,8 @@ if VARIANT not in ("r0_baseline", "e_fp32rot"):
 CFG = BASE / ("config-baseline" if VARIANT == "r0_baseline" else "config-e-fp32rot")
 VIDEOS = BASE / "videos" / VARIANT
 PARAMS = BASE / f"{VARIANT}_49frame_settings.json"
-SRC = BASE / "checkpoints"
+SRC = Path(os.environ.get("LTX25_CHECKPOINT_ROOT", "/opt/ltx25/checkpoints"))
+IMAGE_MANIFEST = Path("/opt/ltx25/model-image-manifest.json")
 MODEL_FILE = SRC / "ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors"
 TEXT_FILE = SRC / "gemma4-12b-ltx-v1/gemma4-12b-ltx-v1_int8_convrot.safetensors"
 
@@ -127,8 +128,11 @@ def main():
         if bootstrap.get("status") != "PASS":
             report.update(status="BLOCKED", blocker="Full LTX-2.5 import prerequisites not yet satisfied")
             return
+        if not IMAGE_MANIFEST.is_file():
+            report.update(status="BLOCKED", blocker="Model assets are not baked in the runner Docker image")
+            return
         if not MODEL_FILE.is_file() or not TEXT_FILE.is_file():
-            report.update(status="BLOCKED", blocker="Transformer or text encoder checkpoint absent")
+            report.update(status="BLOCKED", blocker="Image-baked transformer or text encoder checkpoint absent")
             return
 
         # A fresh installation needs WanGP to generate its default config.

@@ -1,4 +1,4 @@
-run: v9
-previous_run: 43310652803
-purpose: SHA256 stage temporal upscaler + diffusion video VAE from pinned source, then one real 49-frame R0 WanGP baseline with no pip installation.
-constraints: no concurrent GPU jobs; no retries; no Candidate E activation.
+run: v10
+previous_run: 43311215908
+purpose: diagnose expected-vs-actual HDR weight size and safely SHA-verify/repair only four LTX-2.5 support files, then one R0 text-to-video reference.
+policy: one run, no pip, no core checkpoint replacement, no auto retries, no candidate kernel.

@@ -145,6 +145,14 @@ def main():
         if not MODEL_FILE.is_file() or not TEXT_FILE.is_file():
             report.update(status="BLOCKED", blocker="Image-baked transformer or text encoder checkpoint absent")
             return
+        if VARIANT == "e_quality_1024":
+            refdir = BASE / "videos" / "r0_quality_1024"
+            if not refdir.is_dir() or not any(refdir.glob("*.mp4")):
+                report.update(
+                    status="BLOCKED",
+                    blocker="Create the matched 1024x576 R0 video before testing Candidate E"
+                )
+                return
 
         # A fresh installation needs WanGP to generate its default config.
         # Subsequent test runs reuse the isolated config and need only one

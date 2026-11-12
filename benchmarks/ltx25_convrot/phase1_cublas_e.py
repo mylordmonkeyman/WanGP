@@ -87,7 +87,8 @@ def one(f, triple, rotate, gemm):
         result["per_call_persistent_fp16_weight_copy"] = False
         layers = []
         with torch.inference_mode():
-            for m in MS:
+            extended = (1, 16, 256, 1024) if (n, k) in ((2048, 2048), (4096, 4096), (4096, 16384)) else (1, 16, 256)
+            for m in extended:
                 torch.manual_seed(20261112 + m)
                 x = torch.randn((m, k), dtype=torch.float32, device="cuda").bfloat16()
                 scratch_x = torch.empty((m, k), device="cuda", dtype=torch.float16)
@@ -112,61 +113,75 @@ def one(f, triple, rotate, gemm):
                 stream = torch.cuda.current_stream()
                 stream_ptr = ctypes.c_void_p(stream.cuda_stream)
 
-                def e_call():
-                    # Both conversions and rotation are included in E's timing.
-                    rotated = rotate(x, 256)
-                    scratch_w.copy_(q)           # exact INT8 to FP16, every call
-                    scratch_x.copy_(rotated)     # BF16 to FP16, range must be validated
+                def e_compute(fp32_rotation: bool):
+                    # The FP32-rotation variant is a separately labeled
+                    # experiment, not Candidate E's unchanged-rotation path.
+                    rotated = rotate(x.float() if fp32_rotation else x, 256)
+                    scratch_w.copy_(q)          # INT8->FP16 exact, every call
+                    scratch_x.copy_(rotated)    # BF16/FP32->FP16, range-gated later
                     err = gemm(ctypes.c_void_p(scratch_w.data_ptr()),
                                ctypes.c_void_p(scratch_x.data_ptr()),
                                ctypes.c_void_p(scratch_c.data_ptr()),
                                n, m, k, stream_ptr)
                     if err:
                         raise RuntimeError(f"cuBLAS status {err}")
-                    scratch_c.mul_(s.reshape(1, -1))  # FP32 postscale
+                    scratch_c.mul_(s.reshape(1, -1))  # FP32 epilogue
                     output.copy_(scratch_c)          # BF16 final output
                     return output
 
-                # Warm both paths before GPU event timings.
+                def e_call():
+                    return e_compute(False)
+
+                def e_fp32rot_call():
+                    return e_compute(True)
+
                 for _ in range(3):
                     r0_call()
                     e_call()
+                    e_fp32rot_call()
                 torch.cuda.synchronize()
                 r0_y = r0_call().clone()
                 e_y = e_call().clone()
-                # Explicit sync before reading metrics; never inside layer timing.
+                er_y = e_fp32rot_call().clone()
                 torch.cuda.synchronize()
-                e_stats = stats(e_y, ref_fp32)
                 r0_stats = stats(r0_y, ref_fp32)
-                # Strict per-shape initial gate from spec: E may not be worse.
+                e_stats = stats(e_y, ref_fp32)
+                er_stats = stats(er_y, ref_fp32)
                 tol = 1e-8
-                precision_gate = bool(
-                    e_stats["nonfinite"] == 0 and
-                    e_stats["p99_normalized"] <= r0_stats["p99_normalized"] + tol and
-                    e_stats["max_normalized"] <= r0_stats["max_normalized"] + tol
-                )
-                times = {"r0_ms": [], "e_ms": []}
+                def gate(candidate):
+                    return bool(
+                        candidate["nonfinite"] == 0
+                        and candidate["p99_normalized"] <= r0_stats["p99_normalized"] + tol
+                        and candidate["max_normalized"] <= r0_stats["max_normalized"] + tol
+                    )
+                times = {"r0_ms": [], "e_ms": [], "efp32_ms": []}
+                funcs = [("r0_ms", r0_call), ("e_ms", e_call), ("efp32_ms", e_fp32rot_call)]
                 for t in range(6):
-                    order = (("r0_ms", r0_call), ("e_ms", e_call))
-                    if t % 2:
-                        order = tuple(reversed(order))
+                    # Rotate order to mitigate clock and thermal drift.
+                    order = funcs[t % 3:] + funcs[:t % 3]
                     for label, call in order:
                         ms, _ = timer(call)
                         times[label].append(float(ms))
                 r0_med = statistics.median(times["r0_ms"])
                 e_med = statistics.median(times["e_ms"])
+                er_med = statistics.median(times["efp32_ms"])
                 layers.append({
                     "M": m, "K": k, "N": n, "group_size": 256,
-                    "R0": r0_stats, "E": e_stats,
-                    "precision_gate_pass": precision_gate,
+                    "R0": r0_stats, "E": e_stats, "E_fp32rot": er_stats,
+                    "precision_gate_pass": gate(e_stats),
+                    "fp32rot_precision_gate_pass": gate(er_stats),
                     "R0_full_layer_median_ms": r0_med,
                     "E_full_layer_median_ms": e_med,
+                    "E_fp32rot_full_layer_median_ms": er_med,
                     "speedup_ratio_R0_over_E": (r0_med/e_med) if e_med > 0 else None,
-                    "R0_trials_ms": times["r0_ms"], "E_trials_ms": times["e_ms"],
+                    "speedup_ratio_R0_over_fp32rot": (r0_med/er_med) if er_med > 0 else None,
+                    "R0_trials_ms": times["r0_ms"],
+                    "E_trials_ms": times["e_ms"],
+                    "E_fp32rot_trials_ms": times["efp32_ms"],
                     "range": e_input_range,
-                    "note": "Rotation, conversion, GEMM and FP32 scale/BF16 output included in E. Excludes H2D, model offload and any output bias.",
+                    "note": "E includes unchanged BF16 rotation; E_fp32rot changes it and is diagnostic only. Both include Q casting, cuBLAS, FP32 scale and BF16 output. No H2D or output bias.",
                 })
-                del x, scratch_x, scratch_c, output, ref_fp32, r0_y, e_y, rot, xr32, absx, nonzero
+                del x, scratch_x, scratch_c, output, ref_fp32, r0_y, e_y, er_y, rot, xr32, absx, nonzero
                 torch.cuda.synchronize()
         result["tests"] = layers
         result["status"] = "PASS"

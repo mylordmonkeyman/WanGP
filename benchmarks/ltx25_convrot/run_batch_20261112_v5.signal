@@ -1,0 +1,1 @@
+One deliberately-triggered runtime validation after completed v4 (43298420998); complete matplotlib and other allowlisted CLI dependencies, verify imports, and attempt at most one R0 baseline clip after dry-run passes. Do not edit this marker again. No cancellation or auto-retry.

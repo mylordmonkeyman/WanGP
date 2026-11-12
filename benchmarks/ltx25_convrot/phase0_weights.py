@@ -31,7 +31,7 @@ from safetensors import safe_open
 
 from phase0_probe import github_source_rotation
 
-FILE = Path("/cache/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors")
+FILE = Path(os.environ.get("LTX25_CHECKPOINT_ROOT", "/opt/ltx25/checkpoints")) / "ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors"
 OUT = Path("/cache/ltx25/results")
 # Four distinct high-frequency checkpoint weight families, bounded test sizes.
 FAMILIES = ((2048, 2048), (4096, 4096), (2048, 4096), (4096, 16384),

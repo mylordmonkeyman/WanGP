@@ -17,6 +17,9 @@ jobs:
     name: CUDA 12.8 + cuBLAS + PyTorch SM70
     runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
     timeout-minutes: 60
+    env:
+      LTX25_CHECKPOINT_ROOT: /opt/ltx25/checkpoints
+      HF_HUB_OFFLINE: '1'
     steps:
       - name: Checkout exact source commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -67,12 +70,6 @@ jobs:
           /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/phase0_probe.py
 
-      - name: Inspect pinned upstream ConvRot checkpoint header without downloading weights
-        shell: bash
-        run: |
-          set -euo pipefail
-          /opt/venvs/ltx25-cu128/bin/python benchmarks/ltx25_convrot/remote_header.py
-
       - name: Test actual INT8 checkpoint layers against FP32 mathematical reference
         shell: bash
         run: |
@@ -96,13 +93,6 @@ jobs:
           set -euo pipefail
           /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/phase1_cublas_e.py
-
-      - name: Inventory supporting LTX-2.5/Gemma4 checkpoint sizes (no downloads)
-        shell: bash
-        run: |
-          set -euo pipefail
-          /opt/venvs/ltx25-cu128/bin/python \
-            benchmarks/ltx25_convrot/support_manifest.py
 
       - name: Probe full WanGP LTX-2.5 model import prerequisites (no inference)
         shell: bash

@@ -60,7 +60,7 @@ docker compose -p "$project" "${args[@]}" -f "$override" \
   up -d --no-deps --force-recreate "$service"
 new_id="$(docker inspect -f '{{.Image}}' "$C")"
 [[ "$new_id" == "$target_id" ]] || die "Recreated container is not running the new image"
-docker exec "$C" /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+docker exec -i "$C" /opt/venvs/ltx25-cu128/bin/python - <<'PY'
 from pathlib import Path
 import json, mutagen, torch
 root = Path("/opt/ltx25/checkpoints")

@@ -82,7 +82,7 @@ def maybe_linear(x, weight, bias, group):
     if (n, k) not in PASS_SHAPES or group != 256 or m < 64 or m > 8192:
         _record("shape", n, k, m)
         return None
-    if (type(x) is not torch.Tensor or x.dtype != torch.bfloat16
+    if (type(x) is not torch.Tensor or x.dtype not in (torch.bfloat16, torch.float16)
             or not x.is_cuda or q.device != x.device or scale.device != x.device
             or (bias is not None and bias.device != x.device)
             or not q.is_contiguous() or q.dtype != torch.int8
@@ -95,7 +95,8 @@ def maybe_linear(x, weight, bias, group):
 
     from shared.qtypes.int8_convrot import _rotate_activation
 
-    # Precision path: FP32 Hadamard rotation, then FP16 activations.
+    # Precision path: FP32 Hadamard rotation of BF16 or FP16 input,
+    # then FP16 activation GEMM with FP32 accumulation and row epilogue.
     # INT8 weights are exactly representable by FP16; a *temporary*, reused
     # only during this call, holds them. No second long-lived weight set.
     x32 = _rotate_activation(x.float(), group).reshape(m, k)

@@ -29,8 +29,8 @@
   },
   "job_status_at_publish": "success",
   "note": "Only the original WanGP INT8 fallback was used for any output; Candidate E remains disabled.",
-  "run_id": "43298420998",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43298420998",
+  "run_id": "43300975562",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43300975562",
   "runtime_bootstrap": {
     "error": "",
     "imports": [
@@ -60,7 +60,7 @@
         "status": "PASS"
       },
       {
-        "detail": "nal>\", line 995, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"/work/WanGP/WanGP/models/wan/__init__.py\", line 1, in <module>\n    from . import configs, modules\n  File \"/work/WanGP/WanGP/models/wan/modules/__init__.py\", line 2, in <module>\n    from .model import WanModel\n  File \"/work/WanGP/WanGP/models/wan/modules/model.py\", line 22, in <module>\n    from ..scail.model_scail import build_scail_pose_tokens\n  File \"/work/WanGP/WanGP/models/wan/scail/__init__.py\", line 14, in <module>\n    from .scail_pose_nlf import (\n  File \"/work/WanGP/WanGP/models/wan/scail/scail_pose_nlf.py\", line 22, in <module>\n    from .scail_pose_draw import draw_pose_to_canvas_np, scale_image_hw_keep_size\n  File \"/work/WanGP/WanGP/models/wan/scail/scail_pose_draw.py\", line 17, in <module>\n    import matplotlib\nModuleNotFoundError: No module named 'matplotlib'\n",
+        "detail": "16 models when possible as GPU architecture doesn't support optimed BF16 Kernels\n[INT8] Backend: PyTorch (setting: disabled).\nTraceback (most recent call last):\n  File \"/work/WanGP/WanGP/wgp.py\", line 3739, in <module>\n    apply_fp8_kernel_setting(fp8_kernels)\n  File \"/work/WanGP/WanGP/wgp.py\", line 269, in apply_fp8_kernel_setting\n    backend = fp8_backend.configure(selection, resolved=resolved)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/work/WanGP/WanGP/shared/kernels/fp8_backend.py\", line 78, in configure\n    (quanto, scaled), reason = resolve_backend(selection) if resolved is None else resolved\n                               ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/work/WanGP/WanGP/shared/kernels/fp8_backend.py\", line 56, in resolve_backend\n    raise ValueError(f\"Unknown FP8 kernel backend: {selection!r}\")\nValueError: Unknown FP8 kernel backend: 'disabled'\n",
         "name": "wgp_cli_dryrun",
         "status": "ERROR"
       }
@@ -71,7 +71,7 @@
         "detail": "",
         "name": "torch_vision",
         "returncode": 0,
-        "seconds": 2.2
+        "seconds": 2.3
       },
       {
         "detail": "",
@@ -83,13 +83,13 @@
         "detail": "",
         "name": "model_runtime",
         "returncode": 0,
-        "seconds": 3.1
+        "seconds": 3.0
       },
       {
         "detail": "",
         "name": "media",
         "returncode": 0,
-        "seconds": 2.3
+        "seconds": 2.4
       },
       {
         "detail": "",
@@ -99,19 +99,13 @@
       },
       {
         "detail": "",
-        "name": "missing_import:easydict",
+        "name": "missing_import:matplotlib",
         "returncode": 0,
-        "seconds": 2.2
-      },
-      {
-        "detail": "",
-        "name": "missing_import:smplfitter",
-        "returncode": 0,
-        "seconds": 2.6
+        "seconds": 6.7
       }
     ],
     "torch_after": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n",
     "torch_initial": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n"
   },
-  "source_sha": "dfca09bf72aed0e6b57b01394c723b3892a31a3f"
+  "source_sha": "def7b19e24a7dfd19c3ceed987ba4789b8d2e36c"
 }

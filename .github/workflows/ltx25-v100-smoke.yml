@@ -129,6 +129,13 @@ jobs:
           /cache/venvs/ltx25-torch210-cu128/bin/python \
             benchmarks/ltx25_convrot/support_manifest.py
 
+      - name: Probe full WanGP LTX-2.5 model import prerequisites (no inference)
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python \
+            benchmarks/ltx25_convrot/runtime_import_probe.py
+
       - name: Publish sanitized report to isolated results branch
         if: ${{ always() }}
         env:

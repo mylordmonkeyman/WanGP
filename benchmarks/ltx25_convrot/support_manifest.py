@@ -29,6 +29,8 @@ ASSETS = [
     "ltx-2.5-22b_video_embeddings_connector_int8_convrot.safetensors",
     "ltx-2.5-22b_audio_embeddings_connector_int8_convrot.safetensors",
     "ltx-2.5-spatial-upscaler-x2-1.0_bf16.safetensors",
+    "ltx-2.5-22b-ic-lora-sdr-to-hdr-scene-emb.safetensors",
+    "ltx-2.5-22b-ic-lora-sdr-to-hdr-1.0.safetensors",
     "gemma4-12b-ltx-v1/gemma4-12b-ltx-v1_int8_convrot.safetensors",
     "gemma4-12b-ltx-v1/config.json",
     "gemma4-12b-ltx-v1/chat_template.jinja",

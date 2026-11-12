@@ -1,14 +1,8 @@
 name: LTX-2.5 V100 Phase 0 smoke
 
-# Only trusted pushes to the implementation branch run on the self-hosted GPU.
-# No pull_request or pull_request_target trigger.
+# Manual execution only. Editing or pushing code must never start GPU jobs.
+# Run only after the intended batch of changes is committed.
 on:
-  push:
-    branches:
-      - perf/ltx25-convrot-sm70
-    paths:
-      - .github/workflows/ltx25-v100-smoke.yml
-      - benchmarks/ltx25_convrot/**
   workflow_dispatch:
 
 permissions:

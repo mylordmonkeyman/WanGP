@@ -71,7 +71,7 @@
       "error": "",
       "group_size": 16,
       "max_abs": 0.0096435546875,
-      "median_ms": 0.0911,
+      "median_ms": 0.0881,
       "p99_abs": 0.0062255859375,
       "status": "PASS"
     },
@@ -81,7 +81,7 @@
       "error": "",
       "group_size": 16,
       "max_abs": 0.0152587890625,
-      "median_ms": 0.1044,
+      "median_ms": 0.0973,
       "p99_abs": 0.006103515625,
       "status": "PASS"
     },
@@ -91,7 +91,7 @@
       "error": "",
       "group_size": 64,
       "max_abs": 0.01068115234375,
-      "median_ms": 0.1055,
+      "median_ms": 0.1014,
       "p99_abs": 0.00616455078125,
       "status": "PASS"
     },
@@ -111,7 +111,7 @@
       "error": "",
       "group_size": 256,
       "max_abs": 0.007809638977050781,
-      "median_ms": 0.1004,
+      "median_ms": 0.0972,
       "p99_abs": 0.0060983747243881226,
       "status": "PASS"
     },
@@ -121,16 +121,16 @@
       "error": "",
       "group_size": 256,
       "max_abs": 0.015533447265625,
-      "median_ms": 0.1372,
+      "median_ms": 0.1352,
       "p99_abs": 0.006099700927734375,
       "status": "PASS"
     }
   ],
   "rotation_test_count": 6,
-  "run_id": "43289802454",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43289802454",
-  "source_sha": "e9ed1e4b353b05ba74112a0f5047b880bf6280af",
-  "timestamp_utc": "2026-11-12T19:25:03.021050+00:00",
+  "run_id": "43290039401",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43290039401",
+  "source_sha": "6ca45920d07206935fd06be98a6a5c33e145456b",
+  "timestamp_utc": "2026-11-12T19:26:07.135152+00:00",
   "torch": "2.10.0+cu128",
   "weight_diagnostic": {
     "actual_fallback_dispatch_confirmed": false,
@@ -140,30 +140,27 @@
         "K": 2048,
         "N": 2048,
         "name": "model.diffusion_model.transformer_blocks.0.audio_attn1.to_k",
-        "real_wrapper_error": {
-          "exception": "ModuleNotFoundError",
-          "message": "No module named 'shared'"
-        },
-        "real_wrapper_init": "ERROR",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
         "status": "PASS",
         "tests": [
           {
             "M": 1,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 0.06963200122117996
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.009913325309753418,
+            "R0_median_ms": 0.24268800020217896,
+            "R0_p99_normalized": 0.004106440581381321,
+            "surrogate_median_ms": 0.10339199751615524
           },
           {
             "M": 16,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 0.4106239974498749
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.014579415321350098,
+            "R0_median_ms": 0.24883200228214264,
+            "R0_p99_normalized": 0.005079272668808699,
+            "surrogate_median_ms": 0.4546560049057007
           }
         ]
       },
@@ -171,30 +168,27 @@
         "K": 4096,
         "N": 4096,
         "name": "model.diffusion_model.transformer_blocks.0.attn1.to_k",
-        "real_wrapper_error": {
-          "exception": "ModuleNotFoundError",
-          "message": "No module named 'shared'"
-        },
-        "real_wrapper_init": "ERROR",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
         "status": "PASS",
         "tests": [
           {
             "M": 1,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 0.08294399827718735
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.009717404842376709,
+            "R0_median_ms": 0.36454400420188904,
+            "R0_p99_normalized": 0.005475031211972237,
+            "surrogate_median_ms": 0.12902399897575378
           },
           {
             "M": 16,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 0.7895039916038513
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.022126883268356323,
+            "R0_median_ms": 0.4352000057697296,
+            "R0_p99_normalized": 0.005979500710964203,
+            "surrogate_median_ms": 0.8314880132675171
           }
         ]
       },
@@ -202,30 +196,27 @@
         "K": 4096,
         "N": 2048,
         "name": "model.diffusion_model.transformer_blocks.0.audio_to_video_attn.to_q",
-        "real_wrapper_error": {
-          "exception": "ModuleNotFoundError",
-          "message": "No module named 'shared'"
-        },
-        "real_wrapper_init": "ERROR",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
         "status": "PASS",
         "tests": [
           {
             "M": 1,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 0.0644799992442131
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.013822197914123535,
+            "R0_median_ms": 0.26316800713539124,
+            "R0_p99_normalized": 0.007453256752341986,
+            "surrogate_median_ms": 0.12595200538635254
           },
           {
             "M": 16,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 0.78438401222229
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.03011023998260498,
+            "R0_median_ms": 0.2764799892902374,
+            "R0_p99_normalized": 0.007338085677474737,
+            "surrogate_median_ms": 0.8304640054702759
           }
         ]
       },
@@ -233,30 +224,27 @@
         "K": 16384,
         "N": 4096,
         "name": "model.diffusion_model.transformer_blocks.0.ff.net.2",
-        "real_wrapper_error": {
-          "exception": "ModuleNotFoundError",
-          "message": "No module named 'shared'"
-        },
-        "real_wrapper_init": "ERROR",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
         "status": "PASS",
         "tests": [
           {
             "M": 1,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 0.21299199759960175
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.009723693132400513,
+            "R0_median_ms": 1.096735954284668,
+            "R0_p99_normalized": 0.005862535908818245,
+            "surrogate_median_ms": 0.26214399933815
           },
           {
             "M": 16,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 3.166208028793335
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.03471675515174866,
+            "R0_median_ms": 1.2759040594100952,
+            "R0_p99_normalized": 0.006730115972459316,
+            "surrogate_median_ms": 3.210239887237549
           }
         ]
       },
@@ -264,30 +252,27 @@
         "K": 4096,
         "N": 16384,
         "name": "model.diffusion_model.transformer_blocks.0.ff.net.0.proj",
-        "real_wrapper_error": {
-          "exception": "ModuleNotFoundError",
-          "message": "No module named 'shared'"
-        },
-        "real_wrapper_init": "ERROR",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
         "status": "PASS",
         "tests": [
           {
             "M": 1,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 0.21299199759960175
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.01200053095817566,
+            "R0_median_ms": 1.0977280139923096,
+            "R0_p99_normalized": 0.004417562857270241,
+            "surrogate_median_ms": 0.25702399015426636
           },
           {
             "M": 16,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 1.2247040271759033
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.015240326523780823,
+            "R0_median_ms": 1.2564480304718018,
+            "R0_p99_normalized": 0.005024511367082596,
+            "surrogate_median_ms": 1.2728320360183716
           }
         ]
       },
@@ -295,30 +280,27 @@
         "K": 8192,
         "N": 2048,
         "name": "model.diffusion_model.transformer_blocks.0.audio_ff.net.2",
-        "real_wrapper_error": {
-          "exception": "ModuleNotFoundError",
-          "message": "No module named 'shared'"
-        },
-        "real_wrapper_init": "ERROR",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
         "status": "PASS",
         "tests": [
           {
             "M": 1,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 0.08707199990749359
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.03159511089324951,
+            "R0_median_ms": 0.35123199224472046,
+            "R0_p99_normalized": 0.011796744540333748,
+            "surrogate_median_ms": 0.12902399897575378
           },
           {
             "M": 16,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 1.5462720394134521
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.04610031843185425,
+            "R0_median_ms": 0.43827199935913086,
+            "R0_p99_normalized": 0.010998187586665154,
+            "surrogate_median_ms": 1.4899200201034546
           }
         ]
       },
@@ -326,30 +308,27 @@
         "K": 2048,
         "N": 8192,
         "name": "model.diffusion_model.transformer_blocks.0.audio_ff.net.0.proj",
-        "real_wrapper_error": {
-          "exception": "ModuleNotFoundError",
-          "message": "No module named 'shared'"
-        },
-        "real_wrapper_init": "ERROR",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
         "status": "PASS",
         "tests": [
           {
             "M": 1,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 0.07478400319814682
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.01182636059820652,
+            "R0_median_ms": 0.3563520014286041,
+            "R0_p99_normalized": 0.005432443227618933,
+            "surrogate_median_ms": 0.13209599256515503
           },
           {
             "M": 16,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 0.41676801443099976
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.023596763610839844,
+            "R0_median_ms": 0.4116480052471161,
+            "R0_p99_normalized": 0.005287282168865204,
+            "surrogate_median_ms": 0.4618239998817444
           }
         ]
       },
@@ -357,30 +336,27 @@
         "K": 2048,
         "N": 4096,
         "name": "model.diffusion_model.transformer_blocks.0.audio_to_video_attn.to_out.0",
-        "real_wrapper_error": {
-          "exception": "ModuleNotFoundError",
-          "message": "No module named 'shared'"
-        },
-        "real_wrapper_init": "ERROR",
+        "real_wrapper_error": null,
+        "real_wrapper_init": "PASS",
         "status": "PASS",
         "tests": [
           {
             "M": 1,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 0.06451199948787689
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.002084076404571533,
+            "R0_median_ms": 0.24886399507522583,
+            "R0_p99_normalized": 0.001316838781349361,
+            "surrogate_median_ms": 0.11161600053310394
           },
           {
             "M": 16,
             "R0_leaf_error": "",
-            "R0_leaf_status": "not_run",
-            "R0_max_normalized": null,
-            "R0_median_ms": null,
-            "R0_p99_normalized": null,
-            "surrogate_median_ms": 0.3819519877433777
+            "R0_leaf_status": "PASS",
+            "R0_max_normalized": 0.0025556907057762146,
+            "R0_median_ms": 0.2754560112953186,
+            "R0_p99_normalized": 0.0013611563481390476,
+            "surrogate_median_ms": 0.4270080029964447
           }
         ]
       }

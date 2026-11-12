@@ -72,10 +72,10 @@ def safe_github_idle():
 
 
 def require_default(host, config):
+    unsupported = []
     def is_default(field, allowed):
         if host.get(field) not in allowed:
-            fatal("Unsupported customized Docker HostConfig." + field
-                  + "; refusing a lossy migration")
+            unsupported.append("HostConfig." + field)
     is_default("Privileged", (False, None))
     is_default("ReadonlyRootfs", (False, None))
     is_default("AutoRemove", (False, None))
@@ -100,18 +100,33 @@ def require_default(host, config):
         ):
             fatal("Unexpected Docker HostConfig." + field + " format")
     is_default("PidsLimit", (0, -1, None))
-    for key in ("Devices", "DeviceCgroupRules", "CapAdd", "CapDrop",
-                "SecurityOpt", "Ulimits", "GroupAdd", "ExtraHosts",
+    # Keep the original capability restrictions. "ALL" and named
+    # capabilities are the only accepted Docker cap-drop forms.
+    drops = host.get("CapDrop") or []
+    if not isinstance(drops, list) or any(
+        not isinstance(cap, str) or
+        not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", cap)
+        for cap in drops
+    ):
+        unsupported.append("HostConfig.CapDrop (unexpected format)")
+    # Preserve Docker's no-new-privileges security restriction if present.
+    # Fail closed on SELinux/AppArmor/seccomp customizations until audited.
+    security_opts = host.get("SecurityOpt") or []
+    if not isinstance(security_opts, list) or any(
+        opt not in ("no-new-privileges", "no-new-privileges:true")
+        for opt in security_opts
+    ):
+        unsupported.append("HostConfig.SecurityOpt (unsupported value)")
+    for key in ("Devices", "DeviceCgroupRules", "CapAdd",
+                "Ulimits", "GroupAdd", "ExtraHosts",
                 "Dns", "DnsOptions", "DnsSearch", "Links", "VolumesFrom",
                 "Tmpfs", "Sysctls", "PortBindings", "PublishAllPorts"):
         value = host.get(key)
         if value not in (None, [], {}, "", False):
-            fatal("Unsupported custom HostConfig." + key
-                  + "; inspect manually before any recreation")
+            unsupported.append("HostConfig." + key)
     for key in ("ExposedPorts", "Volumes", "Healthcheck", "OnBuild"):
         if config.get(key) not in (None, {}, [], ""):
-            fatal("Unsupported custom container Config." + key
-                  + "; refusing to guess")
+            unsupported.append("Config." + key)
     if host.get("RestartPolicy", {}).get("Name") != "unless-stopped":
         fatal("Unexpected restart policy")
     if host.get("IpcMode") not in ("private", "", None):
@@ -126,7 +141,11 @@ def require_default(host, config):
     if config.get("Tty") or config.get("OpenStdin") or config.get("StdinOnce"):
         fatal("Unexpected interactive/TTY configuration")
     if host.get("Init") not in (False, None):
-        fatal("Unexpected init configuration")
+        unsupported.append("HostConfig.Init")
+    if unsupported:
+        fatal("Unsupported Docker settings (all detected): "
+              + ", ".join(unsupported)
+              + "; no changes were made; refusing lossy migration")
 
 
 def main():
@@ -190,6 +209,8 @@ def main():
     print("Network/restart: bridge / unless-stopped")
     print("CPU affinity:", host.get("CpusetCpus") or "unrestricted")
     print("NUMA mem affinity:", host.get("CpusetMems") or "unrestricted")
+    print("Dropped capabilities:", ", ".join(host.get("CapDrop") or []) or "none")
+    print("Security options:", ", ".join(host.get("SecurityOpt") or []) or "default")
     print("Existing environment: preserving", len(vals), "variables without displaying values")
     print("Image size:", img["Size"], "bytes")
     if dry_run:
@@ -213,8 +234,13 @@ def main():
                         ("CpusetMems", "--cpuset-mems")):
         if host.get(field):
             affinity_args += [flag, host[field]]
+    restriction_args = []
+    for cap in host.get("CapDrop") or []:
+        restriction_args += ["--cap-drop", cap]
+    for opt in host.get("SecurityOpt") or []:
+        restriction_args += ["--security-opt", opt]
     run(["docker", "run", "--rm", "--gpus", "device=" + EXPECTED_GPU,
-         *affinity_args, "--entrypoint",
+         *affinity_args, *restriction_args, "--entrypoint",
          "/opt/venvs/ltx25-cu128/bin/python", IMAGE, "-c", check])
     # Recheck immediately before stopping old runner.
     safe_github_idle()
@@ -225,7 +251,7 @@ def main():
         "--user", "runner", "--entrypoint", "/usr/local/bin/start-runner.sh",
         "--restart", "unless-stopped", "--network", "bridge",
         "--gpus", "device=" + EXPECTED_GPU,
-        *affinity_args,
+        *affinity_args, *restriction_args,
     ]
     if cfg.get("WorkingDir"):
         command += ["--workdir", cfg["WorkingDir"]]
@@ -263,6 +289,11 @@ def main():
             for field in ("CpusetCpus", "CpusetMems"):
                 if (new["HostConfig"].get(field) or "") != (host.get(field) or ""):
                     fatal("New runner CPU/NUMA affinity differs: " + field)
+            for field in ("CapDrop", "SecurityOpt"):
+                old_values = host.get(field) or []
+                new_values = new["HostConfig"].get(field) or []
+                if sorted(old_values) != sorted(new_values):
+                    fatal("New runner security restrictions differ: " + field)
             if {m["Destination"]: m["Source"] for m in new["Mounts"]} != actual:
                 fatal("New container lost a bind mount")
             run(["docker", "exec", CONTAINER,

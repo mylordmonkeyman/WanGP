@@ -44,58 +44,40 @@ jobs:
           nvcc -O3 -std=c++17 -arch=sm_70             benchmarks/ltx25_convrot/smoke_cublas_sm70.cu             -lcublas -o "$RUNNER_TEMP/ltx25_sm70_cublas_smoke"
           "$RUNNER_TEMP/ltx25_sm70_cublas_smoke"
 
-      - name: Install isolated pinned PyTorch 2.10 CUDA 12.8 environment
+      - name: Validate pre-baked Python/CUDA environment (no pip)
         shell: bash
         run: |
           set -euo pipefail
-          VENV=/cache/venvs/ltx25-torch210-cu128
-          if [ ! -x "$VENV/bin/python" ]; then
-            mkdir -p "$(dirname "$VENV")"
-            python3 -m venv "$VENV"
-          fi
-          if ! "$VENV/bin/python" -c 'import torch; assert torch.__version__.startswith("2.10.0"); assert torch.version.cuda == "12.8"'; then
-            "$VENV/bin/python" -m pip install               --index-url https://download.pytorch.org/whl/cu128               'torch==2.10.0'
-          fi
-          "$VENV/bin/python" -c 'import torch; print(torch.__version__, torch.version.cuda, torch.cuda.get_arch_list())'
+          test -x /opt/venvs/ltx25-cu128/bin/python || {
+            echo "Run benchmarks/ltx25_convrot/docker/bake_runner_image.sh on host first" >&2
+            exit 1
+          }
+          /opt/venvs/ltx25-cu128/bin/python -c 'import torch,torchaudio,torchvision,sysconfig,pathlib; assert torch.__version__.startswith("2.10.0+cu128"); assert torch.cuda.get_device_capability()==(7,0); assert (pathlib.Path(sysconfig.get_path("include"))/"Python.h").is_file()'
 
       - name: Run real SM70 PyTorch operations
         shell: bash
         run: |
           set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python             benchmarks/ltx25_convrot/smoke_torch_sm70.py
-
-      - name: Install minimal checkpoint-header dependency
-        shell: bash
-        run: |
-          set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python -m pip install \
-            'safetensors==0.7.0'
+          /opt/venvs/ltx25-cu128/bin/python             benchmarks/ltx25_convrot/smoke_torch_sm70.py
 
       - name: Phase 0 exploratory environment, checkpoint visibility and rotation
         shell: bash
         run: |
           set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python \
+          /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/phase0_probe.py
 
       - name: Inspect pinned upstream ConvRot checkpoint header without downloading weights
         shell: bash
         run: |
           set -euo pipefail
-          python3 benchmarks/ltx25_convrot/remote_header.py
-
-      - name: Install exact WanGP Quanto fallback dependency
-        shell: bash
-        run: |
-          set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python -m pip install \
-            'optimum-quanto==0.2.7' 'numpy==2.1.2'
+          /opt/venvs/ltx25-cu128/bin/python benchmarks/ltx25_convrot/remote_header.py
 
       - name: Test actual INT8 checkpoint layers against FP32 mathematical reference
         shell: bash
         run: |
           set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python \
+          /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/phase0_weights.py
 
       - name: Compile exploratory bounded FP32-output cuBLAS Candidate E
@@ -112,46 +94,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python \
+          /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/phase1_cublas_e.py
 
       - name: Inventory supporting LTX-2.5/Gemma4 checkpoint sizes (no downloads)
         shell: bash
         run: |
           set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python -m pip install -q 'huggingface_hub[hf_xet]'
-          /cache/venvs/ltx25-torch210-cu128/bin/python \
+          /opt/venvs/ltx25-cu128/bin/python -m pip install -q 'huggingface_hub[hf_xet]'
+          /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/support_manifest.py
-
-      - name: Install pinned minimal LTX-2.5 inference import prerequisites
-        shell: bash
-        run: |
-          set -euo pipefail
-          VENV=/cache/venvs/ltx25-torch210-cu128
-          "$VENV/bin/python" -m pip install -q \
-            --index-url https://download.pytorch.org/whl/cu128 \
-            'torchaudio==2.10.0'
-          printf 'torch==2.10.0+cu128\\n' > "$RUNNER_TEMP/ltx25-constraints.txt"
-          "$VENV/bin/python" -m pip install -q \
-            --constraint "$RUNNER_TEMP/ltx25-constraints.txt" \
-            'psutil' 'diffusers==0.36.0' \
-            'transformers==4.54.0' 'accelerate>=1.1.1' \
-            'einops' 'omegaconf' 'hydra-core' 'torchdiffeq' \
-            'soundfile' 'pillow'
-          "$VENV/bin/python" -c 'import torch,torchaudio; assert torch.__version__.startswith("2.10.0"); print("torch",torch.__version__,"torchaudio",torchaudio.__version__)'
 
       - name: Probe full WanGP LTX-2.5 model import prerequisites (no inference)
         shell: bash
         run: |
           set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python \
+          /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/runtime_import_probe.py
 
       - name: Verify actual QLinear ConvRot forward dispatcher on real checkpoint weights
         shell: bash
         run: |
           set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python \
+          /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/phase0_dispatch_probe.py
 
       - name: Audit FP32-rotation precision on multiple checkpoint layers and seeds
@@ -160,7 +125,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python \
+          /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/precision_audit.py
 
       - name: Publish sanitized report to isolated results branch

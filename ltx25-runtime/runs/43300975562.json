@@ -1,0 +1,111 @@
+{
+  "baseline": {
+    "blocker": "Full LTX-2.5 import prerequisites not yet satisfied",
+    "candidate_e_enabled": false,
+    "checkpoint_visible": true,
+    "configured_dryrun": {
+      "elapsed_seconds": null,
+      "returncode": null,
+      "tail": ""
+    },
+    "frames": 49,
+    "gemma_checkpoint_visible": true,
+    "generation": {
+      "elapsed_seconds": null,
+      "returncode": null,
+      "tail": ""
+    },
+    "gpu_preflight": null,
+    "initial_dryrun": {
+      "returncode": null,
+      "tail": ""
+    },
+    "model_type": "ltx2_25_22B_distilled",
+    "resolution": "576x320",
+    "seed": 20261112,
+    "status": "BLOCKED",
+    "video_dir": "/cache/ltx25/videos/r0_baseline",
+    "videos": []
+  },
+  "job_status_at_publish": "success",
+  "note": "Only the original WanGP INT8 fallback was used for any output; Candidate E remains disabled.",
+  "run_id": "43300975562",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43300975562",
+  "runtime_bootstrap": {
+    "error": "",
+    "imports": [
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "mmgp.offload",
+        "status": "PASS"
+      },
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "models.ltx2.ltx_core.model.transformer",
+        "status": "PASS"
+      },
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "models.ltx2.ltx_pipelines.distilled",
+        "status": "PASS"
+      },
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "models.ltx2.ltx2",
+        "status": "PASS"
+      },
+      {
+        "detail": "ow asynchronous generation/post-processing in MCP\n                        API v2/v2.1; disabled by default\n  --mcp-console-output  Mirror WanGP stdout/stderr while serving MCP requests\n  --mcp-allow-read-file-system\n                        Allow MCP agents to reference arbitrary server\n                        filesystem paths; disabled by default\n  --dry-run             Validate file without generating (use with --process)\n  --output-dir OUTPUT_DIR\n                        Override output directory for CLI processing (use with\n                        --process)\n  --refresh-catalog     Refresh local plugin metadata for installed external\n                        plugins\n  --refresh-full-catalog\n                        Refresh local plugin metadata for all catalog plugins\n  --merge-catalog       Merge plugins_local.json into plugins.json and remove\n                        plugins_local.json\n",
+        "name": "wgp_cli_help",
+        "status": "PASS"
+      },
+      {
+        "detail": "16 models when possible as GPU architecture doesn't support optimed BF16 Kernels\n[INT8] Backend: PyTorch (setting: disabled).\nTraceback (most recent call last):\n  File \"/work/WanGP/WanGP/wgp.py\", line 3739, in <module>\n    apply_fp8_kernel_setting(fp8_kernels)\n  File \"/work/WanGP/WanGP/wgp.py\", line 269, in apply_fp8_kernel_setting\n    backend = fp8_backend.configure(selection, resolved=resolved)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/work/WanGP/WanGP/shared/kernels/fp8_backend.py\", line 78, in configure\n    (quanto, scaled), reason = resolve_backend(selection) if resolved is None else resolved\n                               ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/work/WanGP/WanGP/shared/kernels/fp8_backend.py\", line 56, in resolve_backend\n    raise ValueError(f\"Unknown FP8 kernel backend: {selection!r}\")\nValueError: Unknown FP8 kernel backend: 'disabled'\n",
+        "name": "wgp_cli_dryrun",
+        "status": "ERROR"
+      }
+    ],
+    "status": "BLOCKED",
+    "steps": [
+      {
+        "detail": "",
+        "name": "torch_vision",
+        "returncode": 0,
+        "seconds": 2.3
+      },
+      {
+        "detail": "",
+        "name": "hub_compat",
+        "returncode": 0,
+        "seconds": 2.2
+      },
+      {
+        "detail": "",
+        "name": "model_runtime",
+        "returncode": 0,
+        "seconds": 3.0
+      },
+      {
+        "detail": "",
+        "name": "media",
+        "returncode": 0,
+        "seconds": 2.4
+      },
+      {
+        "detail": "",
+        "name": "wan_ui",
+        "returncode": 0,
+        "seconds": 3.5
+      },
+      {
+        "detail": "",
+        "name": "missing_import:matplotlib",
+        "returncode": 0,
+        "seconds": 6.7
+      }
+    ],
+    "torch_after": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n",
+    "torch_initial": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n"
+  },
+  "source_sha": "def7b19e24a7dfd19c3ceed987ba4789b8d2e36c"
+}

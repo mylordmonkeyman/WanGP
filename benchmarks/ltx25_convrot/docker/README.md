@@ -41,6 +41,30 @@ Keep model checkpoints out of the image. They are stored in
 downloads the pinned HDR scene embeddings and LoRA discovered when the
 first real CLI generation attempt got through the dry-run.
 
+## Recover an interrupted or failed build without copying 9.3GB again
+
+The Dockerfile must **not** call `torch.cuda.get_arch_list()` at build
+time: Docker BuildKit normally exposes no GPU, so that API can return
+an empty list even for a valid CUDA wheel. The Dockerfile checks CUDA
+build support only, and the bake script checks SM70 in a separate
+`docker run --gpus all` runtime test.
+
+If your first attempt reached the Dockerfile's final validation step,
+reuse the **existing** build context:
+
+```bash
+git -C /tmp/ltx25-bake-src.dmHY1b/WanGP pull --ff-only
+
+LTX25_BUILD_CONTEXT=/home/mymonkeyman/ltx25-bake.TGoLuSzn \
+  bash /tmp/ltx25-bake-src.dmHY1b/WanGP/benchmarks/ltx25_convrot/docker/bake_runner_image.sh
+```
+
+The script refreshes only the Dockerfile in that directory, reuses the
+prior package snapshot, takes advantage of BuildKit's cached successful
+layers, builds and tests the image with access to the GPU, and configures
+the existing runner **without replacing the runner container**. Only
+run while all LTX-2.5 workflows are inactive.
+
 ## Quick verification / next run
 
 ```bash

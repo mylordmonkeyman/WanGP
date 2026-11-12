@@ -125,12 +125,13 @@ def main():
             report.update(status="BLOCKED", blocker="Transformer or text encoder checkpoint absent")
             return
 
-        # Allow WanGP to create its own complete default config first, before
-        # we override the few isolated options needed for this test.
-        first = run(cmd(True), timeout=300, log_path=OUT / f"cli_first_{sha[:12]}.log")
-        report["initial_cli_dryrun"] = first
-
+        # A fresh installation needs WanGP to generate its default config.
+        # Subsequent test runs reuse the isolated config and need only one
+        # configured dry-run, avoiding an unnecessary second CLI startup.
         cfg = CFG / "wgp_config.json"
+        if not cfg.is_file():
+            first = run(cmd(True), timeout=300, log_path=OUT / f"cli_first_{sha[:12]}.log")
+            report["initial_cli_dryrun"] = first
         if not cfg.is_file():
             report.update(status="BLOCKED", blocker="WanGP did not initialize isolated config")
             return

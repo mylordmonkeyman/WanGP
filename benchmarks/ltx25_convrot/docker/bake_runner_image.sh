@@ -57,22 +57,9 @@ DOCKER_BUILDKIT=1 docker build --progress=plain \
 docker run --rm --gpus all --entrypoint "$DEST_VENV/bin/python" "$TAG" \
   -c 'import torch,matplotlib,onnxruntime; assert torch.cuda.is_available(); caps=[torch.cuda.get_device_capability(i) for i in range(torch.cuda.device_count())]; assert (7,0) in caps, caps; assert "sm_70" in torch.cuda.get_arch_list(), torch.cuda.get_arch_list(); print("BAKED_SM70_OK",torch.__version__,caps)'
 
-echo "=== Prepare existing runner, without restart or changing its mounts ==="
-docker exec -u root "$CONTAINER" bash -lc '
-  set -euo pipefail
-  apt-get update -qq
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-    python3.12-dev python3-dev build-essential pkg-config
-  test -f /usr/include/python3.12/Python.h
-  mkdir -p /opt/venvs
-  if [ -e /opt/venvs/ltx25-cu128 ] && [ ! -L /opt/venvs/ltx25-cu128 ]; then
-    echo "Refusing to replace an existing real venv" >&2
-    exit 1
-  fi
-  ln -sfn /cache/venvs/ltx25-torch210-cu128 /opt/venvs/ltx25-cu128
-  /opt/venvs/ltx25-cu128/bin/python -c \
-    "import os,sysconfig; assert os.path.isfile(os.path.join(sysconfig.get_path(\"include\"),\"Python.h\"))"
-'
+echo "=== Activate prebuilt dependencies on current runner (no apt) ==="
+bash "$SCRIPT_DIR/activate_baked_runner.sh"
+
 echo "=== SUCCESS: no runner restart ==="
 docker image ls "$TAG"
 docker exec "$CONTAINER" "$DEST_VENV/bin/python" -c \

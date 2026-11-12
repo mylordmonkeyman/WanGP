@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1.7
+# Preserve existing Actions runner entrypoint and credential layout.
+# The build context contains no GitHub credentials, checkpoints or model weights.
+ARG BASE_IMAGE=local/gha-v100-ltx25:cuda12.8
+FROM \${BASE_IMAGE}
+
+USER root
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+       python3.12-dev python3-dev python3-venv \
+       build-essential pkg-config ninja-build \
+       ffmpeg libsndfile1 libglib2.0-0 libgl1 libgomp1 \
+       libsm6 libxext6 libxrender1 \
+ && rm -rf /var/lib/apt/lists/*
+
+# Snapshot only site-packages of the already verified Python 3.12, CUDA 12.8
+# PyTorch runtime. /cache is bind-mounted, so bake outside /cache.
+RUN python3 -m venv --copies /opt/venvs/ltx25-cu128
+COPY site-packages/ /opt/venvs/ltx25-cu128/lib/python3.12/site-packages/
+COPY freeze.txt /opt/venvs/ltx25-cu128/freeze.txt
+
+RUN /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+import os, sys, sysconfig
+assert sys.version_info[:2] == (3, 12), sys.version
+header = os.path.join(sysconfig.get_path("include"), "Python.h")
+assert os.path.isfile(header), f"Missing Python.h: {header}"
+import torch, torchaudio, torchvision, safetensors, huggingface_hub
+import diffusers, transformers, matplotlib, onnxruntime
+import optimum.quanto
+assert torch.__version__.startswith("2.10.0+cu128"), torch.__version__
+assert torchaudio.__version__.startswith("2.10.0+cu128"), torchaudio.__version__
+assert torchvision.__version__.startswith("0.25.0+cu128"), torchvision.__version__
+assert "sm_70" in torch.cuda.get_arch_list(), torch.cuda.get_arch_list()
+print("LTX25_IMAGE_VERIFIED", sys.executable, torch.__version__, header)
+PY
+
+# Keep the base runner's entrypoint and credentials/mount handling unchanged.
+ENV LTX25_PYTHON=/opt/venvs/ltx25-cu128/bin/python
+USER runner

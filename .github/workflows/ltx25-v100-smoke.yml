@@ -1,0 +1,71 @@
+name: LTX-2.5 V100 Phase 0 smoke
+
+# Only trusted pushes to the implementation branch run on the self-hosted GPU.
+# No pull_request or pull_request_target trigger.
+on:
+  push:
+    branches:
+      - perf/ltx25-convrot-sm70
+    paths:
+      - .github/workflows/ltx25-v100-smoke.yml
+      - benchmarks/ltx25_convrot/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ltx25-v100-smoke
+  cancel-in-progress: false
+
+jobs:
+  v100-smoke:
+    name: CUDA 12.8 + cuBLAS + PyTorch SM70
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact source commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Report runner and CUDA environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          git rev-parse HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          uname -a
+          nvidia-smi -L
+          nvidia-smi
+          nvcc --version
+          test "$(nvidia-smi --query-gpu=uuid --format=csv,noheader | wc -l)" -eq 1
+
+      - name: Compile and execute SM70 cuBLAS FP32-output smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70             benchmarks/ltx25_convrot/smoke_cublas_sm70.cu             -lcublas -o "$RUNNER_TEMP/ltx25_sm70_cublas_smoke"
+          "$RUNNER_TEMP/ltx25_sm70_cublas_smoke"
+
+      - name: Install isolated pinned PyTorch 2.10 CUDA 12.8 environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          VENV=/cache/venvs/ltx25-torch210-cu128
+          if [ ! -x "$VENV/bin/python" ]; then
+            mkdir -p "$(dirname "$VENV")"
+            python3 -m venv "$VENV"
+          fi
+          if ! "$VENV/bin/python" -c 'import torch; assert torch.__version__.startswith("2.10.0"); assert torch.version.cuda == "12.8"'; then
+            "$VENV/bin/python" -m pip install               --index-url https://download.pytorch.org/whl/cu128               'torch==2.10.0'
+          fi
+          "$VENV/bin/python" -c 'import torch; print(torch.__version__, torch.version.cuda, torch.cuda.get_arch_list())'
+
+      - name: Run real SM70 PyTorch operations
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python             benchmarks/ltx25_convrot/smoke_torch_sm70.py

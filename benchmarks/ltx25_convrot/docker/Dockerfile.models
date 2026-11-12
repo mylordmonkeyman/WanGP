@@ -1,0 +1,58 @@
+# syntax=docker/dockerfile:1.7
+# Immutable, self-contained LTX-2.5 SM70 benchmark image. No model fetches
+# or safetensors hashing in Actions test jobs. Build only on the trusted host,
+# where ltx25_weights is the persistent checkpoint cache, read-only.
+ARG BASE_IMAGE=local/gha-v100-ltx25:cu128-ltx25-baked-v1
+FROM ${BASE_IMAGE}
+USER root
+ENV DEBIAN_FRONTEND=noninteractive
+# WanGP saves optional MP4 metadata using this module.
+RUN /opt/venvs/ltx25-cu128/bin/python -m pip install --no-cache-dir 'mutagen==1.47.0'
+RUN mkdir -p /opt/ltx25/checkpoints/gemma4-12b-ltx-v1
+COPY --from=ltx25_weights /ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+COPY --from=ltx25_weights /ltx-2.5-22b_video_vae_bf16.safetensors /opt/ltx25/checkpoints/ltx-2.5-22b_video_vae_bf16.safetensors
+COPY --from=ltx25_weights /ltx-2.5-22b_audio_vae_bf16.safetensors /opt/ltx25/checkpoints/ltx-2.5-22b_audio_vae_bf16.safetensors
+COPY --from=ltx25_weights /ltx-2.5-22b_vocoder_bf16.safetensors /opt/ltx25/checkpoints/ltx-2.5-22b_vocoder_bf16.safetensors
+COPY --from=ltx25_weights /ltx-2.5-22b_text_embedding_projection_bf16.safetensors /opt/ltx25/checkpoints/ltx-2.5-22b_text_embedding_projection_bf16.safetensors
+COPY --from=ltx25_weights /ltx-2.5-22b_video_embeddings_connector_int8_convrot.safetensors /opt/ltx25/checkpoints/ltx-2.5-22b_video_embeddings_connector_int8_convrot.safetensors
+COPY --from=ltx25_weights /ltx-2.5-22b_audio_embeddings_connector_int8_convrot.safetensors /opt/ltx25/checkpoints/ltx-2.5-22b_audio_embeddings_connector_int8_convrot.safetensors
+COPY --from=ltx25_weights /ltx-2.5-spatial-upscaler-x2-1.0_bf16.safetensors /opt/ltx25/checkpoints/ltx-2.5-spatial-upscaler-x2-1.0_bf16.safetensors
+COPY --from=ltx25_weights /ltx-2.5-temporal-upscaler-x2-1.0_bf16.safetensors /opt/ltx25/checkpoints/ltx-2.5-temporal-upscaler-x2-1.0_bf16.safetensors
+COPY --from=ltx25_weights /ltx-2.5-22b_diffusion_video_vae_bf16.safetensors /opt/ltx25/checkpoints/ltx-2.5-22b_diffusion_video_vae_bf16.safetensors
+COPY --from=ltx25_weights /ltx-2.5-22b-ic-lora-sdr-to-hdr-scene-emb.safetensors /opt/ltx25/checkpoints/ltx-2.5-22b-ic-lora-sdr-to-hdr-scene-emb.safetensors
+COPY --from=ltx25_weights /ltx-2.5-22b-ic-lora-sdr-to-hdr-1.0.safetensors /opt/ltx25/checkpoints/ltx-2.5-22b-ic-lora-sdr-to-hdr-1.0.safetensors
+COPY --from=ltx25_weights /gemma4-12b-ltx-v1/gemma4-12b-ltx-v1_int8_convrot.safetensors /opt/ltx25/checkpoints/gemma4-12b-ltx-v1/gemma4-12b-ltx-v1_int8_convrot.safetensors
+COPY --from=ltx25_weights /gemma4-12b-ltx-v1/config.json /opt/ltx25/checkpoints/gemma4-12b-ltx-v1/config.json
+COPY --from=ltx25_weights /gemma4-12b-ltx-v1/chat_template.jinja /opt/ltx25/checkpoints/gemma4-12b-ltx-v1/chat_template.jinja
+COPY --from=ltx25_weights /gemma4-12b-ltx-v1/tokenizer.json /opt/ltx25/checkpoints/gemma4-12b-ltx-v1/tokenizer.json
+COPY --from=ltx25_weights /gemma4-12b-ltx-v1/tokenizer_config.json /opt/ltx25/checkpoints/gemma4-12b-ltx-v1/tokenizer_config.json
+# This audit is ONCE AT BUILD, not during any GPU workflow. It also embeds
+# the SHA256 inventory for provenance of the immutable resulting image.
+COPY required_models.txt /opt/ltx25/required_models.txt
+RUN /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+from pathlib import Path
+import hashlib, json, os
+root=Path('/opt/ltx25/checkpoints')
+names=Path('/opt/ltx25/required_models.txt').read_text().splitlines()
+assert len(names)==17, names
+manifest=[]
+for name in names:
+    p=(root/name)
+    assert p.is_file() and not p.is_symlink(), name
+    assert p.stat().st_size>0, name
+    h=hashlib.sha256()
+    with p.open('rb') as fd:
+        for chunk in iter(lambda:fd.read(32*1024*1024),b''):
+            h.update(chunk)
+    manifest.append({'path':name,'bytes':p.stat().st_size,'sha256':h.hexdigest()})
+Path('/opt/ltx25/model-image-manifest.json').write_text(json.dumps({
+  'model_repo':'DeepBeepMeep/LTX-2',
+  'pinned_revision':'0e281e1132633c9ff66e1891c045c533e785ce67',
+  'verified_at_image_build':True,'files':manifest},indent=2)+'\n')
+print('LTX25_MODEL_IMAGE_BUILT',len(manifest),'files',sum(r['bytes'] for r in manifest),'bytes')
+PY
+ENV LTX25_CHECKPOINT_ROOT=/opt/ltx25/checkpoints
+ENV LTX25_MODEL_ASSETS_BAKED=1
+# The image retains the original runner entrypoint, credentials remain in
+# existing external mounts, and writable results still live under /cache.
+USER runner

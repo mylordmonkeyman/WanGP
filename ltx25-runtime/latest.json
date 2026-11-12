@@ -1,12 +1,12 @@
 {
   "baseline": {
-    "blocker": "WanGP settings validation returned nonzero",
+    "blocker": "Full LTX-2.5 import prerequisites not yet satisfied",
     "candidate_e_enabled": false,
     "checkpoint_visible": true,
     "configured_dryrun": {
-      "elapsed_seconds": 11.4,
-      "returncode": 1,
-      "tail": "Kernels\nTraceback (most recent call last):\n  File \"/work/WanGP/WanGP/wgp.py\", line 2987, in <module>\n    migrate_extension_defaults(server_config, server_config_filename, workspace_root=args.workspaces_dir or server_config.get('workspaces_dir') or os.path.join(wgp_root, 'workspaces'), family_handlers=family_handlers)\n  File \"/work/WanGP/WanGP/shared/utils/wgp_config_migration.py\", line 334, in migrate_extension_defaults\n    migrate_config = getattr(importlib.import_module(path).family_handler, \"migrate_config\", None)\n                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/importlib/__init__.py\", line 90, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1387, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1310, in _find_and_load_unlocked\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"<frozen importlib._bootstrap>\", line 1387, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1331, in _find_and_load_unlocked\n  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked\n  File \"<frozen importlib._bootstrap_external>\", line 995, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"/work/WanGP/WanGP/models/wan/__init__.py\", line 1, in <module>\n    from . import configs, modules\n  File \"/work/WanGP/WanGP/models/wan/configs/__init__.py\", line 8, in <module>\n    from .wan_i2v_14B import i2v_14B\n  File \"/work/WanGP/WanGP/models/wan/configs/wan_i2v_14B.py\", line 4, in <module>\n    from easydict import EasyDict\nModuleNotFoundError: No module named 'easydict'\n"
+      "elapsed_seconds": null,
+      "returncode": null,
+      "tail": ""
     },
     "frames": 49,
     "gemma_checkpoint_visible": true,
@@ -17,20 +17,20 @@
     },
     "gpu_preflight": null,
     "initial_dryrun": {
-      "returncode": 1,
-      "tail": "\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"<frozen importlib._bootstrap>\", line 1387, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1331, in _find_and_load_unlocked\n  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked\n  File \"<frozen importlib._bootstrap_external>\", line 995, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"/work/WanGP/WanGP/models/wan/__init__.py\", line 1, in <module>\n    from . import configs, modules\n  File \"/work/WanGP/WanGP/models/wan/configs/__init__.py\", line 8, in <module>\n    from .wan_i2v_14B import i2v_14B\n  File \"/work/WanGP/WanGP/models/wan/configs/wan_i2v_14B.py\", line 4, in <module>\n    from easydict import EasyDict\nModuleNotFoundError: No module named 'easydict'\n"
+      "returncode": null,
+      "tail": ""
     },
     "model_type": "ltx2_25_22B_distilled",
     "resolution": "576x320",
     "seed": 20261112,
-    "status": "DRYRUN_BLOCKED",
+    "status": "BLOCKED",
     "video_dir": "/cache/ltx25/videos/r0_baseline",
     "videos": []
   },
   "job_status_at_publish": "success",
   "note": "Only the original WanGP INT8 fallback was used for any output; Candidate E remains disabled.",
-  "run_id": "43297474552",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43297474552",
+  "run_id": "43298420998",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43298420998",
   "runtime_bootstrap": {
     "error": "",
     "imports": [
@@ -58,21 +58,26 @@
         "detail": "ow asynchronous generation/post-processing in MCP\n                        API v2/v2.1; disabled by default\n  --mcp-console-output  Mirror WanGP stdout/stderr while serving MCP requests\n  --mcp-allow-read-file-system\n                        Allow MCP agents to reference arbitrary server\n                        filesystem paths; disabled by default\n  --dry-run             Validate file without generating (use with --process)\n  --output-dir OUTPUT_DIR\n                        Override output directory for CLI processing (use with\n                        --process)\n  --refresh-catalog     Refresh local plugin metadata for installed external\n                        plugins\n  --refresh-full-catalog\n                        Refresh local plugin metadata for all catalog plugins\n  --merge-catalog       Merge plugins_local.json into plugins.json and remove\n                        plugins_local.json\n",
         "name": "wgp_cli_help",
         "status": "PASS"
+      },
+      {
+        "detail": "nal>\", line 995, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"/work/WanGP/WanGP/models/wan/__init__.py\", line 1, in <module>\n    from . import configs, modules\n  File \"/work/WanGP/WanGP/models/wan/modules/__init__.py\", line 2, in <module>\n    from .model import WanModel\n  File \"/work/WanGP/WanGP/models/wan/modules/model.py\", line 22, in <module>\n    from ..scail.model_scail import build_scail_pose_tokens\n  File \"/work/WanGP/WanGP/models/wan/scail/__init__.py\", line 14, in <module>\n    from .scail_pose_nlf import (\n  File \"/work/WanGP/WanGP/models/wan/scail/scail_pose_nlf.py\", line 22, in <module>\n    from .scail_pose_draw import draw_pose_to_canvas_np, scale_image_hw_keep_size\n  File \"/work/WanGP/WanGP/models/wan/scail/scail_pose_draw.py\", line 17, in <module>\n    import matplotlib\nModuleNotFoundError: No module named 'matplotlib'\n",
+        "name": "wgp_cli_dryrun",
+        "status": "ERROR"
       }
     ],
-    "status": "PASS",
+    "status": "BLOCKED",
     "steps": [
       {
         "detail": "",
         "name": "torch_vision",
         "returncode": 0,
-        "seconds": 2.3
+        "seconds": 2.2
       },
       {
         "detail": "",
         "name": "hub_compat",
         "returncode": 0,
-        "seconds": 2.1
+        "seconds": 2.2
       },
       {
         "detail": "",
@@ -84,35 +89,29 @@
         "detail": "",
         "name": "media",
         "returncode": 0,
-        "seconds": 2.4
+        "seconds": 2.3
       },
       {
         "detail": "",
         "name": "wan_ui",
         "returncode": 0,
-        "seconds": 3.6
+        "seconds": 3.5
       },
       {
         "detail": "",
-        "name": "missing_import:markdown",
+        "name": "missing_import:easydict",
         "returncode": 0,
-        "seconds": 2.4
+        "seconds": 2.2
       },
       {
         "detail": "",
-        "name": "missing_import:xxhash",
+        "name": "missing_import:smplfitter",
         "returncode": 0,
-        "seconds": 2.7
-      },
-      {
-        "detail": "",
-        "name": "missing_import:git",
-        "returncode": 0,
-        "seconds": 2.8
+        "seconds": 2.6
       }
     ],
     "torch_after": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n",
     "torch_initial": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n"
   },
-  "source_sha": "e0ccc8d886582e26e8c47ea2a14f9c04bb050693"
+  "source_sha": "dfca09bf72aed0e6b57b01394c723b3892a31a3f"
 }

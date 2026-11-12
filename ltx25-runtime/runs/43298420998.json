@@ -1,0 +1,117 @@
+{
+  "baseline": {
+    "blocker": "Full LTX-2.5 import prerequisites not yet satisfied",
+    "candidate_e_enabled": false,
+    "checkpoint_visible": true,
+    "configured_dryrun": {
+      "elapsed_seconds": null,
+      "returncode": null,
+      "tail": ""
+    },
+    "frames": 49,
+    "gemma_checkpoint_visible": true,
+    "generation": {
+      "elapsed_seconds": null,
+      "returncode": null,
+      "tail": ""
+    },
+    "gpu_preflight": null,
+    "initial_dryrun": {
+      "returncode": null,
+      "tail": ""
+    },
+    "model_type": "ltx2_25_22B_distilled",
+    "resolution": "576x320",
+    "seed": 20261112,
+    "status": "BLOCKED",
+    "video_dir": "/cache/ltx25/videos/r0_baseline",
+    "videos": []
+  },
+  "job_status_at_publish": "success",
+  "note": "Only the original WanGP INT8 fallback was used for any output; Candidate E remains disabled.",
+  "run_id": "43298420998",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43298420998",
+  "runtime_bootstrap": {
+    "error": "",
+    "imports": [
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "mmgp.offload",
+        "status": "PASS"
+      },
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "models.ltx2.ltx_core.model.transformer",
+        "status": "PASS"
+      },
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "models.ltx2.ltx_pipelines.distilled",
+        "status": "PASS"
+      },
+      {
+        "detail": "\u001b[1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\nIMPORT_OK\n",
+        "name": "models.ltx2.ltx2",
+        "status": "PASS"
+      },
+      {
+        "detail": "ow asynchronous generation/post-processing in MCP\n                        API v2/v2.1; disabled by default\n  --mcp-console-output  Mirror WanGP stdout/stderr while serving MCP requests\n  --mcp-allow-read-file-system\n                        Allow MCP agents to reference arbitrary server\n                        filesystem paths; disabled by default\n  --dry-run             Validate file without generating (use with --process)\n  --output-dir OUTPUT_DIR\n                        Override output directory for CLI processing (use with\n                        --process)\n  --refresh-catalog     Refresh local plugin metadata for installed external\n                        plugins\n  --refresh-full-catalog\n                        Refresh local plugin metadata for all catalog plugins\n  --merge-catalog       Merge plugins_local.json into plugins.json and remove\n                        plugins_local.json\n",
+        "name": "wgp_cli_help",
+        "status": "PASS"
+      },
+      {
+        "detail": "nal>\", line 995, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"/work/WanGP/WanGP/models/wan/__init__.py\", line 1, in <module>\n    from . import configs, modules\n  File \"/work/WanGP/WanGP/models/wan/modules/__init__.py\", line 2, in <module>\n    from .model import WanModel\n  File \"/work/WanGP/WanGP/models/wan/modules/model.py\", line 22, in <module>\n    from ..scail.model_scail import build_scail_pose_tokens\n  File \"/work/WanGP/WanGP/models/wan/scail/__init__.py\", line 14, in <module>\n    from .scail_pose_nlf import (\n  File \"/work/WanGP/WanGP/models/wan/scail/scail_pose_nlf.py\", line 22, in <module>\n    from .scail_pose_draw import draw_pose_to_canvas_np, scale_image_hw_keep_size\n  File \"/work/WanGP/WanGP/models/wan/scail/scail_pose_draw.py\", line 17, in <module>\n    import matplotlib\nModuleNotFoundError: No module named 'matplotlib'\n",
+        "name": "wgp_cli_dryrun",
+        "status": "ERROR"
+      }
+    ],
+    "status": "BLOCKED",
+    "steps": [
+      {
+        "detail": "",
+        "name": "torch_vision",
+        "returncode": 0,
+        "seconds": 2.2
+      },
+      {
+        "detail": "",
+        "name": "hub_compat",
+        "returncode": 0,
+        "seconds": 2.2
+      },
+      {
+        "detail": "",
+        "name": "model_runtime",
+        "returncode": 0,
+        "seconds": 3.1
+      },
+      {
+        "detail": "",
+        "name": "media",
+        "returncode": 0,
+        "seconds": 2.3
+      },
+      {
+        "detail": "",
+        "name": "wan_ui",
+        "returncode": 0,
+        "seconds": 3.5
+      },
+      {
+        "detail": "",
+        "name": "missing_import:easydict",
+        "returncode": 0,
+        "seconds": 2.2
+      },
+      {
+        "detail": "",
+        "name": "missing_import:smplfitter",
+        "returncode": 0,
+        "seconds": 2.6
+      }
+    ],
+    "torch_after": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n",
+    "torch_initial": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n"
+  },
+  "source_sha": "dfca09bf72aed0e6b57b01394c723b3892a31a3f"
+}

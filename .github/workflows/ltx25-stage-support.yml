@@ -1,12 +1,7 @@
 name: LTX-2.5 stage pinned support weights
 
-# One-time on creation/update of this workflow, or explicit manual dispatch.
-# Deliberately not triggered by implementation/benchmark edits.
+# Manual execution only. Editing this file does not start downloads or GPU jobs.
 on:
-  push:
-    branches: [perf/ltx25-convrot-sm70]
-    paths:
-      - .github/workflows/ltx25-stage-support.yml
   workflow_dispatch:
 
 permissions:

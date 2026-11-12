@@ -69,3 +69,17 @@ jobs:
         run: |
           set -euo pipefail
           /cache/venvs/ltx25-torch210-cu128/bin/python             benchmarks/ltx25_convrot/smoke_torch_sm70.py
+
+      - name: Install minimal checkpoint-header dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python -m pip install \
+            'safetensors==0.7.0'
+
+      - name: Phase 0 exploratory environment, checkpoint visibility and rotation
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python \
+            benchmarks/ltx25_convrot/phase0_probe.py

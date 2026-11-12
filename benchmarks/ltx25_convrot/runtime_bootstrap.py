@@ -240,7 +240,7 @@ def probe_import(module):
             config = json.loads(config_file.read_text())
             config["fp8_kernels"] = "pytorch"
             config["int8_kernels"] = "disabled"
-            config_file.write_text(json.dumps(config, indent=2) + "\\n")
+            config_file.write_text(json.dumps(config, indent=2) + "\n")
         command = [PYTHON, "wgp.py", "--offline", "--config", str(cfg),
                    "--process", str(params),
                    "--output-dir", str(baseline_root / "videos" / "r0_baseline"),

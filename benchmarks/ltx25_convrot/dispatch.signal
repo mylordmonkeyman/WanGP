@@ -1,0 +1,4 @@
+run: v6
+prior_completed_run: 43300975562
+purpose: Correct unsupported fp8_kernels=disabled in isolated CLI config; use pytorch precise fallback. Check full CLI dry-run and attempt one 49-frame R0 generation only after gate.
+policy: one serialized workflow; no auto-retries; do not modify this signal while running.

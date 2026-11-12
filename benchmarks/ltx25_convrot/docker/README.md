@@ -76,7 +76,7 @@ This directory replaces *per-job pip installation* in the three LTX-2.5
 workflows. Use it only for the self-hosted V100 runner
 `gha-v100-ltx25`, while all Actions jobs on the branch are completed.
 
-## One-time build from the host
+## Historical Python-only build (already completed; do not rerun)
 
 ```bash
 git clone --depth 1 --single-branch \
@@ -86,7 +86,8 @@ git clone --depth 1 --single-branch \
 
 bash /opt/ai/WanGP-ltx25-build/benchmarks/ltx25_convrot/docker/bake_runner_image.sh
 
-bash /opt/ai/WanGP-ltx25-build/benchmarks/ltx25_convrot/docker/stage_hdr_weights.sh
+# HDR weights were already staged and verified; no longer run
+# stage_hdr_weights.sh in any benchmark workflow.
 ```
 
 The bake script uses an already tested Python 3.12/CUDA 12.8 virtual
@@ -165,9 +166,8 @@ Compose/service recreation.
 docker exec gha-v100-ltx25 /opt/venvs/ltx25-cu128/bin/python \
   -c 'import torch,matplotlib,onnxruntime;print(torch.__version__)'
 
-gh workflow run ltx25-runtime-batch.yml \
-  --repo mylordmonkeyman/WanGP \
-  --ref perf/ltx25-convrot-sm70
+# Historical R0 was already completed. Use ltx25-quality-1024.yml
+# only after the complete model image has been built and deployed.
 ```
 
 Start one workflow at a time; do not edit a dispatch signal file or trigger

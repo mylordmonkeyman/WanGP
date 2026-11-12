@@ -1,4 +1,5 @@
-run: v6
-prior_completed_run: 43300975562
-purpose: Correct unsupported fp8_kernels=disabled in isolated CLI config; use pytorch precise fallback. Check full CLI dry-run and attempt one 49-frame R0 generation only after gate.
-policy: one serialized workflow; no auto-retries; do not modify this signal while running.
+run: v7
+previous_run: 43301779314
+cause: CLI validation rejected spatial_upsampling='disabled'; fixed to empty strings for both spatial and temporal upsampling.
+purpose: one serialized bootstrap, real CLI dry-run and at most one unmodified R0 49-frame generation.
+no_retries: true

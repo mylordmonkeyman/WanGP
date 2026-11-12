@@ -1,0 +1,43 @@
+{
+  "baseline": {
+    "blocker": "",
+    "candidate_e_enabled": false,
+    "checkpoint_visible": null,
+    "configured_dryrun": {
+      "elapsed_seconds": null,
+      "returncode": null,
+      "tail": ""
+    },
+    "frames": null,
+    "gemma_checkpoint_visible": null,
+    "generation": {
+      "elapsed_seconds": null,
+      "returncode": null,
+      "tail": ""
+    },
+    "gpu_preflight": null,
+    "initial_dryrun": {
+      "returncode": null,
+      "tail": ""
+    },
+    "model_type": null,
+    "resolution": null,
+    "seed": null,
+    "status": "not_run",
+    "video_dir": null,
+    "videos": []
+  },
+  "job_status_at_publish": "failure",
+  "note": "Only the original WanGP INT8 fallback was used for any output; Candidate E remains disabled.",
+  "run_id": "43311215908",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43311215908",
+  "runtime_bootstrap": {
+    "error": "",
+    "imports": [],
+    "status": "not_run",
+    "steps": [],
+    "torch_after": "",
+    "torch_initial": ""
+  },
+  "source_sha": "1112aa285a452401488edfcb4b0d8af49c08f5da"
+}

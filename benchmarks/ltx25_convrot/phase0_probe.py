@@ -101,14 +101,14 @@ def rotation_probe(rotate):
 
 def checkpoint_header_report():
     # Explicit allowlisted roots only. No recursive filesystem search or downloads.
-    roots = [Path("/models"), Path("/cache/ltx25/checkpoints")]
+    roots = [Path(os.environ.get("LTX25_CHECKPOINT_ROOT", "/opt/ltx25/checkpoints"))]
     filename = "ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors"
     available = [(str(root / filename), (root / filename).is_file()) for root in roots]
     match = next((Path(p) for p, exists in available if exists), None)
     result = {"expected_filename": filename, "candidate_paths": available,
               "present": bool(match), "checkpoint_metadata_verified": False}
     if not match:
-        result["blocker"] = "Checkpoint not visible to runner; mount existing host weights read-only at /models or intentionally stage at /cache/ltx25/checkpoints."
+        result["blocker"] = "Checkpoint not visible to runner; the 17 model assets must be baked into /opt/ltx25/checkpoints in the Docker image."
         return result
     result["size_bytes"] = match.stat().st_size
     result["path"] = str(match)

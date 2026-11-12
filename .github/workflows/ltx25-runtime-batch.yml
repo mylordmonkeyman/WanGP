@@ -43,20 +43,24 @@ jobs:
           nvidia-smi -L
           test -f /cache/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
           test -f /cache/ltx25/checkpoints/gemma4-12b-ltx-v1/gemma4-12b-ltx-v1_int8_convrot.safetensors
-          /cache/venvs/ltx25-torch210-cu128/bin/python -c 'import torch; assert torch.__version__.startswith("2.10.0+cu128"); assert "sm_70" in torch.cuda.get_arch_list()'
+          /opt/venvs/ltx25-cu128/bin/python -c 'import torch; assert torch.__version__.startswith("2.10.0+cu128"); assert "sm_70" in torch.cuda.get_arch_list()'
 
-      - name: Consolidated dependency bootstrap and targeted model imports
+      - name: Verify pre-baked runtime and LTX imports (no pip, no downloads)
         shell: bash
         run: |
           set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python \
-            benchmarks/ltx25_convrot/runtime_bootstrap.py
+          test -x /opt/venvs/ltx25-cu128/bin/python || {
+            echo "Baked image not yet activated: run bake_runner_image.sh on server" >&2
+            exit 1
+          }
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/runtime_validate_baked.py
 
       - name: Isolated unmodified WanGP CLI dry-run and one small video baseline
         shell: bash
         run: |
           set -euo pipefail
-          /cache/venvs/ltx25-torch210-cu128/bin/python \
+          /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/wgp_baseline.py
 
       - name: Publish sanitized full-batch result

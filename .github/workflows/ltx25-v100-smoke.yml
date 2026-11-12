@@ -90,6 +90,20 @@ jobs:
           set -euo pipefail
           python3 benchmarks/ltx25_convrot/remote_header.py
 
+      - name: Install exact WanGP Quanto fallback dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python -m pip install \
+            'optimum-quanto==0.2.7' 'numpy==2.1.2'
+
+      - name: Test actual INT8 checkpoint layers against FP32 mathematical reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python \
+            benchmarks/ltx25_convrot/phase0_weights.py
+
       - name: Publish sanitized report to isolated results branch
         if: ${{ always() }}
         env:

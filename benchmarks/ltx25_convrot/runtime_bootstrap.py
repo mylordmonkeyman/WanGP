@@ -331,6 +331,18 @@ def main():
             if inst["returncode"]:
                 break
 
+        # Recheck *all* imports after dependency installation: adding a
+        # package can alter another dependency, so cached PASS values are not
+        # sufficient for the final validation gate.
+        final_results = []
+        for module in PROBES:
+            result = probe_import(module)
+            final_results.append({
+                "name": module,
+                "status": "PASS" if not result["returncode"] else "ERROR",
+                "tail": result["tail"][-1100:],
+            })
+        report["probes"] = final_results
         health = torch_health()
         report["torch_after"] = health
         success = all(p["status"]=="PASS" for p in report["probes"])

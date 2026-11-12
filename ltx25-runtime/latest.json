@@ -1,12 +1,12 @@
 {
   "baseline": {
-    "blocker": "Full LTX-2.5 import prerequisites not yet satisfied",
+    "blocker": "WanGP settings validation returned nonzero",
     "candidate_e_enabled": false,
     "checkpoint_visible": true,
     "configured_dryrun": {
-      "elapsed_seconds": null,
-      "returncode": null,
-      "tail": ""
+      "elapsed_seconds": 11.4,
+      "returncode": 1,
+      "tail": "Kernels\nTraceback (most recent call last):\n  File \"/work/WanGP/WanGP/wgp.py\", line 2987, in <module>\n    migrate_extension_defaults(server_config, server_config_filename, workspace_root=args.workspaces_dir or server_config.get('workspaces_dir') or os.path.join(wgp_root, 'workspaces'), family_handlers=family_handlers)\n  File \"/work/WanGP/WanGP/shared/utils/wgp_config_migration.py\", line 334, in migrate_extension_defaults\n    migrate_config = getattr(importlib.import_module(path).family_handler, \"migrate_config\", None)\n                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/importlib/__init__.py\", line 90, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1387, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1310, in _find_and_load_unlocked\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"<frozen importlib._bootstrap>\", line 1387, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1331, in _find_and_load_unlocked\n  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked\n  File \"<frozen importlib._bootstrap_external>\", line 995, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"/work/WanGP/WanGP/models/wan/__init__.py\", line 1, in <module>\n    from . import configs, modules\n  File \"/work/WanGP/WanGP/models/wan/configs/__init__.py\", line 8, in <module>\n    from .wan_i2v_14B import i2v_14B\n  File \"/work/WanGP/WanGP/models/wan/configs/wan_i2v_14B.py\", line 4, in <module>\n    from easydict import EasyDict\nModuleNotFoundError: No module named 'easydict'\n"
     },
     "frames": 49,
     "gemma_checkpoint_visible": true,
@@ -17,20 +17,20 @@
     },
     "gpu_preflight": null,
     "initial_dryrun": {
-      "returncode": null,
-      "tail": ""
+      "returncode": 1,
+      "tail": "\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"<frozen importlib._bootstrap>\", line 1387, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1331, in _find_and_load_unlocked\n  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked\n  File \"<frozen importlib._bootstrap_external>\", line 995, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"/work/WanGP/WanGP/models/wan/__init__.py\", line 1, in <module>\n    from . import configs, modules\n  File \"/work/WanGP/WanGP/models/wan/configs/__init__.py\", line 8, in <module>\n    from .wan_i2v_14B import i2v_14B\n  File \"/work/WanGP/WanGP/models/wan/configs/wan_i2v_14B.py\", line 4, in <module>\n    from easydict import EasyDict\nModuleNotFoundError: No module named 'easydict'\n"
     },
     "model_type": "ltx2_25_22B_distilled",
     "resolution": "576x320",
     "seed": 20261112,
-    "status": "BLOCKED",
+    "status": "DRYRUN_BLOCKED",
     "video_dir": "/cache/ltx25/videos/r0_baseline",
     "videos": []
   },
   "job_status_at_publish": "success",
   "note": "Only the original WanGP INT8 fallback was used for any output; Candidate E remains disabled.",
-  "run_id": "43296408514",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43296408514",
+  "run_id": "43297474552",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43297474552",
   "runtime_bootstrap": {
     "error": "",
     "imports": [
@@ -55,18 +55,18 @@
         "status": "PASS"
       },
       {
-        "detail": "1m\u001b[95m****** Memory Management for the GPU Poor (mmgp 4.6.1) - Copyright (c) 2024-2026 DeepBeepMeep ******\u001b[0m\n[RAM] MMGP RAM Allocator: the RAM of freed CPU tensors goes back to the system\n[VRAM] MMGP Optimized VRAM Allocator, spilling into RAM when VRAM is full\nTraceback (most recent call last):\n  File \"/work/WanGP/WanGP/wgp.py\", line 125, in <module>\n    from shared.deepy import controller as deepy_controller\n  File \"/work/WanGP/WanGP/shared/deepy/controller.py\", line 57, in <module>\n    from shared.deepy.engine import (\n  File \"/work/WanGP/WanGP/shared/deepy/engine.py\", line 72, in <module>\n    from shared.gradio import assistant_chat\n  File \"/work/WanGP/WanGP/shared/gradio/assistant_chat.py\", line 4, in <module>\n    from shared.deepy import chat\n  File \"/work/WanGP/WanGP/shared/deepy/chat.py\", line 16, in <module>\n    import markdown\nModuleNotFoundError: No module named 'markdown'\n",
+        "detail": "ow asynchronous generation/post-processing in MCP\n                        API v2/v2.1; disabled by default\n  --mcp-console-output  Mirror WanGP stdout/stderr while serving MCP requests\n  --mcp-allow-read-file-system\n                        Allow MCP agents to reference arbitrary server\n                        filesystem paths; disabled by default\n  --dry-run             Validate file without generating (use with --process)\n  --output-dir OUTPUT_DIR\n                        Override output directory for CLI processing (use with\n                        --process)\n  --refresh-catalog     Refresh local plugin metadata for installed external\n                        plugins\n  --refresh-full-catalog\n                        Refresh local plugin metadata for all catalog plugins\n  --merge-catalog       Merge plugins_local.json into plugins.json and remove\n                        plugins_local.json\n",
         "name": "wgp_cli_help",
-        "status": "ERROR"
+        "status": "PASS"
       }
     ],
-    "status": "BLOCKED",
+    "status": "PASS",
     "steps": [
       {
         "detail": "",
         "name": "torch_vision",
         "returncode": 0,
-        "seconds": 2.2
+        "seconds": 2.3
       },
       {
         "detail": "",
@@ -78,7 +78,7 @@
         "detail": "",
         "name": "model_runtime",
         "returncode": 0,
-        "seconds": 3.0
+        "seconds": 3.1
       },
       {
         "detail": "",
@@ -94,25 +94,25 @@
       },
       {
         "detail": "",
-        "name": "missing_import:onnxruntime",
-        "returncode": 0,
-        "seconds": 4.2
-      },
-      {
-        "detail": "",
-        "name": "missing_import:whisper",
-        "returncode": 0,
-        "seconds": 7.0
-      },
-      {
-        "detail": "",
-        "name": "missing_import:gguf",
+        "name": "missing_import:markdown",
         "returncode": 0,
         "seconds": 2.4
+      },
+      {
+        "detail": "",
+        "name": "missing_import:xxhash",
+        "returncode": 0,
+        "seconds": 2.7
+      },
+      {
+        "detail": "",
+        "name": "missing_import:git",
+        "returncode": 0,
+        "seconds": 2.8
       }
     ],
     "torch_after": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n",
     "torch_initial": "SM70_TORCH_OK 2.10.0+cu128 2.10.0+cu128\n"
   },
-  "source_sha": "3871c938affffa4c8c9769e991af8a238b9d7952"
+  "source_sha": "e0ccc8d886582e26e8c47ea2a14f9c04bb050693"
 }

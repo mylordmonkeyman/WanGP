@@ -61,6 +61,9 @@ def main():
     remote_file = Path(f"/cache/ltx25/results/phase0_remote_header_{sha[:12]}.json")
     remote = json.loads(remote_file.read_text()) if remote_file.exists() else {}
     remote_inv = remote.get("inventory", {})
+    e_path = Path(f"/cache/ltx25/results/phase1_cublas_e_{sha[:12]}.json")
+    e_report = json.loads(e_path.read_text()) if e_path.exists() else {}
+    e_results = e_report.get("results", [])
     weight_path = Path(f"/cache/ltx25/results/phase0_weights_{sha[:12]}.json")
     weights = json.loads(weight_path.read_text()) if weight_path.exists() else {}
     weights_layers = weights.get("layers", [])
@@ -78,6 +81,30 @@ def main():
         "cuda": report.get("torch_cuda"),
         "phase0_probe_present": bool(report),
         "checkpoint_visible": checkpoint.get("present"),
+        "cublas_e": {
+            "status": e_report.get("status", "not_run"),
+            "error": e_report.get("error", "")[:400],
+            "FP32_output": e_report.get("FP32_output", False),
+            "synthetic_activations_only": True,
+            "production_eligible": False,
+            "shape_families": len(e_results),
+            "results": [{
+                "N": layer.get("N"), "K": layer.get("K"),
+                "status": layer.get("status"),
+                "error": layer.get("error", "")[:300],
+                "tests": [{
+                    "M": t["M"], "gate": t["precision_gate_pass"],
+                    "R0_p99": t["R0"]["p99_normalized"],
+                    "R0_max": t["R0"]["max_normalized"],
+                    "E_p99": t["E"]["p99_normalized"],
+                    "E_max": t["E"]["max_normalized"],
+                    "R0_median_ms": t["R0_full_layer_median_ms"],
+                    "E_median_ms": t["E_full_layer_median_ms"],
+                    "speedup": t["speedup_ratio_R0_over_E"],
+                    "fp16_subnormal_count": t["range"]["fp16_subnormal_count"]
+                } for t in layer.get("tests", [])]
+            } for layer in e_results]
+        },
         "weight_diagnostic": {
             "status": weights.get("status", "not_run"),
             "error": weights.get("error", "")[:400],

@@ -104,6 +104,23 @@ jobs:
           /cache/venvs/ltx25-torch210-cu128/bin/python \
             benchmarks/ltx25_convrot/phase0_weights.py
 
+      - name: Compile exploratory bounded FP32-output cuBLAS Candidate E
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_cublas_e.cu \
+            -lcublas -o "$RUNNER_TEMP/libltx25_cublas_e.so"
+
+      - name: Benchmark cuBLAS Candidate E against checkpoint-backed R0 and R1
+        env:
+          LTX25_CUBLAS_E_LIB: ${{ runner.temp }}/libltx25_cublas_e.so
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python \
+            benchmarks/ltx25_convrot/phase1_cublas_e.py
+
       - name: Publish sanitized report to isolated results branch
         if: ${{ always() }}
         env:

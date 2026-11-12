@@ -20,7 +20,7 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 OUT = Path("/cache/ltx25/results")
 BASE = Path("/cache/ltx25")
-PY = "/cache/venvs/ltx25-torch210-cu128/bin/python"
+PY = os.environ.get("LTX25_PYTHON", "/opt/venvs/ltx25-cu128/bin/python")
 CFG = BASE / "config-baseline"
 VIDEOS = BASE / "videos" / "r0_baseline"
 PARAMS = BASE / "baseline_49frame_settings.json"

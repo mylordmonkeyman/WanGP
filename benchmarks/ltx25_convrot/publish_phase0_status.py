@@ -61,6 +61,9 @@ def main():
     remote_file = Path(f"/cache/ltx25/results/phase0_remote_header_{sha[:12]}.json")
     remote = json.loads(remote_file.read_text()) if remote_file.exists() else {}
     remote_inv = remote.get("inventory", {})
+    weight_path = Path(f"/cache/ltx25/results/phase0_weights_{sha[:12]}.json")
+    weights = json.loads(weight_path.read_text()) if weight_path.exists() else {}
+    weights_layers = weights.get("layers", [])
     rotations = report.get("rotation", [])
     checkpoint = report.get("checkpoint", {})
     summary = {
@@ -75,6 +78,30 @@ def main():
         "cuda": report.get("torch_cuda"),
         "phase0_probe_present": bool(report),
         "checkpoint_visible": checkpoint.get("present"),
+        "weight_diagnostic": {
+            "status": weights.get("status", "not_run"),
+            "error": weights.get("error", "")[:400],
+            "real_checkpoint_weights": weights.get("real_checkpoint_weights", False),
+            "real_model_activations": False,
+            "actual_fallback_dispatch_confirmed": False,
+            "selected_matrix_families": weights.get("selected_matrix_families"),
+            "layers_passed": sum(x.get("status") == "PASS" for x in weights_layers),
+            "layers": [{
+                "N": layer["N"], "K": layer["K"], "name": layer["layer"],
+                "status": layer["status"],
+                "real_wrapper_init": layer.get("real_wrapper_init"),
+                "real_wrapper_error": layer.get("real_wrapper_error"),
+                "tests": [{
+                    "M": t["M"],
+                    "R0_leaf_status": t.get("R0_leaf", {}).get("status", "not_run"),
+                    "R0_leaf_error": t.get("R0_leaf", {}).get("message", "")[:300],
+                    "R0_p99_normalized": t.get("R0_leaf", {}).get("vs_R1_fp32", {}).get("p99_normalized"),
+                    "R0_max_normalized": t.get("R0_leaf", {}).get("vs_R1_fp32", {}).get("max_normalized"),
+                    "R0_median_ms": t.get("R0_leaf", {}).get("timing", {}).get("median_ms"),
+                    "surrogate_median_ms": t.get("bf16_dense_surrogate", {}).get("timing", {}).get("median_ms"),
+                } for t in layer.get("tests", [])]
+            } for layer in weights_layers]
+        },
         "remote_header_status": remote.get("status", "not_run"),
         "remote_header_error": remote.get("error", "")[:300],
         "remote_hf_revision": remote.get("hf_revision"),

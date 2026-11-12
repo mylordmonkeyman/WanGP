@@ -1,0 +1,1 @@
+Explicitly triggered third single run after full completion of run 43296408514. Cover remaining top-level WanGP CLI module imports with allowlisted, pinned packages, then test dry-run and a single unmodified 49-frame baseline if ready. No new run triggers after this file is created.

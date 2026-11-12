@@ -49,6 +49,24 @@ def main():
         assert "sm_70" in torch.cuda.get_arch_list(), torch.cuda.get_arch_list()
         header = Path(sysconfig.get_path("include")) / "Python.h"
         assert header.is_file(), f"Missing development headers: {header}"
+        model_dir = Path(os.environ.get("LTX25_CHECKPOINT_ROOT", "/opt/ltx25/checkpoints"))
+        manifest_file = Path("/opt/ltx25/model-image-manifest.json")
+        assert model_dir == Path("/opt/ltx25/checkpoints"), "Benchmark requires immutable image-baked weights"
+        assert manifest_file.is_file(), "No baked model manifest (did you switch to complete Docker image?)"
+        manifest = json.loads(manifest_file.read_text())
+        assert manifest.get("verified_at_image_build"), "Image-build verification receipt missing"
+        assert manifest.get("pinned_revision") == "0e281e1132633c9ff66e1891c045c533e785ce67"
+        assert len(manifest["files"]) == 17, "Expected 17 baked model/tokenizer assets"
+        for item in manifest["files"]:
+            path = model_dir / item["path"]
+            assert path.is_file() and not path.is_symlink(), f"Missing/unsafe baked file: {path}"
+            assert path.stat().st_size == item["bytes"], f"Baked asset size differs: {path}"
+        report["image_baked_models"] = {
+            "status": "PASS", "count": len(manifest["files"]),
+            "checkpoint_root": str(model_dir),
+            "content_rehashed_during_test": False,
+            "download_attempted_during_test": False,
+        }
         report["torch_after"]={"returncode":0,"tail":f"SM70_TORCH_OK {torch.__version__} Python.h={header}"}
         for module in PROBES:
             item = {"name":module}

@@ -61,6 +61,8 @@ def main():
     remote_file = Path(f"/cache/ltx25/results/phase0_remote_header_{sha[:12]}.json")
     remote = json.loads(remote_file.read_text()) if remote_file.exists() else {}
     remote_inv = remote.get("inventory", {})
+    dispatch_path = Path(f"/cache/ltx25/results/phase0_dispatch_{sha[:12]}.json")
+    dispatch = json.loads(dispatch_path.read_text()) if dispatch_path.exists() else {}
     import_path = Path(f"/cache/ltx25/results/runtime_import_{sha[:12]}.json")
     import_report = json.loads(import_path.read_text()) if import_path.exists() else {}
     manifest_file = Path(f"/cache/ltx25/results/support_manifest_{sha[:12]}.json")
@@ -85,6 +87,18 @@ def main():
         "cuda": report.get("torch_cuda"),
         "phase0_probe_present": bool(report),
         "checkpoint_visible": checkpoint.get("present"),
+        "isolated_dispatch": {
+            "status": dispatch.get("status", "not_run"),
+            "error": dispatch.get("error", "")[:300],
+            "initial_backend": dispatch.get("initial_int8_backend_name"),
+            "full_pipeline_verified": False,
+            "layers": [{
+                "name": layer.get("layer"), "N": layer.get("N"), "K": layer.get("K"),
+                "status": layer.get("status"),
+                "max_abs_difference": layer.get("dispatcher_vs_leaf_max_abs"),
+                "error": layer.get("error", "")[:300],
+            } for layer in dispatch.get("layers", [])]
+        },
         "runtime_import": {
             "status": import_report.get("status", "not_run"),
             "weights_loaded": False,

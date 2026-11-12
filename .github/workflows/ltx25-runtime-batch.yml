@@ -45,6 +45,13 @@ jobs:
           test -f /cache/ltx25/checkpoints/gemma4-12b-ltx-v1/gemma4-12b-ltx-v1_int8_convrot.safetensors
           /opt/venvs/ltx25-cu128/bin/python -c 'import torch; assert torch.__version__.startswith("2.10.0+cu128"); assert "sm_70" in torch.cuda.get_arch_list()'
 
+      - name: Stage omitted pinned support files before offline generation (no pip)
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/stage_required_support.py
+
       - name: Verify pre-baked runtime and LTX imports (no pip, no downloads)
         shell: bash
         run: |

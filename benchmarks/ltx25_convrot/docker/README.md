@@ -28,12 +28,12 @@ B=/tmp/ltx25-bake-src.dmHY1b/WanGP/benchmarks/ltx25_convrot/docker
 # download any models and it fails before building if disk is too full.
 bash "$B/bake_model_image.sh"
 
-# Verify Compose service/mounts and expected change without disruption.
-bash "$B/deploy_complete_runner.sh"
+# This runner was created by docker run, NOT Docker Compose.
+# Inspect/validate its config, registration and exact GPU/mounts:
+python3 "$B/deploy_noncompose_runner.py"
 
-# Recreate only this runner service, preserving its Compose settings,
-# GPU access and persistent mounts.
-LTX25_APPLY=1 bash "$B/deploy_complete_runner.sh"
+# Once the dry run passes, replace the runner (old container preserved):
+LTX25_APPLY=1 python3 "$B/deploy_noncompose_runner.py"
 ```
 
 The builder checks available Docker data-root storage and requires
@@ -43,12 +43,18 @@ on the 100 GiB system LV: move/expand Docker's data-root onto a larger
 filesystem deliberately. Do not prune images/volumes used by other
 LLM services without reviewing them.
 
-The deployment script is **dry-run by default**. It requires Docker
-Compose labels on the current runner and will fail rather than guess
-if the runner was started with plain `docker run`. Applying it checks
-for active GitHub Actions jobs, preserves the original Compose files
-and creates a separate image override for this runner service. It does
-not modify or remove the old image.
+The active `gha-v100-ltx25` was created directly with `docker run`.
+Use **`deploy_noncompose_runner.py`**, not the old Compose-specific
+`deploy_complete_runner.sh`. The non-Compose script is **dry-run by
+default** and checks that GitHub Actions has no queued/running jobs,
+that this runner is idle, and that the exact expected V100 UUID, bridge
+network, user, entrypoint, restart policy and three host bind mounts
+match the inspected configuration. It carries the existing runner
+environment through a temporary permission-restricted env file
+without printing credential values, and deletes that file afterward.
+The old container is stopped and renamed with a rollback suffix;
+no images or volumes are deleted. Unrecognized non-default Docker
+options cause a fail-closed error rather than a lossy recreation.
 
 Once the complete-image runner is online, use the
 `ltx25-quality-1024.yml` workflow, **R0 first**. When workflow dispatch

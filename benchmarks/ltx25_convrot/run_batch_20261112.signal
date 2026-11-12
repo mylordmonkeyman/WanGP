@@ -1,0 +1,7 @@
+Run token for single consolidated LTX-2.5 runtime baseline batch.
+Source branch: perf/ltx25-convrot-sm70
+Expected: paired torch/torchvision/torchaudio, pinned model runtime,
+WanGP import diagnostics, offline CLI dry-run, and at most one 49-frame
+unmodified R0 baseline generation.
+Do not edit this marker file again. Additional commits elsewhere do not
+trigger this workflow. Existing GPU jobs are not cancelled.

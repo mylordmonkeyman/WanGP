@@ -136,6 +136,13 @@ jobs:
           /cache/venvs/ltx25-torch210-cu128/bin/python \
             benchmarks/ltx25_convrot/runtime_import_probe.py
 
+      - name: Verify actual QLinear ConvRot forward dispatcher on real checkpoint weights
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python \
+            benchmarks/ltx25_convrot/phase0_dispatch_probe.py
+
       - name: Publish sanitized report to isolated results branch
         if: ${{ always() }}
         env:

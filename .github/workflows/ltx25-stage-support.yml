@@ -1,41 +1,34 @@
-name: LTX-2.5 stage pinned support weights
+name: LTX-2.5 image-baked support inventory (read-only)
 
-# Manual execution only. Editing this file does not start downloads or GPU jobs.
+# Legacy remote downloads are disabled. This workflow reads the model image
+# manifest and file sizes only; it never fetches, hashes, or installs weights.
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: ltx25-stage-support
+  group: ltx25-runtime-baseline-once
   cancel-in-progress: false
 
 jobs:
-  stage:
-    name: Verify and stage LTX-2.5 inference support
+  image-inventory:
+    name: Validate image assets without reading safetensors content
     runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
-    timeout-minutes: 120
+    timeout-minutes: 15
+    env:
+      LTX25_CHECKPOINT_ROOT: /opt/ltx25/checkpoints
+      HF_HUB_OFFLINE: '1'
     steps:
-      - name: Checkout pinned branch
+      - name: Checkout validation script
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
           fetch-depth: 1
-
-      - name: Download and SHA256 verify frozen supporting weights
+      - name: Verify pre-baked assets and Python imports (no model downloads or SHA)
         shell: bash
         run: |
           set -euo pipefail
           /opt/venvs/ltx25-cu128/bin/python \
-            benchmarks/ltx25_convrot/prepare_support.py
-
-      - name: Publish sanitized download receipt
-        if: ${{ always() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          JOB_STATUS: ${{ job.status }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 benchmarks/ltx25_convrot/publish_support_status.py
+            benchmarks/ltx25_convrot/runtime_validate_baked.py

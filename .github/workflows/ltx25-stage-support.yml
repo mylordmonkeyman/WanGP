@@ -1,0 +1,53 @@
+name: LTX-2.5 stage pinned support weights
+
+# One-time on creation/update of this workflow, or explicit manual dispatch.
+# Deliberately not triggered by implementation/benchmark edits.
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths:
+      - .github/workflows/ltx25-stage-support.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-stage-support
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    name: Verify and stage LTX-2.5 inference support
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 120
+    steps:
+      - name: Checkout pinned branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install downloader into runner's existing isolated venv
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python -m pip install -q \
+            'huggingface_hub[hf_xet]'
+
+      - name: Download and SHA256 verify frozen supporting weights
+        shell: bash
+        run: |
+          set -euo pipefail
+          /cache/venvs/ltx25-torch210-cu128/bin/python \
+            benchmarks/ltx25_convrot/prepare_support.py
+
+      - name: Publish sanitized download receipt
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 benchmarks/ltx25_convrot/publish_support_status.py

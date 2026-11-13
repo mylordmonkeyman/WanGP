@@ -1,0 +1,54 @@
+{
+  "description": "Synthetic, bounded LTX-2.x-like self-attention sizes for first comparative testing. NOT a trace from the actual LTX-2.5 checkpoint. Video model config normally uses D128/H32; reduced-head cases approximate attention_kit splitting. Replace with measured trace before claiming an end-to-end gain.",
+  "cases": [
+    {
+      "name": "audio-d64-h8-1024",
+      "batch": 1,
+      "tokens": 1024,
+      "heads": 8,
+      "head_dim": 64
+    },
+    {
+      "name": "video-d128-h8-1024",
+      "batch": 1,
+      "tokens": 1024,
+      "heads": 8,
+      "head_dim": 128
+    },
+    {
+      "name": "video-d128-h8-2048",
+      "batch": 1,
+      "tokens": 2048,
+      "heads": 8,
+      "head_dim": 128
+    },
+    {
+      "name": "video-d128-h8-4096",
+      "batch": 1,
+      "tokens": 4096,
+      "heads": 8,
+      "head_dim": 128
+    },
+    {
+      "name": "video-d128-h32-4096",
+      "batch": 1,
+      "tokens": 4096,
+      "heads": 32,
+      "head_dim": 128
+    },
+    {
+      "name": "video-d128-h32-8192",
+      "batch": 1,
+      "tokens": 8192,
+      "heads": 32,
+      "head_dim": 128
+    },
+    {
+      "name": "batch2-d128-h8-1024",
+      "batch": 2,
+      "tokens": 1024,
+      "heads": 8,
+      "head_dim": 128
+    }
+  ]
+}

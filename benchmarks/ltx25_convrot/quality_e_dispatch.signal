@@ -1,2 +1,2 @@
 2026-11-12 local
-run no-sync Candidate E allowing experimentally verified sm70 half subnormals; compare wall time
+repeat fixed-seed 1024x576 Candidate E device-range policy for timing stability

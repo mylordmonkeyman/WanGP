@@ -35,6 +35,7 @@ VARIANTS = {
     "e_cast4_1024": ("1024x576", True),
     "e_combo_1024": ("1024x576", True),
     "e_default_1024": ("1024x576", True),
+    "e_debug_fp32rot_samecfg_1024": ("1024x576", True),
 }
 if VARIANT not in VARIANTS:
     raise ValueError(f"Unsupported LTX25_BENCH_VARIANT: {VARIANT!r}")
@@ -44,9 +45,10 @@ IS_STAGE_PROFILE = VARIANT == "e_profile_1024"
 IS_WORKSPACE = VARIANT in ("e_workspace_1024", "e_combo_1024")
 IS_CAST4 = VARIANT in ("e_cast4_1024", "e_combo_1024")
 IS_DEFAULT = VARIANT == "e_default_1024"
+IS_DEBUG_EXPLICIT = VARIANT == "e_debug_fp32rot_samecfg_1024"
 if not IS_DEFAULT and IS_CANDIDATE != (os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").lower() == "fp32rot"):
     raise ValueError("Candidate mode and selected benchmark variant disagree")
-CFG = BASE / f"config-{VARIANT}"
+CFG = BASE / ("config-e_default_1024" if IS_DEBUG_EXPLICIT else f"config-{VARIANT}")
 VIDEOS = BASE / "videos" / VARIANT
 PARAMS = BASE / f"{VARIANT}_49frame_settings.json"
 SRC = Path(os.environ.get("LTX25_CHECKPOINT_ROOT", "/opt/ltx25/checkpoints"))
@@ -74,6 +76,13 @@ def run(cmd, timeout, log_path):
     began = time.monotonic()
     env = os.environ.copy()
     env["HF_HUB_OFFLINE"] = "1"
+    if IS_DEBUG_EXPLICIT:
+        # Diagnostic: same e_default config and default cast/workspace, but
+        # explicit fp32rot mode to isolate dispatch selection from settings.
+        env["WAN2GP_LTX25_CUBLAS_E_MODE"] = "fp32rot"
+        for name in ("WAN2GP_LTX25_E_CAST", "WAN2GP_LTX25_E_WORKSPACE",
+                     "LTX25_CUBLAS_E_LIB"):
+            env.pop(name, None)
     if IS_DEFAULT:
         # The default-selection gate MUST exercise *no environment opt-ins*,
         # including no explicit library path: force auto native build/cache.
@@ -192,7 +201,8 @@ def main():
                    "e_workspace_1024": "quality_workspace",
                    "e_cast4_1024": "quality_cast4",
                    "e_combo_1024": "quality_combo",
-                   "e_default_1024": "quality_default"}[VARIANT]
+                   "e_default_1024": "quality_default",
+                   "e_debug_fp32rot_samecfg_1024": "quality_default_explicit"}[VARIANT]
     result_path = OUT / f"runtime_{result_kind}_{sha[:12]}.json"
     try:
         if bootstrap.get("status") != "PASS":
@@ -204,7 +214,7 @@ def main():
         if not MODEL_FILE.is_file() or not TEXT_FILE.is_file():
             report.update(status="BLOCKED", blocker="Image-baked transformer or text encoder checkpoint absent")
             return
-        if VARIANT in ("e_quality_1024", "e_real_activation_audit_1024", "e_profile_1024", "e_workspace_1024", "e_cast4_1024", "e_combo_1024", "e_default_1024"):
+        if VARIANT in ("e_quality_1024", "e_real_activation_audit_1024", "e_profile_1024", "e_workspace_1024", "e_cast4_1024", "e_combo_1024", "e_default_1024", "e_debug_fp32rot_samecfg_1024"):
             refdir = BASE / "videos" / "r0_quality_1024"
             if not refdir.is_dir() or not any(refdir.glob("*.mp4")):
                 report.update(
@@ -292,7 +302,7 @@ def main():
             if cast_mode != "vector4":
                 report["status"] = "CAST4_NOT_SELECTED"
                 report["blocker"] = f"Expected vector4 cast counters, got {cast_mode!r}"
-        if IS_WORKSPACE or IS_DEFAULT:
+        if IS_WORKSPACE or IS_DEFAULT or IS_DEBUG_EXPLICIT:
             import re
             # The workspace prints a bounded JSON summary at interpreter exit.
             ws_matches = re.findall(r"\[LTX25_WORKSPACE\] (\{[^\n]+\})",

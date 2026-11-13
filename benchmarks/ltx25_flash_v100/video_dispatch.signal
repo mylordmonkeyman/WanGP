@@ -7,3 +7,6 @@ Resolution: 576x320
 
 Dispatch: retry-video-route-fix-cb06e7-5c0ced-20261113T0915Z
 Reason: first video run generated all clips but candidate calls were zero; mark video self-attention and override explicit SDPA only for opted-in eligible calls.
+
+Dispatch: retry-video-fix-literal-newline-transformer-1457d68-20261113T1118Z
+Reason: retry run 43399547931 failed baked import with IndentationError at transformer.py:107 caused by literal backslash-n in candidate marking. Fixed source and added transformer compile preflight.

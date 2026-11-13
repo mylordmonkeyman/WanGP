@@ -1,0 +1,34 @@
+{
+  "downloaded_checkpoints": false,
+  "error": "FileNotFoundError: Missing matched-run report: /cache/ltx25/results/runtime_quality_e_a566cf56eae.json",
+  "kind": "Independent cached LTX-2.5 decoded-video reproducibility and pixel difference check",
+  "new_generation": false,
+  "note": "Decoded-pixel identity and PSNR/SSIM are objective difference metrics for fixed-seed videos. They are NOT perceptual-quality judgments. Human viewing is required before approving quality.",
+  "pairs": [],
+  "perceptual_quality_validated": false,
+  "run_id": "43369136887",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43369136887",
+  "source_sha": "ad23a0170a4beb82edba16bd379204be593b89e2",
+  "status": "ERROR",
+  "utc": "2026-11-13T05:00:36.151828+00:00",
+  "video_source": "four already-generated fixed-seed 1024x576 49-frame 8-step runs",
+  "videos": {
+    "Archived-E": {
+      "decoded_framemd5_sha256": "a4ea635c2e9c66ac3c88e2efba1523c612dc3453fa81b7ad35d7ac5b3dd5559f",
+      "frame_count": 49,
+      "generation_seconds": 112.8,
+      "mp4_bytes": 3080470,
+      "path": "/cache/ltx25/videos/e_quality_1024/2026-11-13-00h43m21s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "source_sha_prefix": "4adc57c0d17f"
+    },
+    "R0": {
+      "decoded_framemd5_sha256": "b9748e684686bd48286d10152671b85016eb2485e94a0285e12c6d3d76763621",
+      "frame_count": 49,
+      "generation_seconds": 157.9,
+      "mp4_bytes": 3118857,
+      "path": "/cache/ltx25/videos/r0_quality_1024/2026-11-13-00h31m46s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "source_sha_prefix": "9d80ef2bccde"
+    }
+  },
+  "workflow_status_at_publication": "failure"
+}

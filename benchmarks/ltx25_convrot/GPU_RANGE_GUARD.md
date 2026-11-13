@@ -180,3 +180,78 @@ gate. These outputs visibly vary in sail color, boat position and water
 texture. Blind human assessment across several prompts/seeds is still
 required before `auto` promotion. Reproducibility of no-sync E with
 and without the audit strengthens the runtime consistency evidence only.
+
+## Priority 2: stage profiling and reusable scratch — staged, not GPU validated
+
+**Last V100-validated no-sync reference snapshot:**
+`archive/ltx25-convrot-sm70-post-sync-validated-20261113` at
+`32bc42e6389e79ab6f742da9896364aa5bd74b3c`.
+
+The active branch now contains opt-in-only instrumentation and a scratch
+experiment. The original `fp32rot` default behavior remains unchanged;
+no automatic selection or production promotion has occurred.
+
+**Live-model stage profiler:** `WAN2GP_LTX25_PROFILE_STAGES=1` enables
+`shared/kernels/ltx25_stage_profiler.py`. It records a sparse set of
+same-stream CUDA events around rotation, scratch setup, INT8->FP16 weight
+conversion, range preparation, cuBLAS, FP32 epilogue and output conversion.
+Events are resolved **only at interpreter exit**. Event-to-event time
+includes host enqueue gaps and potential concurrent GPU traffic; compare
+warm calls separately from first-use initialization. The dedicated
+`e_profile_1024` run publishes raw stage samples under
+`ltx25-quality/e_profile_1024/` on `perf/ltx25-run-results`.
+
+**Bounded scratch pilot:** `WAN2GP_LTX25_E_WORKSPACE=1` enables
+`shared/kernels/ltx25_workspace_sm70.py`. One default CUDA stream per
+GPU may reuse FP16 activation, FP32 accumulator, and two int32 row-state
+buffers (default cumulative capacity <=96 MiB). Oversized operations,
+nondefault streams, and concurrent/reentrant calls bypass the pool and
+retain their original ephemeral allocations. Leases release after output
+conversion has been queued on the same stream; no host synchronization.
+The original INT8 checkpoint and FP32 row scales remain MMGP-owned.
+**No persistent FP16 weight copies are cached**; `q.to(torch.float16)`
+still happens for each call. This first optimization targets allocation
+churn only; weight conversion must be measured before trying an alternate
+kernel or approach.
+
+**Workspace quality gate:** `e_workspace_1024` runs
+`candidate_workspace_preflight.py`, then the same fixed-seed 1024x576
+49-frame generation, then `workspace_video_gate.py`, which demands exact
+decoded-yuv420p equality across **all 49 frames** against the previously
+validated no-sync E clip. A mismatch is recorded as a failed gate.
+Do not interpret equality of this one clip as general visual validation.
+
+### Current test state
+
+- Hosted **CPU-only source checks PASSED** (Python compilation and
+  strict opt-in / transient weight contract):
+  https://github.com/mylordmonkeyman/WanGP/actions/runs/43454931381
+  and https://github.com/mylordmonkeyman/WanGP/actions/runs/43455283021.
+- First stage-profile run:
+  https://github.com/mylordmonkeyman/WanGP/actions/runs/43453044580
+  **SKIPPED GPU GENERATION (GPU_BUSY)**.
+- Retried stage-profile run:
+  https://github.com/mylordmonkeyman/WanGP/actions/runs/43454440544
+  **SKIPPED GPU GENERATION (GPU_BUSY)**. Another GPU compute owner
+  was reported as PID `124951` using `342 MiB`; PID's executable name
+  is not visible in the runner's process namespace.
+- The quality workflow now checks GPU ownership **before any CUDA
+  preflight** so no further profiling/benchmark work will consume
+  V100 resources while another process owns the device.
+- The GPU scratch path has **not** yet passed V100 preflight, full video
+  pixel-equivalence or a matched uninstrumented timing comparison.
+  There is **no measured Priority 2 speedup yet**.
+
+### Next exact sequence, when the GPU is idle
+
+1. Deliberately update `benchmarks/ltx25_convrot/stage_profile_dispatch.signal`
+   to trigger `e_profile_1024`, evaluate warm GPU stage times per shape.
+2. Deliberately update `benchmarks/ltx25_convrot/workspace_dispatch.signal`
+   to trigger `e_workspace_1024`, requiring V100 preflight, actual leases,
+   full video and strict 49-frame equality. Do not run concurrently.
+3. If both pass, run matched **uninstrumented** E vs workspace E
+   repetitions with idle GPU and comparable clocks/thermal conditions.
+4. Retain the scratch pilot only if it measurably speeds full generation
+   without destabilizing MMGP or increasing peak VRAM unacceptably.
+   Otherwise revert to the validated no-sync snapshot and prioritize
+   the dominant operation identified by the profiler.

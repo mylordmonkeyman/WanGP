@@ -51,8 +51,8 @@ jobs:
           WAN2GP_LTX25_HADAMARD=radix4 \
             /opt/venvs/ltx25-cu128/bin/python \
               benchmarks/ltx25_convrot/candidate_cast8_preflight.py
-      - name: Confirm default cast remains vector4 in production module
+      - name: Confirm promoted default cast is vector8 in production module
         run: |
           set -euo pipefail
-          grep -Fq 'CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector4")' \
+          grep -Fq 'CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector8")' \
             shared/kernels/ltx25_cublas_sm70.py

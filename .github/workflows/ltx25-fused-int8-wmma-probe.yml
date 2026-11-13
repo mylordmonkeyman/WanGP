@@ -25,6 +25,14 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - name: Compile SM70 tiled on-the-fly INT8-to-WMMA GEMM
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_fused_i8_wmma_sm70.cu \
+            -lcublas -o "$LTX25_FUSED_WMMA_LIB"
+          test -s "$LTX25_FUSED_WMMA_LIB"
       - name: Require idle V100 before benchmark
         shell: bash
         run: |
@@ -37,14 +45,6 @@ jobs:
             exit 1
           fi
           nvidia-smi -L
-      - name: Compile SM70 tiled on-the-fly INT8-to-WMMA GEMM
-        shell: bash
-        run: |
-          set -euo pipefail
-          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
-            benchmarks/ltx25_convrot/ltx25_fused_i8_wmma_sm70.cu \
-            -lcublas -o "$LTX25_FUSED_WMMA_LIB"
-          test -s "$LTX25_FUSED_WMMA_LIB"
       - name: Compare five real matrix shapes with A-B-B-A CUDA event timings
         shell: bash
         run: |
@@ -67,7 +67,9 @@ jobs:
           if p.exists():
               d=json.loads(p.read_text())
           else:
-              d={'status':'ERROR','reason':'No completed fused WMMA microbench report; inspect GitHub job logs'}
+              d={'status':'NOT_RUN','reason':'Benchmark not executed; inspect CUDA compile and GPU-busy logs'}
+          d['run_id']=os.environ['GITHUB_RUN_ID']
+          d['source_sha']=os.environ['GITHUB_SHA']
           d['run_url']='https://github.com/mylordmonkeyman/WanGP/actions/runs/'+os.environ['GITHUB_RUN_ID']
           put('ltx25-fused-int8-wmma/latest.json',d)
           put('ltx25-fused-int8-wmma/runs/'+os.environ['GITHUB_RUN_ID']+'.json',d)

@@ -1,0 +1,53 @@
+name: LTX-2.5 V100 real-shape BF16 attention microbenchmark
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/ltx25-v100-flash-attn-dual]
+    paths: [benchmarks/ltx25_flash_v100/real_shape_dispatch.signal]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ltx25-v100-realshape-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  real-shape:
+    if: github.ref == 'refs/heads/perf/ltx25-v100-flash-attn-dual'
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify static syntax
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          /opt/venvs/ltx25-cu128/bin/python -m py_compile benchmarks/ltx25_flash_v100/real_shape_benchmark.py
+      - name: Download known-good compiled SM70 extensions
+        uses: actions/download-artifact@v4
+        with:
+          name: ltx25-v100-sm70-cu128-extensions-43384835108
+          run-id: '43384835108'
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/realshape-artifact
+      - name: Validate ABI and run bounded real-shape experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST="$RUNNER_TEMP/realshape-ext"
+          mkdir -p "$DEST"
+          tar -xzf "$RUNNER_TEMP/realshape-artifact/compiled-v100-attention-sm70-cu128.tar.gz" -C "$DEST"
+          grep -Fq 'PyTorch 2.10.0+cu128' "$DEST/ABI.txt"
+          grep -Fq 'NVIDIA sm70' "$DEST/ABI.txt"
+          export PYTHONPATH="$DEST/1cat:$DEST/zhinianqin:$PWD${PYTHONPATH:+:$PYTHONPATH}"
+          export LTX25_REAL_SHAPE_OUT="$RUNNER_TEMP/realshape-results"
+          /opt/venvs/ltx25-cu128/bin/python benchmarks/ltx25_flash_v100/real_shape_benchmark.py
+      - name: Upload real-shape results even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ltx25-v100-realshape-${{ github.run_id }}
+          path: ${{ runner.temp }}/realshape-results/
+          retention-days: 14
+          if-no-files-found: warn

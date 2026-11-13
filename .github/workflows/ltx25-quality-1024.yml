@@ -155,6 +155,14 @@ jobs:
           /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/wgp_baseline.py
 
+      - name: Require workspace video to match validated no-sync E decoded frames
+        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/workspace_video_gate.py
+
       - name: Publish quality result independently from original baseline
         if: ${{ always() }}
         env:
@@ -194,6 +202,10 @@ jobs:
               assert stats.get("acquired", 0) > 0, "No bounded scratch reuse"
               assert stats.get("max_persistent_bytes", 0) <= 96 * (1 << 20), "Scratch cap exceeded"
               assert stats.get("persistent_weight_copies") == 0, "FP16 weight cached persistently"
+              gate = r.get("workspace_video_gate") or {}
+              print("WORKSPACE_VIDEO_GATE", gate)
+              assert gate.get("decoded_pixels_identical") is True, "Workspace clip differs from established E"
+              assert gate.get("total_frames") == 49, "Incorrect video frame count"
           if variant == "e_profile_1024":
               profile = r.get("stage_profile") or {}
               print("STAGE_PROFILE_GATE", profile.get("status"),

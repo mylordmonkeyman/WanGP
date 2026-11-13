@@ -544,3 +544,9 @@ class Int8RowsExperts(NativeExpertFormat):
 
 
 EXPERT_FORMATS = (Int8RowsExperts(),)
+
+# Opt-in trace only: leaves every production ConvRot forward unwrapped.
+# Includes rotation, backend dispatch and GEMM, not the preceding QKV layout.
+if os.environ.get("WAN2GP_LTX25_PROFILE") == "1":
+    from shared.ltx25_v100_profile import profiled_convrot_forward
+    QLinearInt8ConvRot.forward = profiled_convrot_forward(QLinearInt8ConvRot.forward)

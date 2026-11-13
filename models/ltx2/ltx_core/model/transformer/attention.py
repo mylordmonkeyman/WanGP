@@ -6,7 +6,7 @@ import torch
 from ...utils import rms_norm
 from shared import attention_kit
 from shared.attention import pay_attention
-from shared.ltx25_v100_attention import attention_override as ltx25_v100_attention_override
+from shared.ltx25_v100_attention import attention_override as ltx25_v100_attention_override, min_tokens as ltx25_v100_min_tokens
 from .rope import LTXRopeType, RopeCache, apply_rotary_emb_inplace, apply_rope_cache_heads_inplace
 from shared.kernels.ops import project_many
 
@@ -202,9 +202,23 @@ class Attention(torch.nn.Module):
                 return "flash", 3
         return None, None
 
-    def _v100_attention_override(self) -> str | None:
-        # Marked only on genuine LTX-2.5 model instances by ltx2.py.
-        return ltx25_v100_attention_override() if getattr(self, "_ltx25_v100_candidate", False) else None
+    def _v100_attention_override(self, x: torch.Tensor, mask: torch.Tensor | None) -> str | None:
+        # Decide before attention_kit allocates/projects Q/K/V. Ineligible calls
+        # keep their original Sage/SDPA staging and VRAM behavior.
+        if not getattr(self, "_ltx25_v100_candidate", False) or mask is not None:
+            return None
+        selected = ltx25_v100_attention_override()
+        if selected is None:
+            return None
+        if x.ndim != 3 or x.shape[1] < ltx25_v100_min_tokens():
+            return None
+        if x.dtype != torch.float16 or not x.is_cuda or self.dim_head not in (64, 128):
+            return None
+        if torch.cuda.get_device_capability(x.device) != (7, 0):
+            return None
+        if torch.cuda.is_current_stream_capturing():
+            return None
+        return selected
 
     def _head_mean_squares(self, project):
         # LTX uses vector_norm followed by square, including that rounding point. Compute each full-width statistic once;
@@ -246,12 +260,13 @@ class Attention(torch.nn.Module):
                           and freqs.num_attention_heads == self.heads for freqs in (pe, k_pe))
         split_cross = (context_list is not None and NAG is None and split_heads and context_list[0].shape[0] == x_list[0].shape[0] and
                        attention_kit.head_groups(self.heads, x_list[0].shape[0] * max(x_list[0].shape[1], context_list[0].shape[1])) > 1)
+        v100_force = self._v100_attention_override(x_list[0], mask) if context_list is None else None
         if ((context_list is None and mask is None or split_cross) and self._resolve_attention_override()[0] is None):
             # the gates read the attention input: computed first so that the input is released by the q/k/v projections
             gate_logits = None if self.to_gate_logits is None else self.to_gate_logits(x_list[0])
             callback = lambda query, key, group: self._norm_rope_(query, key, pe, k_pe, group)
             options = dict(split_heads=split_heads, norm_spans_heads=True, norm_stats=self._head_mean_squares,
-                           attention_mask=mask, force_attention=self._v100_attention_override() if context_list is None else None)
+                           attention_mask=mask, force_attention=v100_force)
             if context_list is None:
                 out = attention_kit.qkv_attention(x_list, self.to_q, self.to_k, self.to_v, self.heads, self.dim_head, callback, **options)
             else:
@@ -289,7 +304,7 @@ class Attention(torch.nn.Module):
         force_attention, attention_version = self._resolve_attention_override()
         # Preserve explicit LTX attention choices; only DEFAULT opts into this pilot.
         if force_attention is None and not cross_attn:
-            force_attention = self._v100_attention_override()
+            force_attention = v100_force
 
         if cross_attn and NAG is not None:
             cap_len = int(NAG.get("cap_embed_len", 0) or 0)

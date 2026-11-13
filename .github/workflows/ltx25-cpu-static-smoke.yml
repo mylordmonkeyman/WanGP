@@ -35,6 +35,9 @@ jobs:
             benchmarks/ltx25_convrot/candidate_workspace_preflight.py \
             benchmarks/ltx25_convrot/workspace_video_gate.py \
             benchmarks/ltx25_convrot/candidate_cast4_preflight.py \
+            benchmarks/ltx25_convrot/candidate_cast8_preflight.py \
+            benchmarks/ltx25_convrot/cast_width_sweep.py \
+            benchmarks/ltx25_convrot/fused_i8_wmma_microbench.py \
             benchmarks/ltx25_convrot/default_auto_preflight.py \
             shared/qtypes/int8_convrot.py \
             benchmarks/ltx25_convrot/cast_microbench.py \
@@ -63,6 +66,9 @@ jobs:
           assert 'WAN2GP_LTX25_E_WORKSPACE' in a and 'WAN2GP_LTX25_E_WORKSPACE' in w
           assert 'WAN2GP_LTX25_CUBLAS_E_MODE", "fp32rot"' in a
           assert 'WAN2GP_LTX25_E_CAST", "vector4"' in a
+          assert 'def _cast8_fn():' in a
+          assert 'ltx25_cublas_cast_int8_to_f16_8' in a
+          assert 'CAST_MODE in ("vector4", "vector8")' in a
           assert 'WAN2GP_LTX25_HADAMARD", "radix4"' in a
           assert 'elif ROT_MODE in ("torch", ""):' in a, 'Torch FP32 rollback is required'
           assert 'ltx25_cublas_rot256_f32' in a

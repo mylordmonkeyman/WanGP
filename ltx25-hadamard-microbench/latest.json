@@ -1,0 +1,369 @@
+{
+  "device": "Tesla V100-PCIE-32GB",
+  "mode": "isolated_same_stream_cuda_events",
+  "model_generation": false,
+  "production_eligible": false,
+  "run_id": "43478786870",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43478786870",
+  "scope": "Synthetic FP32 rotated activations, standalone exact H256 ordering",
+  "shape_results": [
+    {
+      "K": 2048,
+      "M": 64,
+      "dtype": "torch.bfloat16",
+      "exact_fp32_element_fraction": 0.9941787719726562,
+      "max_normalized_error": 1.1920928955078125e-07,
+      "p99_normalized_error": 0.0,
+      "radix4_cuda": {
+        "median_ms": 0.02253,
+        "min_ms": 0.02048,
+        "p90_ms": 0.02458,
+        "trials": 50
+      },
+      "relative_rms_error": 4.735567049607425e-09,
+      "speedup": 4.727,
+      "torch_matmul": {
+        "median_ms": 0.1065,
+        "min_ms": 0.10342,
+        "p90_ms": 0.11366,
+        "trials": 50
+      }
+    },
+    {
+      "K": 2048,
+      "M": 64,
+      "dtype": "torch.float16",
+      "exact_fp32_element_fraction": 0.9558868408203125,
+      "max_normalized_error": 1.9066932566147443e-07,
+      "p99_normalized_error": 5.960464477539063e-08,
+      "radix4_cuda": {
+        "median_ms": 0.0215,
+        "min_ms": 0.02048,
+        "p90_ms": 0.02355,
+        "trials": 50
+      },
+      "relative_rms_error": 1.6781898537487905e-08,
+      "speedup": 4.9056,
+      "torch_matmul": {
+        "median_ms": 0.10547,
+        "min_ms": 0.10342,
+        "p90_ms": 0.11162,
+        "trials": 50
+      }
+    },
+    {
+      "K": 4096,
+      "M": 64,
+      "dtype": "torch.bfloat16",
+      "exact_fp32_element_fraction": 0.9953269958496094,
+      "max_normalized_error": 1.4579467233488685e-07,
+      "p99_normalized_error": 0.0,
+      "radix4_cuda": {
+        "median_ms": 0.0215,
+        "min_ms": 0.02048,
+        "p90_ms": 0.02256,
+        "trials": 50
+      },
+      "relative_rms_error": 4.920303720012953e-09,
+      "speedup": 4.9056,
+      "torch_matmul": {
+        "median_ms": 0.10547,
+        "min_ms": 0.10342,
+        "p90_ms": 0.11469,
+        "trials": 50
+      }
+    },
+    {
+      "K": 4096,
+      "M": 64,
+      "dtype": "torch.float16",
+      "exact_fp32_element_fraction": 0.9538650512695312,
+      "max_normalized_error": 2.2642748831458448e-07,
+      "p99_normalized_error": 5.960464477539063e-08,
+      "radix4_cuda": {
+        "median_ms": 0.0215,
+        "min_ms": 0.0215,
+        "p90_ms": 0.02355,
+        "trials": 50
+      },
+      "relative_rms_error": 1.6379969380864168e-08,
+      "speedup": 4.8581,
+      "torch_matmul": {
+        "median_ms": 0.10445,
+        "min_ms": 0.10339,
+        "p90_ms": 0.11878,
+        "trials": 50
+      }
+    },
+    {
+      "K": 4096,
+      "M": 128,
+      "dtype": "torch.bfloat16",
+      "exact_fp32_element_fraction": 0.9940605163574219,
+      "max_normalized_error": 2.384185791015625e-07,
+      "p99_normalized_error": 0.0,
+      "radix4_cuda": {
+        "median_ms": 0.0215,
+        "min_ms": 0.02048,
+        "p90_ms": 0.02355,
+        "trials": 50
+      },
+      "relative_rms_error": 6.267273366944437e-09,
+      "speedup": 5.1916,
+      "torch_matmul": {
+        "median_ms": 0.11162,
+        "min_ms": 0.11056,
+        "p90_ms": 0.11875,
+        "trials": 50
+      }
+    },
+    {
+      "K": 4096,
+      "M": 128,
+      "dtype": "torch.float16",
+      "exact_fp32_element_fraction": 0.9533443450927734,
+      "max_normalized_error": 2.384185791015625e-07,
+      "p99_normalized_error": 6.827684728705208e-08,
+      "radix4_cuda": {
+        "median_ms": 0.0215,
+        "min_ms": 0.02048,
+        "p90_ms": 0.02253,
+        "trials": 50
+      },
+      "relative_rms_error": 1.913662828201268e-08,
+      "speedup": 5.1916,
+      "torch_matmul": {
+        "median_ms": 0.11162,
+        "min_ms": 0.11059,
+        "p90_ms": 0.11882,
+        "trials": 50
+      }
+    },
+    {
+      "K": 2048,
+      "M": 256,
+      "dtype": "torch.bfloat16",
+      "exact_fp32_element_fraction": 0.9935894012451172,
+      "max_normalized_error": 2.294375747169397e-07,
+      "p99_normalized_error": 0.0,
+      "radix4_cuda": {
+        "median_ms": 0.0215,
+        "min_ms": 0.02048,
+        "p90_ms": 0.02355,
+        "trials": 50
+      },
+      "relative_rms_error": 6.19967499559948e-09,
+      "speedup": 5.1916,
+      "torch_matmul": {
+        "median_ms": 0.11162,
+        "min_ms": 0.11056,
+        "p90_ms": 0.11773,
+        "trials": 50
+      }
+    },
+    {
+      "K": 2048,
+      "M": 256,
+      "dtype": "torch.float16",
+      "exact_fp32_element_fraction": 0.9562549591064453,
+      "max_normalized_error": 2.384185791015625e-07,
+      "p99_normalized_error": 6.38070716263428e-08,
+      "radix4_cuda": {
+        "median_ms": 0.0215,
+        "min_ms": 0.02045,
+        "p90_ms": 0.02253,
+        "trials": 50
+      },
+      "relative_rms_error": 1.8207005680892507e-08,
+      "speedup": 5.1898,
+      "torch_matmul": {
+        "median_ms": 0.11158,
+        "min_ms": 0.11056,
+        "p90_ms": 0.11469,
+        "trials": 50
+      }
+    },
+    {
+      "K": 4096,
+      "M": 256,
+      "dtype": "torch.bfloat16",
+      "exact_fp32_element_fraction": 0.9952793121337891,
+      "max_normalized_error": 2.384185791015625e-07,
+      "p99_normalized_error": 0.0,
+      "radix4_cuda": {
+        "median_ms": 0.02557,
+        "min_ms": 0.02454,
+        "p90_ms": 0.0256,
+        "trials": 50
+      },
+      "relative_rms_error": 4.974768597065804e-09,
+      "speedup": 4.966,
+      "torch_matmul": {
+        "median_ms": 0.12698,
+        "min_ms": 0.1239,
+        "p90_ms": 0.13619,
+        "trials": 50
+      }
+    },
+    {
+      "K": 4096,
+      "M": 256,
+      "dtype": "torch.float16",
+      "exact_fp32_element_fraction": 0.9666061401367188,
+      "max_normalized_error": 3.305954123788979e-07,
+      "p99_normalized_error": 5.960464477539063e-08,
+      "radix4_cuda": {
+        "median_ms": 0.02458,
+        "min_ms": 0.02352,
+        "p90_ms": 0.0256,
+        "trials": 50
+      },
+      "relative_rms_error": 1.4405535431194494e-08,
+      "speedup": 5.2075,
+      "torch_matmul": {
+        "median_ms": 0.128,
+        "min_ms": 0.12291,
+        "p90_ms": 0.13619,
+        "trials": 50
+      }
+    },
+    {
+      "K": 4096,
+      "M": 512,
+      "dtype": "torch.bfloat16",
+      "exact_fp32_element_fraction": 0.994171142578125,
+      "max_normalized_error": 2.384185791015625e-07,
+      "p99_normalized_error": 0.0,
+      "radix4_cuda": {
+        "median_ms": 0.03478,
+        "min_ms": 0.03376,
+        "p90_ms": 0.03584,
+        "trials": 50
+      },
+      "relative_rms_error": 5.8188089901989315e-09,
+      "speedup": 3.5325,
+      "torch_matmul": {
+        "median_ms": 0.12286,
+        "min_ms": 0.11264,
+        "p90_ms": 0.13005,
+        "trials": 50
+      }
+    },
+    {
+      "K": 4096,
+      "M": 512,
+      "dtype": "torch.float16",
+      "exact_fp32_element_fraction": 0.953524112701416,
+      "max_normalized_error": 4.5382387270365143e-07,
+      "p99_normalized_error": 6.528370022351737e-08,
+      "radix4_cuda": {
+        "median_ms": 0.03478,
+        "min_ms": 0.03274,
+        "p90_ms": 0.03584,
+        "trials": 50
+      },
+      "relative_rms_error": 1.8702230875078385e-08,
+      "speedup": 3.5184,
+      "torch_matmul": {
+        "median_ms": 0.12237,
+        "min_ms": 0.11981,
+        "p90_ms": 0.13005,
+        "trials": 50
+      }
+    },
+    {
+      "K": 4096,
+      "M": 1024,
+      "dtype": "torch.bfloat16",
+      "exact_fp32_element_fraction": 0.9939992427825928,
+      "max_normalized_error": 2.2692991308304045e-07,
+      "p99_normalized_error": 0.0,
+      "radix4_cuda": {
+        "median_ms": 0.06141,
+        "min_ms": 0.06038,
+        "p90_ms": 0.06144,
+        "trials": 50
+      },
+      "relative_rms_error": 5.952990989044338e-09,
+      "speedup": 3.3016,
+      "torch_matmul": {
+        "median_ms": 0.20275,
+        "min_ms": 0.2017,
+        "p90_ms": 0.20378,
+        "trials": 50
+      }
+    },
+    {
+      "K": 4096,
+      "M": 1024,
+      "dtype": "torch.float16",
+      "exact_fp32_element_fraction": 0.9532971382141113,
+      "max_normalized_error": 3.5762786865234375e-07,
+      "p99_normalized_error": 6.545361230791968e-08,
+      "radix4_cuda": {
+        "median_ms": 0.06141,
+        "min_ms": 0.06038,
+        "p90_ms": 0.06144,
+        "trials": 50
+      },
+      "relative_rms_error": 1.876053445926118e-08,
+      "speedup": 3.3016,
+      "torch_matmul": {
+        "median_ms": 0.20275,
+        "min_ms": 0.2007,
+        "p90_ms": 0.20378,
+        "trials": 50
+      }
+    },
+    {
+      "K": 16384,
+      "M": 256,
+      "dtype": "torch.bfloat16",
+      "exact_fp32_element_fraction": 0.9939172267913818,
+      "max_normalized_error": 2.384185791015625e-07,
+      "p99_normalized_error": 0.0,
+      "radix4_cuda": {
+        "median_ms": 0.06144,
+        "min_ms": 0.06038,
+        "p90_ms": 0.06147,
+        "trials": 50
+      },
+      "relative_rms_error": 5.849858375484018e-09,
+      "speedup": 3.3,
+      "torch_matmul": {
+        "median_ms": 0.20275,
+        "min_ms": 0.2007,
+        "p90_ms": 0.20477,
+        "trials": 50
+      }
+    },
+    {
+      "K": 16384,
+      "M": 256,
+      "dtype": "torch.float16",
+      "exact_fp32_element_fraction": 0.9525823593139648,
+      "max_normalized_error": 4.7638283717788e-07,
+      "p99_normalized_error": 6.611885083884772e-08,
+      "radix4_cuda": {
+        "median_ms": 0.06144,
+        "min_ms": 0.06038,
+        "p90_ms": 0.06147,
+        "trials": 50
+      },
+      "relative_rms_error": 1.8969569026694444e-08,
+      "speedup": 3.3,
+      "torch_matmul": {
+        "median_ms": 0.20275,
+        "min_ms": 0.2007,
+        "p90_ms": 0.20378,
+        "trials": 50
+      }
+    }
+  ],
+  "source_sha": "e2ab52e98107d46680805c1b139fd8cb655d7dd9",
+  "status": "PASS",
+  "trials": 50,
+  "utc": "2026-11-13T18:03:19.422691+00:00",
+  "warning": "Synthetic H256 rotation benchmark, not full-video speed or quality validation.",
+  "workflow_status": "success"
+}

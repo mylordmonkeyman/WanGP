@@ -1,0 +1,2 @@
+2026-11-13
+Run exact FP32-output cuBLAS Tensor-Op algorithm sweep on single V100, four synthetic checkpoint-realistic matrix shapes, 30 CUDA event trials; do not modify inference defaults or run concurrently with another GPU owner.

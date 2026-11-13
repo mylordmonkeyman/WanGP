@@ -255,3 +255,64 @@ Do not interpret equality of this one clip as general visual validation.
    without destabilizing MMGP or increasing peak VRAM unacceptably.
    Otherwise revert to the validated no-sync snapshot and prioritize
    the dominant operation identified by the profiler.
+
+## Priority 2 V100 run evidence (Nov 13, 2026)
+
+User confirmed that the competing VRAM owner was terminated before these
+tests were dispatched. The existing V100 ownership guard verified GPU idle
+for each completed generation.
+
+### Sparse real-model CUDA-event stage profiling
+
+**PASS:** https://github.com/mylordmonkeyman/WanGP/actions/runs/43455709423
+
+- Fixed 1024x576, 49 frames, 8 steps, same seed and MMGP profile 0.
+- 37 actual eligible-call samples across all seven families; no profiler
+  errors; 16,368 optimized calls and 4,434 device-side FP32 fallback rows.
+- Instrumented generation: **101.4 s**, NOT a comparable uninstrumented
+  wall-time baseline.
+- Median warm-stage CUDA event observations (milliseconds):
+
+| N×K | Scratch setup | INT8→FP16 | GEMM | Rotation |
+|---|---:|---:|---:|---:|
+| 16384×4096 | 0.0020 | 0.4767 | 0.5596 | 0.0461 |
+| 4096×16384 | 0.0020 | 0.4767 | 0.5852 | 0.1341 |
+| 4096×4096 | 0.0143 | 0.1321 | 0.4649 | 0.2494 |
+| 2048×2048 | 0.0072 | 0.0368 | 0.1331 | 0.1249 |
+
+Interpretation: for the two frequent 64M-weight families, the FP16
+cast is comparable to cuBLAS GEMM time, while scratch setup is tiny.
+Samples are sparse and do not isolate GPU time from host enqueue gaps
+or concurrent memory activity. This makes weight conversion a credible
+next performance experiment; it is not evidence that scratch reuse
+alone will yield a large speedup.
+
+### Bounded reusable scratch pilot
+
+**PASS:** https://github.com/mylordmonkeyman/WanGP/actions/runs/43456268178
+
+- Completed full matched generation at **97.2 s** (single uninstrumented
+  workspace run; not an established speedup over 98.3/98.5 s reference).
+- Acquired the scratch lease for 16,360/16,368 eligible calls; eight
+  oversize calls correctly used ephemeral allocations.
+- Maximum persistent scratch = 100,171,264 bytes (95.5 MiB; under 96 MiB cap).
+- No nondefault stream or reentrant reuse; zero persistent FP16 weight sets.
+- Opt-in V100 workspace preflight and stream/lifetime safety tests passed.
+- The resulting MP4's **all 49 decoded frames are exactly identical**
+  to established no-sync Candidate E (`a566cf56eae8`).
+- Production default remains unchanged, as does checkpoint quantization.
+
+### Isolated conversion experiment
+
+New standalone SM70 kernels and a separate workflow compare PyTorch
+`q.to(float16)` and preallocated PyTorch `copy_` against CUDA scalar and
+vector4 INT8→FP16 conversions using exact synthetic int8 tensors with
+checkpoint-realistic shapes. This test does not load the model, retain
+weights, or change Candidate E. Source:
+`benchmarks/ltx25_convrot/ltx25_cast_bench.cu` and
+`benchmarks/ltx25_convrot/cast_microbench.py`.
+
+**No conversion speedup is established until the isolated kernel completes
+and matches PyTorch bit-exactly across the tested shapes.** If promising,
+a separate opt-in full-generation path will be required with V100
+preflight, real-activation R0/R1 gate and exact decoded-frame regression.

@@ -259,6 +259,33 @@ extern "C" int ltx25_cublas_gemm_f16_f32(
   return status == CUBLAS_STATUS_SUCCESS ? 0 : 1200 + int(status);
 }
 
+// Opt-in, shape-specific SM70 cuBLAS Tensor Op algorithm 2.
+// Isolated V100 sweep showed bit-exact FP32 outputs for N16384 K4096 M64.
+// All other shapes MUST use the existing CUBLAS_GEMM_DEFAULT_TENSOR_OP.
+extern "C" int ltx25_cublas_gemm_f16_f32_algo2(
+    const void* q_rowmajor, const void* x_rowmajor, void* c_rowmajor,
+    int n, int m, int k, void* stream_ptr) {
+  if (!q_rowmajor || !x_rowmajor || !c_rowmajor) return -1;
+  if (n != 16384 || k != 4096 || m != 64) return -2;
+  static thread_local cublasHandle_t handle = nullptr;
+  if (!handle) {
+    const cublasStatus_t created = cublasCreate(&handle);
+    if (created != CUBLAS_STATUS_SUCCESS) return 1000 + int(created);
+  }
+  const auto stream = reinterpret_cast<cudaStream_t>(stream_ptr);
+  const cublasStatus_t selected = cublasSetStream(handle, stream);
+  if (selected != CUBLAS_STATUS_SUCCESS) return 1100 + int(selected);
+
+  const float alpha = 1.0f, beta = 0.0f;
+  const cublasStatus_t status = cublasGemmEx(
+      handle, CUBLAS_OP_T, CUBLAS_OP_N, n, m, k,
+      &alpha, q_rowmajor, CUDA_R_16F, k,
+      x_rowmajor, CUDA_R_16F, k,
+      &beta, c_rowmajor, CUDA_R_32F, n,
+      CUBLAS_COMPUTE_32F, CUBLAS_GEMM_ALGO2_TENSOR_OP);
+  return status == CUBLAS_STATUS_SUCCESS ? 0 : 1200 + int(status);
+}
+
 extern "C" int ltx25_cublas_epilogue_f32(
     void* c32, const void* x32, const void* q, const void* scale,
     const void* bias, const void* exponents, const void* slow_rows,

@@ -1,34 +1,34 @@
 # Experimental SM70 Candidate E — device-side FP16 range guard
 
 **Scope:** LTX-2.5 22B Distilled INT8 ConvRot, NVIDIA V100 (SM70).
-**Status:** Research-only, opt-in through \`WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot\`.
-**Production eligible:** NO. This is not an \`auto\` backend.
-**Reversible snapshot:** \`archive/ltx25-convrot-sm70-pre-sync-20261112\`, commit
-\`4adc57c0d17f960d91415564db68fa6ab9360537\`.
+**Status:** Research-only, opt-in through `WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot`.
+**Production eligible:** NO. This is not an `auto` backend.
+**Reversible snapshot:** `archive/ltx25-convrot-sm70-pre-sync-20261112`, commit
+`4adc57c0d17f960d91415564db68fa6ab9360537`.
 
 ## What changed
 
 The archived Python adapter inspected the converted FP16 activations with
-\`torch.isfinite(x16).all().item()\` and an underflow \`any().item()\` for
+`torch.isfinite(x16).all().item()` and an underflow `any().item()` for
 **each optimized linear**. Both host scalar reads force CUDA stream
 synchronization and can interrupt overlapped inference/offload.
 
 The new adapter uses three asynchronous native functions on the *same*
 current CUDA stream:
 
-1. \`ltx25_cublas_prepare_f32_f16\`: reduce each FP32-rotated activation
+1. `ltx25_cublas_prepare_f32_f16`: reduce each FP32-rotated activation
    row on the device. Choose an exact power-of-two scale when all nonzero
    values remain representable in FP16. Allow *subnormal* FP16 operands down
-   to \`2^-24\`, which are tested on the actual V100 by the preflight.
+   to `2^-24`, which are tested on the actual V100 by the preflight.
    Preserve a conservative FP32 fallback for rows with maxima above 32768,
    mixed ranges that cannot avoid underflow, or nonfinite inputs.
    Unsafe rows are zeroed before cuBLAS so they cannot contaminate its
    FP32 output.
-2. \`ltx25_cublas_gemm_f16_f32\`: unscaled checkpoint INT8 weights are
+2. `ltx25_cublas_gemm_f16_f32`: unscaled checkpoint INT8 weights are
    temporarily cast exactly to FP16 and multiplied by the prepared FP16
    activations. cuBLAS writes **FP32** C. The checkpoint and stored FP32
    scales are unchanged.
-3. \`ltx25_cublas_epilogue_f32\`: normal rows unscale in FP32; unsafe
+3. `ltx25_cublas_epilogue_f32`: normal rows unscale in FP32; unsafe
    rows compute a full direct FP32 dot with the *original* INT8 weights
    and the current FP32-rotated activation. Apply the stored FP32 row
    scales and optional bias. This fallback completes **in the same
@@ -47,7 +47,7 @@ equivalence for the actual model's intermediate activations.
 From the feature-branch checkout, with the baked runner's CUDA/PyTorch
 environment and offline model cache already prepared:
 
-\`\`\`bash
+```bash
 nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
   benchmarks/ltx25_convrot/ltx25_cublas_e.cu \
   -lcublas -o /tmp/libltx25_cublas_e_quality.so
@@ -56,20 +56,20 @@ WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot \
 LTX25_CUBLAS_E_LIB=/tmp/libltx25_cublas_e_quality.so \
 /opt/venvs/ltx25-cu128/bin/python \
   benchmarks/ltx25_convrot/candidate_adapter_preflight.py
-\`\`\`
+```
 
 The test covers BF16 and FP16 inputs, explicit rejection of a disallowed
 weight shape, a GPU FP32 exception, safe power-of-two scaling, direct SM70
 cuBLAS preservation of an FP16 *subnormal* operand, and Python-level
-assertions that neither \`Tensor.item()\` nor \`torch.cuda.synchronize()\`
+assertions that neither `Tensor.item()` nor `torch.cuda.synchronize()`
 occurs during the candidate call. This is **synthetic** testing; passing
 it does not establish the spec's real-activation R0/R1 precision gate.
 
 The self-hosted V100 workflow
-\`.github/workflows/ltx25-quality-1024.yml\` performs this preflight
+`.github/workflows/ltx25-quality-1024.yml` performs this preflight
 before launching a 1024×576, 49-frame, eight-step, fixed-seed video
 with MMGP profile 0 and SDPA, and publishes raw run status to
-\`perf/ltx25-run-results\`. Ordinary source pushes do not launch jobs;
+`perf/ltx25-run-results`. Ordinary source pushes do not launch jobs;
 the E signal file must be changed deliberately.
 
 ## Single-run performance record (not confidence intervals)
@@ -92,7 +92,7 @@ Evidence:
 - Overconservative guard: https://github.com/mylordmonkeyman/WanGP/actions/runs/43366246858
 - Revised guard: https://github.com/mylordmonkeyman/WanGP/actions/runs/43366794156
 
-Counter caution: \`range_fallback\` in the archived adapter counted **calls**
+Counter caution: `range_fallback` in the archived adapter counted **calls**
 whose *entire linear* was rejected; the revised counter counts individual
 **rows** corrected on GPU. These counts are not directly comparable.
 

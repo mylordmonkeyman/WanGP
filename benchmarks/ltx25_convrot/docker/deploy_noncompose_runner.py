@@ -117,8 +117,29 @@ def require_default(host, config):
         for opt in security_opts
     ):
         unsupported.append("HostConfig.SecurityOpt (unsupported value)")
+    # Exactly replay Docker resource limits from the old runner. Each
+    # inspect entry is {Name, Soft, Hard}; -1 represents unlimited.
+    ulimits = host.get("Ulimits") or []
+    if not isinstance(ulimits, list):
+        unsupported.append("HostConfig.Ulimits (not an array)")
+    else:
+        names = set()
+        for item in ulimits:
+            if not isinstance(item, dict) or set(item) != {"Name", "Soft", "Hard"}:
+                unsupported.append("HostConfig.Ulimits (unexpected entry fields)")
+                continue
+            name, soft, hard = item["Name"], item["Soft"], item["Hard"]
+            if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", name):
+                unsupported.append("HostConfig.Ulimits (invalid limit name)")
+            if type(soft) is not int or type(hard) is not int or soft < -1 or hard < -1:
+                unsupported.append("HostConfig.Ulimits (invalid soft/hard value)")
+            if name in names:
+                unsupported.append("HostConfig.Ulimits (duplicate resource)")
+            names.add(name)
+            if type(soft) is int and type(hard) is int and hard != -1 and (soft == -1 or soft > hard):
+                unsupported.append("HostConfig.Ulimits (soft exceeds hard)")
     for key in ("Devices", "DeviceCgroupRules", "CapAdd",
-                "Ulimits", "GroupAdd", "ExtraHosts",
+                "GroupAdd", "ExtraHosts",
                 "Dns", "DnsOptions", "DnsSearch", "Links", "VolumesFrom",
                 "Tmpfs", "Sysctls", "PortBindings", "PublishAllPorts"):
         value = host.get(key)
@@ -214,6 +235,10 @@ def main():
     print("CPU affinity:", host.get("CpusetCpus") or "unrestricted")
     print("NUMA mem affinity:", host.get("CpusetMems") or "unrestricted")
     print("Shared memory (/dev/shm):", host.get("ShmSize", 67108864), "bytes")
+    print("Resource limits (Ulimits):", ", ".join(
+        f"{entry['Name']}={entry['Soft']}:{entry['Hard']}"
+        for entry in (host.get("Ulimits") or [])
+    ) or "none")
     print("Dropped capabilities:", ", ".join(host.get("CapDrop") or []) or "none")
     print("Security options:", ", ".join(host.get("SecurityOpt") or []) or "default")
     print("Existing environment: preserving", len(vals), "variables without displaying values")
@@ -242,13 +267,18 @@ def main():
     # --shm-size accepts a byte count; applying it also to the preflight
     # ensures the image check runs with the real runner's memory settings.
     shm_args = ["--shm-size", str(host.get("ShmSize", 67108864))]
+    ulimit_args = []
+    for entry in host.get("Ulimits") or []:
+        ulimit_args += [
+            "--ulimit", f"{entry['Name']}={entry['Soft']}:{entry['Hard']}"
+        ]
     restriction_args = []
     for cap in host.get("CapDrop") or []:
         restriction_args += ["--cap-drop", cap]
     for opt in host.get("SecurityOpt") or []:
         restriction_args += ["--security-opt", opt]
     run(["docker", "run", "--rm", "--gpus", "device=" + EXPECTED_GPU,
-         *affinity_args, *shm_args, *restriction_args, "--entrypoint",
+         *affinity_args, *shm_args, *ulimit_args, *restriction_args, "--entrypoint",
          "/opt/venvs/ltx25-cu128/bin/python", IMAGE, "-c", check])
     # Recheck immediately before stopping old runner.
     safe_github_idle()
@@ -259,7 +289,7 @@ def main():
         "--user", "runner", "--entrypoint", "/usr/local/bin/start-runner.sh",
         "--restart", "unless-stopped", "--network", "bridge",
         "--gpus", "device=" + EXPECTED_GPU,
-        *affinity_args, *shm_args, *restriction_args,
+        *affinity_args, *shm_args, *ulimit_args, *restriction_args,
     ]
     if cfg.get("WorkingDir"):
         command += ["--workdir", cfg["WorkingDir"]]
@@ -273,8 +303,11 @@ def main():
     # An --env-file means secrets NEVER enter argv/ps or command output.
     with tempfile.TemporaryDirectory(prefix="ltx25-docker-env-") as folder:
         ef = Path(folder) / "env"
-        ef.write_text("\n".join(vals) + "\n", encoding="utf-8")
-        ef.chmod(0o600)
+        # Create with 0600 atomically: avoid a brief world-readable window
+        # between writing runner credentials and chmod().
+        fd = os.open(ef, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write("\n".join(vals) + "\n")
         command += ["--env-file", str(ef),
                     "--env", "LTX25_CHECKPOINT_ROOT=/opt/ltx25/checkpoints",
                     "--env", "LTX25_MODEL_ASSETS_BAKED=1", IMAGE]
@@ -299,6 +332,10 @@ def main():
                     fatal("New runner CPU/NUMA affinity differs: " + field)
             if new["HostConfig"].get("ShmSize") != host.get("ShmSize"):
                 fatal("New runner /dev/shm size differs from original")
+            def limits_by_name(raw):
+                return {e["Name"]: (e["Soft"], e["Hard"]) for e in raw or []}
+            if limits_by_name(new["HostConfig"].get("Ulimits")) != limits_by_name(host.get("Ulimits")):
+                fatal("New runner resource limits differ from original")
             # Docker may normalize capitalization and the implicit :true
             # suffix. Compare the restrictions semantically, not formatting.
             def normalized_cap(value):

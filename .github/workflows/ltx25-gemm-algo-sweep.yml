@@ -73,7 +73,7 @@ jobs:
           put('ltx25-gemm-algo-sweep/latest.json',d)
           put('ltx25-gemm-algo-sweep/runs/'+os.environ['GITHUB_RUN_ID']+'.json',d)
           PY
-      - name: Assert complete four-shape sweep
+      - name: Assert complete eight-shape sweep
         if: ${{ always() }}
         shell: bash
         run: |
@@ -84,7 +84,7 @@ jobs:
           p=Path('/cache/ltx25/results')/('gemm_algo_sweep_'+os.environ['GITHUB_SHA'][:12]+'.json')
           assert p.exists(),p
           d=json.loads(p.read_text())
-          assert d['status']=='PASS' and len(d['shapes'])==4
+          assert d['status']=='PASS' and len(d['shapes'])==8
           assert all(any(x['selector']==-1 and x['bit_exact_fp32']
                          for x in sh['candidates'] if x['status']=='PASS')
                      for sh in d['shapes'])

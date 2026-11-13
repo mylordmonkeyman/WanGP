@@ -16,7 +16,8 @@ FP32 rotation changes arithmetic relative to native BF16 R0. Candidate E
 passed the recorded single-seed numerical/video gates, but this is NOT a
 claim of universal perceptual equivalence. Set WAN2GP_LTX25_CUBLAS_E_MODE=off
 to restore WanGP's original dispatch without rebuilding or changing weights.
-If the compiled extension is unavailable, auto mode safely uses native R0.
+If the compiled extension is unavailable, the implicit default safely uses
+native R0. An explicitly requested fp32rot mode retains strict test errors.
 """
 from __future__ import annotations
 
@@ -32,7 +33,16 @@ from pathlib import Path
 
 import torch
 
-MODE = os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "auto").strip().lower()
+_MODE_IMPLICIT = (os.environ.get("WAN2GP_LTX25_DEFAULT_ON") == "1"
+                  or "WAN2GP_LTX25_CUBLAS_E_MODE" not in os.environ)
+MODE = os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "fp32rot").strip().lower()
+if MODE == "auto":
+    # Never run the unvalidated auto dispatch. Normalize to the exact
+    # fp32rot selector which matched all 49 decoded frames on the V100.
+    MODE = "fp32rot"
+    _MODE_IMPLICIT = True
+    os.environ["WAN2GP_LTX25_CUBLAS_E_MODE"] = "fp32rot"
+    os.environ["WAN2GP_LTX25_DEFAULT_ON"] = "1"
 REAL_ACTIVATION_AUDIT = os.environ.get("WAN2GP_LTX25_REAL_ACTIVATION_AUDIT", "") == "1"
 PROFILE_STAGES = os.environ.get("WAN2GP_LTX25_PROFILE_STAGES", "") == "1"
 USE_WORKSPACE = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "1") == "1"
@@ -56,7 +66,7 @@ _BAD_ROW_COUNTS = {}
 _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
           "sizes": {}, "mode": MODE, "cast_mode": CAST_MODE or "torch_to",
           "production_eligible": False,
-          "auto_selected": MODE == "auto",
+          "auto_selected": _MODE_IMPLICIT,
           "auto_native_fallback": 0,
           "range_fallback_units": "rows (device-side FP32 dot)",
           "row_range_policy": "power_of_two_nonzero_fp16_else_fp32_dot"}
@@ -176,7 +186,7 @@ def maybe_linear(x, weight, bias, group):
     escapes: the row correction runs on the same stream after cuBLAS and before
     conversion to the input dtype. CUDA graph capture remains unsupported.
     """
-    if MODE not in ("fp32rot", "auto"):
+    if MODE != "fp32rot":
         return None
     q = getattr(weight, "_data", None)
     scale = getattr(weight, "_scale", None)
@@ -211,7 +221,7 @@ def maybe_linear(x, weight, bias, group):
         if CAST_MODE == "vector4":
             _cast4_fn()
     except (OSError, RuntimeError, AttributeError, ImportError) as exc:
-        if MODE != "auto":
+        if not _MODE_IMPLICIT:
             raise
         _NATIVE_UNAVAILABLE = True
         _STATS["auto_native_fallback"] += 1
@@ -315,7 +325,7 @@ def maybe_linear(x, weight, bias, group):
     return out
 
 def _summary():
-    if MODE not in ("fp32rot", "auto"):
+    if MODE != "fp32rot":
         return
     # One synchronization, only AFTER generation has finished at interpreter
     # exit. This is never in the measured per-linear hot path.
@@ -326,5 +336,5 @@ def _summary():
     print("[LTX25_CUBLAS_E] " + json.dumps(_STATS, sort_keys=True)[:6000], flush=True)
 
 
-if MODE in ("fp32rot", "auto"):
+if MODE == "fp32rot":
     atexit.register(_summary)

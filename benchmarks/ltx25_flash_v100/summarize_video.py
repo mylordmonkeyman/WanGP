@@ -42,11 +42,13 @@ def main():
         if key != "sdpa" and rec.get("candidate_calls", 0) < 1:
             errors.append(f"{key}: no verified CUDA attention calls")
         generation = rec.get("generation", {})
+        queue_seconds = rec.get("queue_completed_seconds")
         videos = rec.get("videos", [])
         records[key] = {
             "status": rec.get("status", "UNKNOWN"),
             "backend": rec.get("attention_backend"),
             "elapsed_seconds": generation.get("elapsed_seconds"),
+            "queue_completed_seconds": queue_seconds,
             "generation_returncode": generation.get("returncode"),
             "candidate_calls": rec.get("candidate_calls", 0),
             "candidate_banner_found": rec.get("candidate_banner_found", False),
@@ -56,10 +58,15 @@ def main():
             "generation_log": generation.get("log_path"),
         }
     baseline = records.get("sdpa", {}).get("elapsed_seconds")
+    baseline_queue = records.get("sdpa", {}).get("queue_completed_seconds")
     for key, rec in records.items():
         elapsed = rec.get("elapsed_seconds")
+        queue_elapsed = rec.get("queue_completed_seconds")
         rec["speedup_vs_sdpa"] = round(baseline / elapsed, 4) if (
             baseline is not None and elapsed and elapsed > 0
+        ) else None
+        rec["queue_speedup_vs_sdpa"] = round(baseline_queue / queue_elapsed, 4) if (
+            baseline_queue is not None and queue_elapsed and queue_elapsed > 0
         ) else None
 
     final = {
@@ -68,8 +75,9 @@ def main():
         "utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "comparison": "matched-seed 576x320 49-frame 8-step LTX-2.5 T2V; "
                       "FP16, R0 ConvRot, profile 0, SDPA global default",
-        "note": "The sampled prompt/settings/seed match. Generated video quality "
-                "requires visual review; timing excludes process startup/dry-run.",
+        "note": "The sampled prompt/settings/seed match. Video quality requires "
+                "visual review. CLI elapsed includes interpreter and model startup; "
+                "queue time (when logged) better isolates generation.",
         "records": records, "errors": errors,
     }
     (args.output_dir / "video_report.json").write_text(json.dumps(final, indent=2) + "\n")
@@ -78,15 +86,18 @@ def main():
         "",
         f"Status: **{final['status']}** | Commit: {args.sha}",
         "",
-        "| Backend | Generation (s) | vs SDPA | Verified candidate calls | Status |",
-        "|---|---:|---:|---:|---|",
+        "| Backend | CLI wall (s) | Queue (s) | Queue vs SDPA | Calls | Status |",
+        "|---|---:|---:|---:|---:|---|",
     ]
     for key in ("sdpa", "1cat", "zhinianqin"):
         rec = records.get(key, {})
         sec = rec.get("elapsed_seconds")
         speed = rec.get("speedup_vs_sdpa")
+        qsec = rec.get("queue_completed_seconds")
+        qspeed = rec.get("queue_speedup_vs_sdpa")
         lines.append(f"| {key} | {sec if sec is not None else 'n/a'} | "
-                     f"{f'{speed:.2f}x' if speed is not None else 'n/a'} | "
+                     f"{qsec if qsec is not None else 'n/a'} | "
+                     f"{f'{qspeed:.2f}x' if qspeed is not None else 'n/a'} | "
                      f"{rec.get('candidate_calls', 0)} | {rec.get('status', 'MISSING')} |")
     lines += ["", "**Scope:** identical T2V settings, seed and resolution; two external "
               "extensions selected at launch time. Observed actual attention shapes and "

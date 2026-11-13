@@ -1,4 +1,4 @@
-# LTX-2.5 Tesla V100 FlashAttention pilot (draft; no GPU tests run)
+# LTX-2.5 Tesla V100 FlashAttention pilot and three-way benchmark
 
 Branch: perf/ltx25-v100-flash-attn-dual  
 Snapshot parent: 4adc57c0d17f960d91415564db68fa6ab9360537
@@ -83,8 +83,10 @@ modifies vLLM site-packages and deletes a flash_attn directory; DO NOT
 run build.sh unchanged in your existing WanGP environment. Build and validate
 in an isolated environment before deciding on any installation.
 
-Both extensions are external and their version/ABI compatibility remain
-UNVERIFIED against the user's installed WanGP container.
+Both extensions **compiled and passed** 256-token FP16 D64/D128 inference
+smokes on the pre-baked V100 Actions runner (run #43371330815, PyTorch
+2.10.0+cu128). Compatibility against the user's separate WanGP container and
+longer LTX-2.5 shapes is still unverified.
 
 ## Files changed
 
@@ -96,8 +98,10 @@ UNVERIFIED against the user's installed WanGP container.
 - shared/cli_args.py — launch flags.
 - wgp.py — propagate launch flags.
 
-No GitHub Actions workflow, dispatch signal, Docker environment, or quantization
-kernel was changed. **Do not trigger any GPU workflow without authorization.**
+The previously authorized compile probe and its signal live on this branch.
+A **separate** benchmark workflow is now prepared with no benchmark dispatch signal.
+Neither quantization kernels, Docker environment, nor existing production
+WanGP installation are modified by this pilot.
 
 ## Proposed validation, only after explicit authorization
 
@@ -114,5 +118,57 @@ kernel was changed. **Do not trigger any GPU workflow without authorization.**
 5. Only after matching results, consider expanding eligibility to unmasked
    cross-attention, GQA, masking or CUDA graph capture separately.
 
-This branch is a draft integration, **not** evidence that either external
-extension works or improves LTX-2.5 speed on the target V100.
+Initial SM70 compilation and 256-token correctness are established. No
+long-sequence benchmarks or LTX-2.5 video comparisons have been run;
+**no speedup has yet been established.**
+
+
+## Three-way benchmark workflow (prepared, NOT DISPATCHED)
+
+Workflow: [.github/workflows/ltx25-v100-attention-threeway.yml](../../.github/workflows/ltx25-v100-attention-threeway.yml)
+
+The workflow runs **only** after an explicit GitHub workflow_dispatch on
+perf/ltx25-v100-flash-attn-dual, or after a new user-authorized commit
+changing benchmarks/ltx25_flash_v100/benchmark_dispatch.signal.
+**There is no benchmark dispatch-signal file committed.** Other commits do
+not trigger this workflow, and no GPU-runner dispatch is permitted without
+the user's explicit instruction.
+
+One isolated self-hosted V100 job does the following:
+
+1. Checks out the exact approved commit. Checks Python/Bash syntax.
+2. Uses the **proven** compile_on_runner.sh to build pinned 1Cat and
+   zhinianqin CUDA 12.8 extensions in RUNNER_TEMP against the baked
+   /opt/venvs/ltx25-cu128 interpreter. No global pip installs,
+   checkpoint downloads, model loads, or vLLM server installation.
+3. Installs missing non-PyTorch Python tools (if any) with pip --target
+   under the same temporary work directory, verifies key imports, and
+   checks each extension was loaded from its correct source directory.
+   Checks sm_70, PyTorch 2.10.0+cu128, and Python development headers.
+4. Runs mocked adapter-contract tests and the pinned extension FP16 smoke.
+5. Benchmarks **SDPA, 1Cat, zhinianqin** through WanGP's pay_attention
+   dispatcher, with matching random FP16 Q/K/V, warmup, three rotated-order
+   rounds, and eight iterations per backend/round by default.
+6. Checks FP16 accuracy against SDPA for every shape; reports median
+   **dispatch wall-time** and CUDA-event time, incremental and absolute peak
+   allocated VRAM, and per-case SDPA-relative speedups. Failed selected
+   kernels are never silently reported as a successful run.
+7. Uploads compiler/benchmark logs, JSON, CSV, Markdown summary, and
+   reusable .so/Python wrappers with an ABI manifest.
+
+### Shape source and limits
+
+three_way_shapes.json contains seven **synthetic LTX-like** self-attention
+shapes, including D64/D128, H8/H32 and up to 8,192 tokens, plus one B2 case.
+They are **not** actual per-layer traces from the user's checkpoint.
+The benchmark enforces a maximum Q/K/V+output size before allocation, does
+not call a text encoder, and does not generate video.
+
+This is a **microbenchmark** for selecting the candidate before a later
+matched-seed full-video test. It is not evidence of an end-to-end WanGP
+speedup; memory head splitting and GPU-to-CPU synchronization elsewhere can
+still dominate performance.
+
+Workflow links:
+- https://github.com/mylordmonkeyman/WanGP/actions/workflows/ltx25-v100-attention-threeway.yml
+- https://github.com/mylordmonkeyman/WanGP/actions/runs/43371330815 (earlier successful compile-only test)

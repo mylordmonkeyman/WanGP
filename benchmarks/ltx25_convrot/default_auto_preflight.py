@@ -16,6 +16,7 @@ import json
 
 for name in ("WAN2GP_LTX25_CUBLAS_E_MODE", "WAN2GP_LTX25_E_CAST",
              "WAN2GP_LTX25_E_WORKSPACE", "LTX25_CUBLAS_E_LIB",
+             "WAN2GP_LTX25_HADAMARD", "WAN2GP_LTX25_GEMM_TUNE",
              "WAN2GP_LTX25_E_AUTO_BUILD"):
     assert name not in os.environ, f"{name} must be unset for this test"
 
@@ -28,6 +29,7 @@ from shared.qtypes.int8_convrot import _rotate_activation
 
 def main():
     assert e.MODE == "fp32rot" and e._MODE_IMPLICIT and e.CAST_MODE == "vector4" and e.USE_WORKSPACE
+    assert e.ROT_MODE == "radix4" and e._STATS["rotation_mode"] == "radix4"
     assert ws.ENABLED and ws.LIMIT_BYTES == 96 * (1 << 20)
     assert e.LIB == "" and e._STATS["auto_selected"] is True
     assert torch.cuda.get_device_capability(0) == (7, 0)
@@ -59,7 +61,17 @@ def main():
             assert rel < 0.015, f"{dtype} auto numerical drift: {rel}"
             samples.append({"dtype": str(dtype), "relative_rms_error": rel})
         assert torch.equal(q, original), "Original INT8 weights mutated"
-        assert e._FN is not None and e._CAST_FN is not None
+        assert e._FN is not None and e._CAST_FN is not None and e._ROT_FN is not None
+        # The previous torch FP32 rotation is still available on demand.
+        prev_rotation = e.ROT_MODE
+        e.ROT_MODE = "torch"
+        try:
+            torch_out = e.maybe_linear(x, wt, None, 256)
+            assert torch_out is not None and torch_out.dtype == x.dtype
+            torch.cuda.synchronize()
+            assert torch.isfinite(torch_out).all().item()
+        finally:
+            e.ROT_MODE = prev_rotation
         assert ws._STATS["acquired"] >= 2
         assert ws._STATS["persistent_weight_copies"] == 0
         assert ws._STATS["max_persistent_bytes"] <= ws.LIMIT_BYTES
@@ -95,6 +107,15 @@ def main():
         finally:
             e._FN, e._CAST_FN, e._NATIVE_UNAVAILABLE = prior_fn, prior_cast, prior_unavailable
 
+        # A native extension missing the new radix4 entry point must also
+        # fall back before launching any partial accelerated operation.
+        prior_count = e._STATS["auto_native_fallback"]
+        with patch.object(e, "_rot_fn", side_effect=AttributeError("intentional missing radix4 symbol")):
+            assert e.maybe_linear(x, wt, None, 256) is None
+        assert e._NATIVE_UNAVAILABLE
+        assert e._STATS["auto_native_fallback"] == prior_count + 1
+        e._NATIVE_UNAVAILABLE = prior_unavailable
+
     dll = e._FN[0]
     output = {
         "status": "PASS", "mode": e.MODE, "cast": e.CAST_MODE,
@@ -103,6 +124,9 @@ def main():
         "samples": samples, "workspace_leases": ws._STATS["acquired"],
         "original_int8_unchanged": True,
         "missing_native_falls_back_before_cuda": True,
+        "missing_radix4_symbol_falls_back_before_cuda": True,
+        "torch_rotation_rollback_works": True,
+        "default_rotation": e.ROT_MODE,
         "explicit_off_works": True,
         "no_host_sync_in_hot_path": True,
     }

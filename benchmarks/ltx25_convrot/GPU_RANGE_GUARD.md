@@ -79,18 +79,20 @@ the E signal file must be changed deliberately.
 | R0 unmodified WanGP | 157.9 s | N/A | Completed |
 | Archived opt-in FP32-rotation E | 112.8 s | 1,800 whole-call range fallbacks | Completed |
 | First GPU-only guard, FP16 *normal* constraint | 156.9 s | 306,419 *rows* | Completed but too slow |
-| Revised GPU-only guard, permits validated FP16 subnormals | 98.5 s | 4,434 *rows* | Completed |
+| Revised GPU-only guard, permits validated FP16 subnormals | 98.5 s; repeated **98.3 s** | 4,434 *rows* in both runs | Completed twice |
 
 All use 1024×576 / 49 frames / 8 steps / seed 20261112,
-matching prompt and generation settings. Each timing is an independent
-single run, not a repeated interleaved median; CPU/GPU clocks, overlap,
-peak memory, and qualitative video differences remain to be compared.
+matching prompt and generation settings. Both revised-guard timings are independent identical-setting runs (98.5 s
+and 98.3 s). The R0 and archived E figures are single runs, and there is no
+interleaved R0/E median. CPU/GPU clocks, overlap, peak memory, and
+qualitative video differences remain to be compared.
 
 Evidence:
 - R0: https://github.com/mylordmonkeyman/WanGP/actions/runs/43336958612
 - Archived E: https://github.com/mylordmonkeyman/WanGP/actions/runs/43338937862
 - Overconservative guard: https://github.com/mylordmonkeyman/WanGP/actions/runs/43366246858
 - Revised guard: https://github.com/mylordmonkeyman/WanGP/actions/runs/43366794156
+- Revised guard repetition (identical model settings): https://github.com/mylordmonkeyman/WanGP/actions/runs/43367142966
 
 Counter caution: `range_fallback` in the archived adapter counted **calls**
 whose *entire linear* was rejected; the revised counter counts individual

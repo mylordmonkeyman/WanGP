@@ -1,0 +1,70 @@
+name: LTX-2.5 V100 cached decoded-video comparison
+
+# No new model generation, checkpoint reads, or downloads.
+on:
+  push:
+    branches:
+      - perf/ltx25-convrot-sm70
+    paths:
+      - benchmarks/ltx25_convrot/video_comparison_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    name: Compare four cached 49-frame LTX-2.5 videos
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 35
+    steps:
+      - name: Checkout isolated analysis code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Compare decoded frames and create visual contact sheet
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/video_comparison.py
+
+      - name: Publish results separately from video quality claims
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 benchmarks/ltx25_convrot/publish_video_comparison.py
+
+      - name: Upload side-by-side decoded-frame contact sheet
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-1024-cached-frame-comparison
+          path: /cache/ltx25/results/video_comparison_current/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Require decoded-video comparisons
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path('/cache/ltx25/results') / ('video_comparison_' + os.environ['GITHUB_SHA'][:12] + '.json')
+          assert path.is_file(), f'Report missing: {path}'
+          data = json.loads(path.read_text())
+          print('VIDEO_COMPARISON_GATE', data.get('status'), data.get('pairs'))
+          assert data.get('status') == 'PASS', data.get('error', 'Video analysis incomplete')
+          assert len(data.get('pairs', [])) == 4, 'Expected four matched comparisons'
+          PY

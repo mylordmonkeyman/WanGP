@@ -13,9 +13,10 @@ namespace {
 
 constexpr int THREADS = 256;
 
-// A block owns one input row. A power-of-two rescale preserves magnitude
-// exactly in FP32 and ensures *all nonzero* FP16 operands are normal, when
-// possible. An ill-conditioned/nonfinite row is sent through FP32 instead.
+// A block owns one input row. Power-of-two rescaling is exact in FP32;
+// every nonzero input must survive FP16 conversion without underflow to zero.
+// SM70 supports FP16 subnormals, and the V100 preflight separately tests the
+// cuBLAS subnormal contribution. Unsupported ranges use FP32 same-row math.
 // This kernel never round-trips a device flag or an activation to the host.
 __global__ void prepare_rows(const float* __restrict__ input,
                              __half* __restrict__ output,
@@ -62,10 +63,10 @@ __global__ void prepare_rows(const float* __restrict__ input,
       slow = 1;
     }
     if (!slow && largest[0] > 0.0f) {
-      // max*2^exp2 < 2^15 and min*2^exp2 >= 2^-14.
-      // Keep the cast away from FP16 overflow AND subnormals/FTZ.
+      // max*2^exp2 < 2^15 and min*2^exp2 >= 2^-24.
+      // Permit tested FP16 subnormals, but never drop a nonzero input.
       const int upper = 14 - ilogbf(largest[0]);
-      const int lower = -14 - ilogbf(smallest[0]);
+      const int lower = -24 - ilogbf(smallest[0]);
       if (lower > upper) {
         slow = 1;
       } else {

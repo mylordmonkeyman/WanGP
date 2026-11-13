@@ -269,6 +269,14 @@ def maybe_linear(x, weight, bias, group):
                            x_source32.numel(), stream)
         if status:
             raise RuntimeError(f"SM70 radix4 Hadamard failed: status={status}, M={m}, K={k}")
+    elif ROT_MODE == "flat_mm":
+        # Numerically bit-identical to the existing H256 matmul in the
+        # isolated V100 shape tests. Reuses the *same* H256 constant,
+        # FP32 operands, checkpoint weights and row-range policy.
+        from shared.qtypes.int8_convrot import _regular_hadamard
+        x_source32 = x.float().reshape(-1, 256)
+        h256 = _regular_hadamard(256, x.device, torch.float32)
+        x32 = torch.mm(x_source32, h256).reshape(m, k)
     elif ROT_MODE in ("torch", ""):
         x32 = _rotate_activation(x.float(), group).reshape(m, k).contiguous()
     else:

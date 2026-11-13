@@ -149,7 +149,7 @@ def _fn():
                        ctypes.c_int, ctypes.c_int, ptr]
     finish.restype = ctypes.c_int
     _FN = (dll, gemm, prepare, finish)
-    print("[LTX25_CUBLAS_E] SM70 ConvRot enabled: GPU range guard, vector8 cast and bounded scratch defaults; no persistent FP16 weights", flush=True)
+    print(f"[LTX25_CUBLAS_E] SM70 ConvRot enabled: GPU range guard, cast={CAST_MODE}, rotation={ROT_MODE}, workspace={USE_WORKSPACE}, gemm_tune={GEMM_TUNE}; no persistent FP16 weights", flush=True)
     return _FN
 
 

@@ -91,6 +91,18 @@ def run(cmd, timeout, log_path):
             "log_path": str(log_path), "log_tail": tail}
 
 
+def queue_seconds_from_log(log_data: str) -> float | None:
+    """Extract WanGP queue-generation wall time, excluding CLI startup."""
+    match = re.search(r"Queue completed: \d+/\d+ tasks in ([^\n\r]+)", log_data)
+    if not match:
+        return None
+    pieces = re.findall(r"(\d+(?:\.\d+)?)\s*([hms])", match.group(1))
+    if not pieces:
+        return None
+    return round(sum(float(value) * {"h": 3600, "m": 60, "s": 1}[unit]
+                     for value, unit in pieces), 3)
+
+
 def gpu_busy():
     # GPU sharing invalidates any performance claim. Skip generation if another
     # host process owns GPU memory. nvidia-smi is advisory, not an ownership lock.
@@ -161,7 +173,7 @@ def main():
         # configured dry-run, avoiding an unnecessary second CLI startup.
         cfg = CFG / "wgp_config.json"
         if not cfg.is_file():
-            first = run(cmd(True), timeout=300, log_path=OUT / f"cli_first_{sha[:12]}.log")
+            first = run(cmd(True), timeout=300, log_path=OUT / f"cli_first_{VARIANT}_{sha[:12]}.log")
             report["initial_cli_dryrun"] = first
         if not cfg.is_file():
             report.update(status="BLOCKED", blocker="WanGP did not initialize isolated config")
@@ -183,7 +195,7 @@ def main():
             "prevent_power_throttling": False,
         })
         cfg.write_text(json.dumps(conf, indent=2) + "\n")
-        second = run(cmd(True), timeout=300, log_path=OUT / f"cli_dryrun_{sha[:12]}.log")
+        second = run(cmd(True), timeout=300, log_path=OUT / f"cli_dryrun_{VARIANT}_{sha[:12]}.log")
         report["configured_cli_dryrun"] = second
         if second["returncode"]:
             report.update(status="DRYRUN_BLOCKED", blocker="WanGP settings validation returned nonzero")
@@ -205,15 +217,9 @@ def main():
         full_generation_log = Path(result["log_path"]).read_text(errors="replace")
         # WanGP prints a separate queue duration; subprocess elapsed also
         # includes Python startup, checkpoint load and other CLI overhead.
-        match = re.search(r"Queue completed: \d+/\d+ tasks in ([^\n\r]+)", full_generation_log)
-        if match:
-            duration = match.group(1)
-            pieces = re.findall(r"(\d+(?:\.\d+)?)\s*([hms])", duration)
-            if pieces:
-                report["queue_completed_seconds"] = round(sum(
-                    float(value) * {"h": 3600, "m": 60, "s": 1}[unit]
-                    for value, unit in pieces
-                ), 3)
+        queue_seconds = queue_seconds_from_log(full_generation_log)
+        if queue_seconds is not None:
+            report["queue_completed_seconds"] = queue_seconds
         files = [p for p in VIDEOS.rglob("*.mp4") if p.resolve() not in before]
         report["videos"] = [
             {"path": str(p), "filename": p.name, "size_bytes": p.stat().st_size}

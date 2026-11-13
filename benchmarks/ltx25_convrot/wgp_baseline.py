@@ -33,6 +33,7 @@ VARIANTS = {
     "e_profile_1024": ("1024x576", True),
     "e_workspace_1024": ("1024x576", True),
     "e_cast4_1024": ("1024x576", True),
+    "e_cast8_1024": ("1024x576", True),
     "e_combo_1024": ("1024x576", True),
     "e_default_1024": ("1024x576", True),
     "e_hadamard_1024": ("1024x576", True),
@@ -47,6 +48,7 @@ IS_REAL_AUDIT = VARIANT == "e_real_activation_audit_1024"
 IS_STAGE_PROFILE = VARIANT == "e_profile_1024"
 IS_WORKSPACE = VARIANT in ("e_workspace_1024", "e_combo_1024")
 IS_CAST4 = VARIANT in ("e_cast4_1024", "e_combo_1024")
+IS_CAST8 = VARIANT == "e_cast8_1024"
 IS_DEFAULT = VARIANT == "e_default_1024"
 IS_HADAMARD = VARIANT == "e_hadamard_1024"
 IS_FLAT_MM = VARIANT == "e_flat_mm_1024"
@@ -110,6 +112,8 @@ def run(cmd, timeout, log_path):
             env.pop(name, None)
     if IS_CAST4:
         env["WAN2GP_LTX25_E_CAST"] = "vector4"
+    if IS_CAST8:
+        env["WAN2GP_LTX25_E_CAST"] = "vector8"
     if IS_WORKSPACE:
         env["WAN2GP_LTX25_E_WORKSPACE"] = "1"
         env["LTX25_E_WORKSPACE_MAX_MIB"] = "96"
@@ -218,6 +222,7 @@ def main():
                    "e_profile_1024": "quality_stage_profile",
                    "e_workspace_1024": "quality_workspace",
                    "e_cast4_1024": "quality_cast4",
+                    "e_cast8_1024": "quality_cast8",
                    "e_combo_1024": "quality_combo",
                    "e_default_1024": "quality_default",
                    "e_hadamard_1024": "quality_hadamard",
@@ -235,7 +240,7 @@ def main():
         if not MODEL_FILE.is_file() or not TEXT_FILE.is_file():
             report.update(status="BLOCKED", blocker="Image-baked transformer or text encoder checkpoint absent")
             return
-        if VARIANT in ("e_quality_1024", "e_real_activation_audit_1024", "e_profile_1024", "e_workspace_1024", "e_cast4_1024", "e_combo_1024", "e_default_1024", "e_debug_fp32rot_samecfg_1024", "e_hadamard_1024", "e_flat_mm_1024", "e_algo2_1024"):
+        if VARIANT in ("e_quality_1024", "e_real_activation_audit_1024", "e_profile_1024", "e_workspace_1024", "e_cast4_1024", "e_combo_1024", "e_default_1024", "e_debug_fp32rot_samecfg_1024", "e_hadamard_1024", "e_cast8_1024", "e_flat_mm_1024", "e_algo2_1024"):
             refdir = BASE / "videos" / "r0_quality_1024"
             if not refdir.is_dir() or not any(refdir.glob("*.mp4")):
                 report.update(
@@ -345,7 +350,12 @@ def main():
             if cast_mode != "vector4":
                 report["status"] = "CAST4_NOT_SELECTED"
                 report["blocker"] = f"Expected vector4 cast counters, got {cast_mode!r}"
-        if IS_WORKSPACE or IS_DEFAULT or IS_DEBUG_EXPLICIT or IS_HADAMARD or IS_FLAT_MM or IS_ALGO2:
+        if IS_CAST8 and report["status"] == "PASS":
+            counters = report.get("candidate_counters", {})
+            if counters.get("cast_mode") != "vector8" or counters.get("used") != 16368:
+                report["status"] = "CAST8_NOT_SELECTED"
+                report["blocker"] = "Exact vector8 pilot did not run the expected eligible ConvRot calls"
+        if IS_WORKSPACE or IS_DEFAULT or IS_DEBUG_EXPLICIT or IS_HADAMARD or IS_FLAT_MM or IS_ALGO2 or IS_CAST8:
             import re
             # The workspace prints a bounded JSON summary at interpreter exit.
             ws_matches = re.findall(r"\[LTX25_WORKSPACE\] (\{[^\n]+\})",

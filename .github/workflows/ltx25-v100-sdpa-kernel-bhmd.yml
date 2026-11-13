@@ -1,0 +1,82 @@
+name: LTX-2.5 V100 SDPA kernel identification and 1Cat BHMD test
+
+# Explicitly user-approved GPU investigation. Ordinary source changes do not run.
+on:
+  push:
+    branches: [perf/ltx25-v100-flash-attn-dual]
+    paths: [benchmarks/ltx25_flash_v100/sdpa_kernel_dispatch.signal]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+# Share mutex with the existing real-shape benchmark; never overlap its GPU work.
+concurrency:
+  group: ltx25-v100-realshape-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  profile-and-compare:
+    if: github.ref == 'refs/heads/perf/ltx25-v100-flash-attn-dual'
+    name: Profile SDPA CUDA ops; test 1Cat BHMD with and without layout copies
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 35
+    env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout exact branch revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Validate Python source and baked CUDA ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          /opt/venvs/ltx25-cu128/bin/python -m py_compile \
+            benchmarks/ltx25_flash_v100/sdpa_kernel_bhmd_probe.py
+          /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+          import torch
+          from torch.profiler import profile, ProfilerActivity
+          assert torch.__version__.startswith("2.10.0+cu128"), torch.__version__
+          assert torch.cuda.get_device_capability() == (7, 0), "Not Tesla V100"
+          assert torch.version.cuda == "12.8", torch.version.cuda
+          print("Torch", torch.__version__, "CUDA", torch.version.cuda)
+          PY
+
+      - name: Download previously successful compiled CUDA extension artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ltx25-v100-sm70-cu128-extensions-43384835108
+          run-id: "43384835108"
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/sdpa-probe-archive
+
+      - name: Extract isolated extension and run measured profiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST="$RUNNER_TEMP/sdpa-probe-ext"
+          OUT="$RUNNER_TEMP/sdpa-kernel-probe-results"
+          mkdir -p "$DEST" "$OUT"
+          test -s "$RUNNER_TEMP/sdpa-probe-archive/compiled-v100-attention-sm70-cu128.tar.gz"
+          tar -xzf "$RUNNER_TEMP/sdpa-probe-archive/compiled-v100-attention-sm70-cu128.tar.gz" -C "$DEST"
+          grep -Fq 'PyTorch 2.10.0+cu128' "$DEST/ABI.txt"
+          grep -Fq 'NVIDIA sm70' "$DEST/ABI.txt"
+          find "$DEST/1cat" -name 'flash_attn_v100_cuda*.so' | grep -q .
+          export PYTHONPATH="$DEST/1cat:$DEST/zhinianqin:$PWD${PYTHONPATH:+:$PYTHONPATH}"
+          export LTX25_KERNEL_PROBE_OUT="$OUT"
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_flash_v100/sdpa_kernel_bhmd_probe.py
+
+      - name: Upload CUDA kernel names, Chrome traces and timing data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ltx25-v100-sdpa-bhmd-${{ github.run_id }}
+          path: ${{ runner.temp }}/sdpa-kernel-probe-results/
+          retention-days: 14
+          if-no-files-found: warn

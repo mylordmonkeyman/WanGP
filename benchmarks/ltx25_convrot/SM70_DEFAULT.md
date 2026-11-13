@@ -108,3 +108,26 @@ change other attention backends, default model precision, or checkpoint files.
 
 Evidence and command-line test details:
 `benchmarks/ltx25_convrot/GPU_RANGE_GUARD.md`.
+
+### Validated no-env default-on acceptance
+
+The corrected no-env default passed the complete V100 workflow at
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43476591579 .
+It generated the same 49 decoded frames as the validated Candidate E
+reference at **96.1 seconds**, with **16,368** optimized calls,
+**4,434** device-side FP32 fallback rows and **16,360** scratch leases.
+Workspace residency peaked at ~95.5 MiB, no persistent FP16 weight copy
+was cached, and the native extension was resolved without an explicit
+library path. The prior standalone `auto` mode is never used for
+default selection, because its two full-video equality gates failed.
+
+The exact tested source was preserved in:
+`archive/ltx25-convrot-sm70-default-promoted-validated-20261113`
+at `54a888d600ce896e0b40ff00c75fd8ee46f0249d`.
+
+**Deployment caveat:** GitHub commits and V100 Actions tests do not
+modify an existing separate installation of WanGP. Update the actual
+server checkout to this branch (preserving local changes) and restart
+its WanGP process to activate these source-code defaults. An existing
+long-running Python process continues using previously imported modules
+until restarted.

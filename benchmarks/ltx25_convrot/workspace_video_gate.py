@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Strict decoded-frame comparison against the validated no-sync Candidate E.
+
+Runs only after an explicit e_workspace_1024 test generates a video. All 49
+frames are decoded as yuv420p by the same ffmpeg command. A difference is
+recorded as a failed gate, never silently classified as visually equivalent.
+
+This script does not create a video, download models, or use CUDA.
+"""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+
+BASE = Path("/cache/ltx25/results")
+REFERENCE_REPORT = BASE / "runtime_quality_e_a566cf56eae8.json"
+
+
+def video_from(report_path):
+    report = json.loads(report_path.read_text())
+    if report.get("status") != "PASS" or len(report.get("videos", [])) != 1:
+        raise RuntimeError(f"Incomplete quality report or video list: {report_path}")
+    video = Path(report["videos"][0]["path"])
+    if not video.is_file():
+        raise FileNotFoundError(video)
+    return video, report
+
+
+def hashes(ffmpeg, video):
+    cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin",
+           "-i", str(video), "-map", "0:v:0", "-pix_fmt", "yuv420p",
+           "-f", "framemd5", "-"]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=180)
+    frames = [line.strip() for line in result.stdout.splitlines()
+              if line.strip() and not line.startswith("#")]
+    if len(frames) != 49:
+        raise RuntimeError(f"{video}: expected 49 decoded frames, got {len(frames)}")
+    return frames
+
+
+def main():
+    sha = os.environ["GITHUB_SHA"][:12]
+    current = BASE / f"runtime_quality_workspace_{sha}.json"
+    video, report = video_from(current)
+    gate = {"status": "ERROR", "reference_report": str(REFERENCE_REPORT),
+            "comparison": "49 decoded yuv420p frames, exact equality",
+            "new_video": str(video)}
+    try:
+        reference, _ = video_from(REFERENCE_REPORT)
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            import imageio_ffmpeg
+            ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        a, b = hashes(ffmpeg, reference), hashes(ffmpeg, video)
+        mismatches = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
+        gate.update(status="PASS" if not mismatches else "FAIL",
+                    total_frames=49, mismatched_frames=len(mismatches),
+                    first_mismatch=mismatches[:10],
+                    decoded_pixels_identical=not mismatches)
+    except Exception as exc:
+        gate.update(status="ERROR", error=f"{type(exc).__name__}: {exc}"[:500])
+    report["workspace_video_gate"] = gate
+    if gate["status"] != "PASS":
+        report["status"] = "WORKSPACE_VIDEO_MISMATCH"
+        report["blocker"] = "Decoded workspace video differs from validated no-sync Candidate E"
+    current.write_text(json.dumps(report, indent=2) + "\n")
+    print("LTX25_WORKSPACE_VIDEO_GATE " + json.dumps(gate, sort_keys=True), flush=True)
+    if gate["status"] != "PASS":
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()

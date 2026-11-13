@@ -294,7 +294,8 @@ def main():
             if (counters.get("mode") != "fp32rot" or
                     counters.get("auto_selected") is not True or
                     counters.get("cast_mode") != "vector4" or
-                    counters.get("used", 0) <= 0 or
+                    counters.get("used", 0) != 16368 or
+                    counters.get("range_fallback", -1) != 4434 or
                     counters.get("auto_native_fallback", 0) != 0):
                 report["status"] = "DEFAULT_AUTO_NOT_SELECTED"
                 report["blocker"] = "Default automatic SM70 vector4 mode did not execute successfully"

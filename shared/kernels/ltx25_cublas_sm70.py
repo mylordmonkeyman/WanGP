@@ -46,7 +46,7 @@ if MODE == "auto":
 REAL_ACTIVATION_AUDIT = os.environ.get("WAN2GP_LTX25_REAL_ACTIVATION_AUDIT", "") == "1"
 PROFILE_STAGES = os.environ.get("WAN2GP_LTX25_PROFILE_STAGES", "") == "1"
 USE_WORKSPACE = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "1") == "1"
-CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector4").strip().lower()
+CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector8").strip().lower()
 ROT_MODE = os.environ.get("WAN2GP_LTX25_HADAMARD", "radix4").strip().lower()
 GEMM_TUNE = os.environ.get("WAN2GP_LTX25_GEMM_TUNE", "off").strip().lower()
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
@@ -149,7 +149,7 @@ def _fn():
                        ctypes.c_int, ctypes.c_int, ptr]
     finish.restype = ctypes.c_int
     _FN = (dll, gemm, prepare, finish)
-    print("[LTX25_CUBLAS_E] SM70 ConvRot enabled: GPU range guard, vector4 cast and bounded scratch defaults; no persistent FP16 weights", flush=True)
+    print("[LTX25_CUBLAS_E] SM70 ConvRot enabled: GPU range guard, vector8 cast and bounded scratch defaults; no persistent FP16 weights", flush=True)
     return _FN
 
 
@@ -166,7 +166,7 @@ def _cast4_fn():
 
 
 def _cast8_fn():
-    """Bind the V100 exact packed-8 INT8-to-FP16 cast (opt-in only)."""
+    """Bind the V100 exact packed-8 INT8-to-FP16 cast (default; override with vector4)."""
     global _CAST8_FN
     if _CAST8_FN is None:
         dll = _fn()[0]
@@ -344,7 +344,7 @@ def maybe_linear(x, weight, bias, group):
     try:
         if CAST_MODE in ("vector4", "vector8"):
             # Both exact integer conversion kernels use one transient FP16
-            # weight tensor. Vector8 is an opt-in alternative to vector4;
+            # weight tensor. Vector8 is the default; vector4 remains an override;
             # the original INT8 checkpoint is never mutated or duplicated.
             w16 = torch.empty(q.shape, dtype=torch.float16, device=q.device)
             ptr = ctypes.c_void_p

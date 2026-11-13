@@ -1,0 +1,2 @@
+2026-11-13
+Run exact V100 49-frame 1024x576 default-Algo2-Algo2-default test with current promoted radix4/packed-vector8 Candidate E. Do not change production GEMM default; require synthetic BF16/FP16 numerical preflight, identical decoded video frames and dispatch verification. Do not run if V100 occupied.

@@ -140,8 +140,8 @@ __global__ void transform_radix4_256(const float* __restrict__ input,
   const int tid=threadIdx.x;
   // Double buffering in shared memory prevents read/write hazards.
   __shared__ float buf_a[ROT_GROUP];
-  __shared__ float buf_b[GROUP];
-  const size_t start=group*GROUP;
+  __shared__ float buf_b[ROT_GROUP];
+  const size_t start=group*ROT_GROUP;
   buf_a[tid]=input[start+tid];
   __syncthreads();
   float* src=buf_a;

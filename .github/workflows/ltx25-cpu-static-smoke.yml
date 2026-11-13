@@ -63,7 +63,8 @@ jobs:
           assert 'WAN2GP_LTX25_E_WORKSPACE' in a and 'WAN2GP_LTX25_E_WORKSPACE' in w
           assert 'WAN2GP_LTX25_CUBLAS_E_MODE", "fp32rot"' in a
           assert 'WAN2GP_LTX25_E_CAST", "vector4"' in a
-          assert 'WAN2GP_LTX25_HADAMARD", "torch"' in a
+          assert 'WAN2GP_LTX25_HADAMARD", "radix4"' in a
+          assert 'elif ROT_MODE in ("torch", ""):' in a, 'Torch FP32 rollback is required'
           assert 'ltx25_cublas_rot256_f32' in a
           assert 'WAN2GP_LTX25_GEMM_TUNE", "off"' in a
           assert 'ltx25_cublas_gemm_f16_f32_algo2' in a

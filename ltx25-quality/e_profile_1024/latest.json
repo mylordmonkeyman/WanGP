@@ -15,7 +15,10 @@
   "gpu_preflight": {
     "busy": true,
     "entries": [
-      "124951, 342 MiB"
+      {
+        "gpu_entry": "124951, 342 MiB",
+        "process_name": "unknown"
+      }
     ],
     "reason": "other GPU compute processes"
   },
@@ -25,14 +28,15 @@
   "production_eligible": false,
   "real_activation_audit": null,
   "resolution": "1024x576",
-  "run_id": "43453044580",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43453044580",
+  "run_id": "43454440544",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43454440544",
   "runtime_bootstrap_status": "PASS",
   "seed": 20261112,
-  "source_sha": "70341cfb4d663c5a266b329ef4263e5f32be7cde",
+  "source_sha": "d085595ddee2dda3ebeb06bbfb5c099b416afbbe",
   "stage_profile": null,
   "status": "GPU_BUSY",
   "variant": "e_profile_1024",
   "videos": [],
-  "workflow_status": "failure"
+  "workflow_status": "failure",
+  "workspace_stats": null
 }

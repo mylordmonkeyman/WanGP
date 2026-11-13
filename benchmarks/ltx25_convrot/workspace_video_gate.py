@@ -50,6 +50,7 @@ def main():
         "e_combo_1024": ("quality_combo", "combo_video_gate"),
         "e_default_1024": ("quality_default", "default_video_gate"),
         "e_hadamard_1024": ("quality_hadamard", "hadamard_video_gate"),
+        "e_flat_mm_1024": ("quality_flat_mm", "flat_mm_video_gate"),
         "e_debug_fp32rot_samecfg_1024": ("quality_default_explicit", "debug_explicit_video_gate"),
     }
     if variant not in variants:

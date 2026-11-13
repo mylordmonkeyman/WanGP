@@ -1,0 +1,2 @@
+2026-11-13
+Authorized by user after GPU freed. Run opt-in reusable scratch preflight, matched full video and exact 49-frame decoded equivalence. No persistent FP16 weight cache.

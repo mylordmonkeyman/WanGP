@@ -8,6 +8,7 @@
 #include <cublas_v2.h>
 #include <cfloat>
 #include <cmath>
+#include <cstdint>
 
 namespace {
 
@@ -125,7 +126,42 @@ __global__ void finish_rows(float* __restrict__ c32,
   }
 }
 
+// Optional experimental faster INT8 -> FP16 weight expansion.
+// Exact conversion: every signed INT8 value is precisely representable in FP16.
+// This fills a bounded *transient* FP16 tensor only; no weight cache or
+// second persistent weight set is retained.
+__global__ void cast_qint8_to_fp16_four(const uint32_t* __restrict__ q,
+                                       __half2* __restrict__ dst,
+                                       size_t groups) {
+  const size_t i = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (i >= groups) return;
+  const uint32_t packed = q[i];
+  const int x0 = static_cast<int8_t>(packed & 0xffU);
+  const int x1 = static_cast<int8_t>((packed >> 8) & 0xffU);
+  const int x2 = static_cast<int8_t>((packed >> 16) & 0xffU);
+  const int x3 = static_cast<int8_t>((packed >> 24) & 0xffU);
+  dst[2 * i] = __halves2half2(__float2half_rn(static_cast<float>(x0)),
+                              __float2half_rn(static_cast<float>(x1)));
+  dst[2 * i + 1] = __halves2half2(__float2half_rn(static_cast<float>(x2)),
+                                  __float2half_rn(static_cast<float>(x3)));
+}
+
 }  // namespace
+
+extern "C" int ltx25_cublas_cast_int8_to_f16_4(
+    const void* q, void* dst, size_t count, void* stream_ptr) {
+  if (!q || !dst || count == 0 || (count & 3U) ||
+      (reinterpret_cast<uintptr_t>(q) & 3U) ||
+      (reinterpret_cast<uintptr_t>(dst) & 3U)) return -1;
+  const size_t groups = count / 4;
+  const size_t blocks = (groups + THREADS - 1) / THREADS;
+  if (blocks > static_cast<size_t>(UINT32_MAX)) return -2;
+  const auto stream = reinterpret_cast<cudaStream_t>(stream_ptr);
+  cast_qint8_to_fp16_four<<<static_cast<unsigned int>(blocks), THREADS, 0, stream>>>(
+      static_cast<const uint32_t*>(q), reinterpret_cast<__half2*>(dst), groups);
+  const auto err = cudaPeekAtLastError();
+  return err == cudaSuccess ? 0 : 4000 + int(err);
+}
 
 extern "C" int ltx25_cublas_prepare_f32_f16(
     const void* x32, void* x16, void* exponents, void* slow_rows,

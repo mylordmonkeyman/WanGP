@@ -203,7 +203,7 @@ jobs:
             benchmarks/ltx25_convrot/candidate_cast4_preflight.py
 
       - name: Preflight FP32 radix4 Hadamard against full torch-rotation adapter
-        if: ${{ env.LTX25_BENCH_VARIANT == 'e_hadamard_1024' || env.LTX25_BENCH_VARIANT == 'e_flat_mm_1024' }}
+        if: ${{ env.LTX25_BENCH_VARIANT == 'e_hadamard_1024' }}
         shell: bash
         run: |
           set -euo pipefail

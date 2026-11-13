@@ -16,7 +16,10 @@ flash-attn varlen API, so always use keyword arguments.
 from __future__ import annotations
 
 from functools import lru_cache
+from collections import Counter
+import atexit
 import importlib
+import json
 import os
 
 import torch
@@ -30,6 +33,24 @@ PREFIX = "ltx25_v100_"
 _configured_backend: str | None = None
 _configured_min_tokens: int | None = None
 _announced: set[str] = set()
+_shape_counts: Counter[str] = Counter()
+_trace_shapes = os.environ.get("WANGP_LTX25_V100_TRACE", "0") == "1"
+
+
+def _trace(which: str, q: torch.Tensor) -> None:
+    """Optional CPU-only metadata; never read GPU tensor values or synchronize."""
+    if not _trace_shapes:
+        return
+    label = f"{which}:b{q.shape[0]}:t{q.shape[1]}:h{q.shape[2]}:d{q.shape[3]}"
+    if label not in _shape_counts:
+        print(f"[WanGP][LTX25] Attention shape {label}", flush=True)
+    _shape_counts[label] += 1
+
+
+@atexit.register
+def _dump_trace() -> None:
+    if _trace_shapes:
+        print("LTX25_V100_ATTENTION_STATS " + json.dumps(dict(_shape_counts), sort_keys=True), flush=True)
 
 
 def _validate_mode(mode: str) -> str:
@@ -173,6 +194,7 @@ def try_attention(
         q, k, v, attention_mask=attention_mask, dropout_p=dropout_p,
         causal=causal, window_size=window_size, q_lens=q_lens, k_lens=k_lens,
     ):
+        _trace(f"{selected}:fallback", q)
         return None
 
     module = _load_backend(selected)
@@ -212,4 +234,5 @@ def try_attention(
     if selected not in _announced:
         print(f"[WanGP][LTX25] Using V100 attention backend {selected} for eligible unmasked FP16 self-attention")
         _announced.add(selected)
+    _trace(f"{selected}:used", q)
     return out

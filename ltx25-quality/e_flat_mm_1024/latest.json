@@ -72,7 +72,16 @@
   "debug_explicit_video_gate": null,
   "default_video_gate": null,
   "error": "",
-  "flat_mm_video_gate": null,
+  "flat_mm_video_gate": {
+    "comparison": "49 decoded yuv420p frames, exact equality",
+    "decoded_pixels_identical": true,
+    "first_mismatch": [],
+    "mismatched_frames": 0,
+    "new_video": "/cache/ltx25/videos/e_flat_mm_1024/2026-11-13-18h20m54s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+    "reference_report": "/cache/ltx25/results/runtime_quality_e_a566cf56eae8.json",
+    "status": "PASS",
+    "total_frames": 49
+  },
   "frames": 49,
   "generation": {
     "elapsed_seconds": 96.2,
@@ -91,8 +100,8 @@
   "production_eligible": false,
   "real_activation_audit": null,
   "resolution": "1024x576",
-  "run_id": "43481304334",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43481304334",
+  "run_id": "43482055889",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43482055889",
   "runtime_bootstrap_status": "PASS",
   "seed": 20261112,
   "source_sha": "f46d245732f22fbe066303d5ab08e5cb15852e1c",

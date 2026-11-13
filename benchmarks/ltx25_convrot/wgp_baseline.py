@@ -63,6 +63,10 @@ def run(cmd, timeout, log_path):
     began = time.monotonic()
     env = os.environ.copy()
     env["HF_HUB_OFFLINE"] = "1"
+    # This fixed T2V benchmark activates no LoRAs. Keep all 17 assets
+    # immutable inside /opt/ltx25/checkpoints; don't try to move a baked
+    # HDR LoRA into the checkout's loras/ directory during CLI startup.
+    env["WAN2GP_LTX2_SKIP_BAKED_LORA_MIGRATION"] = "1"
     env["WAN2GP_INT8_CONVROT_DTYPE_DEBUG"] = "1"
     env["GRADIO_ANALYTICS_ENABLED"] = "False"
     env["OMP_NUM_THREADS"] = "8"
@@ -231,6 +235,10 @@ def main():
         for key in ("initial_cli_dryrun", "configured_cli_dryrun", "generation"):
             if key in report:
                 print("LTX25_BASELINE_" + key.upper() + " " + json.dumps(report[key])[-6000:], flush=True)
+        # A blocked CLI dry-run is not a successful workflow step. Publish
+        # status in the finally block first, then propagate a nonzero exit.
+        if report.get("status") != "PASS":
+            raise SystemExit(1)
 
 
 if __name__=="__main__":

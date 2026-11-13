@@ -1,0 +1,101 @@
+name: LTX-2.5 V100 exact full-video cuBLAS Algo2 ABBA
+
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths:
+      - benchmarks/ltx25_convrot/gemm_algo2_abba_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  gemm-algo2-abba:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 40
+    env:
+      LTX25_CUBLAS_E_LIB: /tmp/libltx25_gemm_algo2_abba.so
+      LTX25_CHECKPOINT_ROOT: /opt/ltx25/checkpoints
+      WAN2GP_LTX25_CUBLAS_E_MODE: fp32rot
+      WAN2GP_LTX25_E_CAST: vector8
+      WAN2GP_LTX25_HADAMARD: radix4
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+
+    steps:
+      - name: Checkout pinned GEMM experiment
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Check V100 ownership and verify offline checkpoint environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          active="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader |
+            grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$active" ]]; then
+            echo "$active"
+            echo 'V100 already in use; refusing benchmark' >&2
+            exit 1
+          fi
+          test -f /opt/ltx25/model-image-manifest.json
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/runtime_validate_baked.py
+
+      - name: Compile SM70 Candidate E once for both arms
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_cublas_e.cu \
+            -lcublas -o "$LTX25_CUBLAS_E_LIB"
+          test -s "$LTX25_CUBLAS_E_LIB"
+
+      - name: GPU numerical preflight of promoted base and shape-specific Algo2
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/candidate_adapter_preflight.py
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/candidate_cast8_preflight.py
+          WAN2GP_LTX25_GEMM_TUNE=algo2_m64 \
+            /opt/venvs/ltx25-cu128/bin/python \
+              benchmarks/ltx25_convrot/candidate_algo2_preflight.py
+
+      - name: Matched 49-frame default-Algo2-Algo2-default quality and walltime
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/gemm_algo2_abba.py
+
+      - name: Publish reproducible raw A-B-B-A results
+        if: ${{ always() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'benchmarks/ltx25_convrot')
+          from publish_phase0_status import put
+          p = Path('/cache/ltx25/results') / ('gemm_algo2_abba_' + os.environ['GITHUB_SHA'][:12] + '.json')
+          d = json.loads(p.read_text()) if p.exists() else {
+            'status': 'NOT_RUN', 'reason': 'Preflight or GPU ownership blocked the test',
+            'production_eligible': False,
+          }
+          d['run_id'] = os.environ['GITHUB_RUN_ID']
+          d['source_sha'] = os.environ['GITHUB_SHA']
+          d['run_url'] = 'https://github.com/mylordmonkeyman/WanGP/actions/runs/' + d['run_id']
+          put('ltx25-gemm-algo2-abba/latest.json', d)
+          put('ltx25-gemm-algo2-abba/runs/' + d['run_id'] + '.json', d)
+          PY

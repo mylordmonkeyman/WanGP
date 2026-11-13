@@ -53,7 +53,7 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
             changed="$(git diff-tree --no-commit-id --name-only -r HEAD |
-              grep -E '^benchmarks/ltx25_convrot/(quality_.*|real_activation_audit)_dispatch.signal"
+              grep -E '^benchmarks/ltx25_convrot/(quality_(r0|e)|real_activation_audit)_dispatch[.]signal$' || true)"
             case "$changed" in
               benchmarks/ltx25_convrot/quality_r0_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=r0_quality_1024" >> "$GITHUB_ENV"

@@ -290,3 +290,58 @@ must confirm exactly where Algo2 ran. Results are stored under
 `ltx25-gemm-algo2-abba/` on `perf/ltx25-run-results`. The Algo2
 selector remains opt-in (`WAN2GP_LTX25_GEMM_TUNE=algo2_m64`) pending
 the matched benchmark and an engineering-benefit decision.
+
+### Measured 2026-11-13 Candidate E GEMM tuning decision
+
+The V100 full-video A–B–B–A test, GitHub Actions
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43527938342 ,
+compared the promoted radix4/vector8 default GEMM against shape-specific
+Algo2 (N=16384,K=4096,M=64). All four 49-frame decoded videos were
+pixel-identical, with 16,368 optimized ConvRot calls and the same 4,600
+exceptional FP32 correction rows in every run. Algo2 ran exactly 1,008
+times in each tuned arm, zero times in default arms.
+
+| Sequence | Variant | Generation wall time |
+|---|---|---:|
+| A1 | default | 97.0 s |
+| B1 | Algo2 | 93.0 s |
+| B2 | Algo2 | 92.9 s |
+| A2 | default | 92.4 s |
+
+The 94.7 s vs 92.95 s medians should **not** be attributed to Algo2:
+the same default moved by 4.6 seconds with run order, whereas the
+independent GEMM-only estimate for this selector is only 0.0671 seconds
+per complete 49-frame workload. Retain `GEMM_TUNE=off` by default.
+
+The opt-in active-shape profiler, GitHub Actions
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43528725302 ,
+counted every live (N,K,M) combination across 16,368 eligible calls
+under the actual radix4/vector8 setup. It revealed 8,960 calls not
+covered by the original eight-shape cuBLAS algorithm sweep. The new
+ten-shape V100 sweep, GitHub Actions
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43529503106 ,
+covered every remaining family and passed. With the original sweep,
+all 16,368 calls are covered: the summed optimistic benefit of selecting
+the fastest bit-exact legacy cuBLAS algorithm by shape was **0.09485 s**,
+approximately **0.10%** of a 93-second 49-frame generation. Other
+algorithms that changed FP32 outputs remain ineligible absent a
+prospectively defined numerical and visual-quality contract.
+
+A separate zero/8-MiB-workspace `cublasLtMatmul` heuristic experiment,
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43529929040 ,
+compared FP16 operands/FP32 outputs to the current GEMM on the ten
+higher-frequency live shapes. It found an exact 0.273-ms candidate
+versus 0.382-ms cuBLAS baseline for N16384,K4096,M64, but few other
+important bit-exact improvements. The weighted optimistic isolated-GEMM
+saving across these ten shapes is **0.1682 s** (0.18% of 93 s), before
+including integration, heuristic setup, or offload overhead. This was a
+standalone synthetic-data benchmark, **not** a validated production
+cublasLt dispatch or full-video candidate.
+
+**Decision:** current Candidate E GEMM default remains unchanged;
+cuBLAS algorithm and cuBLASLt heuristic selection have insufficient
+demonstrated full-pipeline return to justify adding production dispatch
+complexity. The reversible vector8/radix4 promotion remains in effect.
+Further optimization should focus on measured end-to-end bottlenecks,
+or on an alternate GEMM architecture only if an independently measured
+benefit exceeds these narrow algorithm-selection bounds.

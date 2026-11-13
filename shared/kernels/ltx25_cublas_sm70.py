@@ -59,6 +59,7 @@ PASS_SHAPES = {
 }
 _FN = None
 _CAST_FN = None
+_CAST8_FN = None
 _ROT_FN = None
 _ALGO2_FN = None
 _NATIVE_UNAVAILABLE = False
@@ -164,6 +165,19 @@ def _cast4_fn():
     return _CAST_FN
 
 
+def _cast8_fn():
+    """Bind the V100 exact packed-8 INT8-to-FP16 cast (opt-in only)."""
+    global _CAST8_FN
+    if _CAST8_FN is None:
+        dll = _fn()[0]
+        fn = dll.ltx25_cublas_cast_int8_to_f16_8
+        ptr = ctypes.c_void_p
+        fn.argtypes = [ptr, ptr, ctypes.c_size_t, ptr]
+        fn.restype = ctypes.c_int
+        _CAST8_FN = fn
+    return _CAST8_FN
+
+
 def _rot_fn():
     """Bind the default-on V100 same-stream FP32 radix-4 Hadamard kernel."""
     global _ROT_FN
@@ -251,6 +265,8 @@ def maybe_linear(x, weight, bias, group):
         _fn()
         if CAST_MODE == "vector4":
             _cast4_fn()
+        elif CAST_MODE == "vector8":
+            _cast8_fn()
         if ROT_MODE == "radix4":
             _rot_fn()
         if GEMM_TUNE == "algo2_m64" and (n, k, m) == (16384, 4096, 64):
@@ -326,16 +342,18 @@ def maybe_linear(x, weight, bias, group):
     if PROFILE_STAGES:
         profiler.mark(profile, "alloc")
     try:
-        if CAST_MODE == "vector4":
-            # Faster exact integer conversion, still a *transient* weight
-            # expansion. No duplicate weights survive this linear call.
+        if CAST_MODE in ("vector4", "vector8"):
+            # Both exact integer conversion kernels use one transient FP16
+            # weight tensor. Vector8 is an opt-in alternative to vector4;
+            # the original INT8 checkpoint is never mutated or duplicated.
             w16 = torch.empty(q.shape, dtype=torch.float16, device=q.device)
             ptr = ctypes.c_void_p
             stream_ptr = ptr(torch.cuda.current_stream(x.device).cuda_stream)
-            rc = _cast4_fn()(ptr(q.data_ptr()), ptr(w16.data_ptr()),
-                             q.numel(), stream_ptr)
+            fn = _cast8_fn() if CAST_MODE == "vector8" else _cast4_fn()
+            rc = fn(ptr(q.data_ptr()), ptr(w16.data_ptr()),
+                    q.numel(), stream_ptr)
             if rc:
-                raise RuntimeError(f"Candidate E vector4 INT8 cast failed, status={rc}")
+                raise RuntimeError(f"Candidate E {CAST_MODE} INT8 cast failed, status={rc}")
         elif CAST_MODE in ("", "torch"):
             w16 = q.to(torch.float16)
         else:

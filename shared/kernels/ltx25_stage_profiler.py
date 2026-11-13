@@ -31,6 +31,7 @@ MAX_SAMPLES = 7 * len(SAMPLE_CALLS)
 MARKS = ("start", "rotation", "alloc", "weight_cast", "prepare",
          "gemm", "epilogue", "output")
 _COUNTS = defaultdict(int)
+_M_COUNTS = defaultdict(lambda: defaultdict(int))
 _SAMPLES = []
 
 
@@ -71,6 +72,9 @@ def begin(n, k, m, dtype, device, stream):
         return None
     key = f"{n}x{k}"
     _COUNTS[key] += 1
+    # Count every actual M under instrumentation, not just sparse samples.
+    # This is Python-only bookkeeping; no GPU synchronization in inference.
+    _M_COUNTS[key][int(m)] += 1
     call = _COUNTS[key]
     if call not in SAMPLE_CALLS or len(_SAMPLES) >= MAX_SAMPLES:
         return None
@@ -114,6 +118,7 @@ def _summary():
                  and r["call_index"] > 1]
         by_shape[shape] = {
             "eligible_calls": _COUNTS[shape],
+            "m_call_counts": {str(m): count for m, count in sorted(_M_COUNTS[shape].items())},
             "sample_count": len(valid),
             "warm_gpu_median_ms": {
                 stage: round(statistics.median(r["gpu_stage_ms"][stage] for r in valid), 4)

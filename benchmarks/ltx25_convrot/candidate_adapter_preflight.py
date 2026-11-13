@@ -101,7 +101,8 @@ def device_range_check():
 
     torch.cuda.synchronize()
     assert int(slow[3].item()) == 1, "Expected mixed range row to use FP32"
-    assert all(int(slow[i].item()) == 0 for i in (0, 1, 2)), "Expected scaled or zero rows to be safe"
+    assert int(slow[1].item()) == 1, "Expected high-magnitude row to use FP32"
+    assert all(int(slow[i].item()) == 0 for i in (0, 2)), "Expected small or zero rows to be safe"
     assert int(counter.item()) >= 1, "Missing GPU exceptional-row count"
     ref = (x32 @ q.float().T) * scale.reshape(1, n) + bias.reshape(1, n)
     normalized = (c32 - ref).abs() / torch.maximum(torch.ones_like(ref), ref.abs())

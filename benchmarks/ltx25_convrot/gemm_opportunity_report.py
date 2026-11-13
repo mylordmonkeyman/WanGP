@@ -87,14 +87,21 @@ def estimate(profile: dict, sweep: dict, wall_seconds: float | None) -> dict:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("profile_json", type=Path)
-    p.add_argument("sweep_json", type=Path)
+    p.add_argument("sweep_json", type=Path, nargs="+", help="One or more complementary GEMM selector sweeps")
     p.add_argument("--wall-seconds", type=float)
     p.add_argument("--output", type=Path)
     args = p.parse_args()
     if args.wall_seconds is not None and args.wall_seconds <= 0:
         p.error("--wall-seconds must be positive")
     profile = json.loads(args.profile_json.read_text())
-    sweep = json.loads(args.sweep_json.read_text())
+    sweeps = [json.loads(src.read_text()) for src in args.sweep_json]
+    sweep = {
+        "shapes": [shape for run in sweeps for shape in run["shapes"]],
+        "source_sha": ",".join(str(run.get("source_sha", "unknown"))[:12] for run in sweeps),
+    }
+    identifiers = [(s["N"],s["K"],s["M"]) for s in sweep["shapes"]]
+    if len(set(identifiers)) != len(identifiers):
+        raise ValueError("Input sweep files contain duplicate N,K,M families")
     ans = estimate(profile.get("stage_profile", profile), sweep, args.wall_seconds)
     doc = json.dumps(ans, indent=2) + "\n"
     if args.output:

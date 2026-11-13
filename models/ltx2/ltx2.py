@@ -984,6 +984,13 @@ class LTX2:
         with init_empty_weights():
             velocity_model = LTXModelConfigurator.from_config(base_config)
         velocity_model = _load_component(velocity_model, transformer_path, transformer_sd_ops, ignore_unused_weights=True)
+        # Only actual LTX-2.5 model instances may opt into the experimental
+        # SM70 FlashAttention pilot. Other LTX versions remain unchanged.
+        if str(self.base_model_type).startswith("ltx2_25_"):
+            from .ltx_core.model.transformer.attention import Attention as LTXAttention
+            for module in velocity_model.modules():
+                if isinstance(module, LTXAttention):
+                    module._ltx25_v100_candidate = True
         transformer_modules = component_paths.get("transformer_modules") if component_paths else None
         if transformer_modules:
             from .editanything import install_editanything_modules

@@ -1,0 +1,2 @@
+2026-11-13
+User authorized SM70 vector4+workspace as defaults. Exercise default ConvRot without any opt-in or precompiled-library env, require automatic native CUDA cache build, BF16/FP16 numerical preflight, original R0 fallback for unsupported ops, and exact 49-frame video output.

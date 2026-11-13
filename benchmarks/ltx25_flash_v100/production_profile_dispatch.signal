@@ -1,0 +1,3 @@
+Explicitly authorized by user for profiling on experimental perf/ltx25-v100-flash-attn-dual branch only.
+Profile the existing BF16 INT8 ConvRot WanGP SDPA path at one warmed transformer forward, no modified math or model weights.
+Gate GPU execution with existing 1024x576 workflow concurrency mutex ltx25-runtime-baseline-once.

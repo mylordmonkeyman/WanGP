@@ -205,10 +205,10 @@ def main():
         full_generation_log = Path(result["log_path"]).read_text(errors="replace")
         # WanGP prints a separate queue duration; subprocess elapsed also
         # includes Python startup, checkpoint load and other CLI overhead.
-        match = re.search(r"Queue completed: \\d+/\\d+ tasks in ([^\\n\\r]+)", full_generation_log)
+        match = re.search(r"Queue completed: \d+/\d+ tasks in ([^\n\r]+)", full_generation_log)
         if match:
             duration = match.group(1)
-            pieces = re.findall(r"(\\d+(?:\\.\\d+)?)\\s*([hms])", duration)
+            pieces = re.findall(r"(\d+(?:\.\d+)?)\s*([hms])", duration)
             if pieces:
                 report["queue_completed_seconds"] = round(sum(
                     float(value) * {"h": 3600, "m": 60, "s": 1}[unit]

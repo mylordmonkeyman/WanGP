@@ -1,0 +1,86 @@
+name: LTX-2.5 V100 attention CPU-only static preflight
+
+# Hosted runner only: zero V100 VRAM, no downloads of model checkpoints.
+on:
+  push:
+    branches: [perf/ltx25-v100-flash-attn-dual]
+    paths:
+      - "benchmarks/ltx25_flash_v100/**"
+      - "shared/ltx25_v100_attention.py"
+      - ".github/workflows/ltx25-v100-cpu-preflight.yml"
+      - ".github/workflows/ltx25-v100-attention-video.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Syntax, workflow parse, and fake result-report test (CPU only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate source, workflows, and mocked reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q benchmarks/ltx25_flash_v100
+          python -m py_compile shared/ltx25_v100_attention.py shared/attention.py \
+            models/ltx2/ltx2.py models/ltx2/ltx_core/model/transformer/attention.py
+          for one in benchmarks/ltx25_flash_v100/*.sh; do bash -n "$one"; done
+          python -m json.tool benchmarks/ltx25_flash_v100/three_way_shapes.json >/dev/null
+          python -m pip install --quiet "PyYAML>=6.0,<7"
+          python - <<'PY'
+          import pathlib, yaml
+          for p in pathlib.Path(".github/workflows").glob("ltx25-v100-*.yml"):
+              parsed = yaml.safe_load(p.read_text())
+              assert isinstance(parsed, dict) and "jobs" in parsed, p
+              print("VALID_YAML", p)
+          PY
+          python - <<'PY'
+          import json, pathlib, subprocess, sys, tempfile
+          sha = "cpu-static-test-sha"
+          with tempfile.TemporaryDirectory() as td:
+              src = pathlib.Path(td, "inputs")
+              out = pathlib.Path(td, "outputs")
+              src.mkdir()
+              for which in ("sdpa", "1cat", "zhinianqin"):
+                  variant = f"attn_{which}_576"
+                  data = {
+                      "sha": sha, "variant": variant,
+                      "attention_backend": "off" if which == "sdpa" else which,
+                      "status": "PASS",
+                      "generation": {"elapsed_seconds": 100.0 if which == "sdpa" else 80.0},
+                      "queue_completed_seconds": 80.0 if which == "sdpa" else 60.0,
+                      "videos": [{"path": "/tmp/test.mp4", "size_bytes": 10}],
+                      "candidate_calls": 0 if which == "sdpa" else 20,
+                      "candidate_banner_found": which != "sdpa",
+                  }
+                  (src / f"runtime_attention_{variant}_{sha[:12]}.json").write_text(json.dumps(data))
+              cmd = [sys.executable, "benchmarks/ltx25_flash_v100/summarize_video.py",
+                     "--sha", sha, "--source", str(src), "--output-dir", str(out)]
+              result = subprocess.run(cmd, capture_output=True, text=True)
+              assert result.returncode == 0, result.stdout + result.stderr
+              output = json.loads((out / "video_report.json").read_text())
+              assert output["status"] == "PASS"
+              assert output["records"]["1cat"]["queue_speedup_vs_sdpa"] > 1.3
+              # No hidden selected CUDA fallback may be marked as PASS.
+              bad = src / f"runtime_attention_attn_1cat_576_{sha[:12]}.json"
+              data = json.loads(bad.read_text())
+              data["candidate_calls"] = 0
+              bad.write_text(json.dumps(data))
+              result = subprocess.run(cmd, capture_output=True, text=True)
+              assert result.returncode != 0, "A false positive candidate escaped the gate"
+              print("PASS: three-way summary and missing-call negative gate")
+          PY

@@ -1,2 +1,2 @@
 2026-11-13
-Validate radix4 H256 opt-in complete ConvRot adapter and default preservation, without touching V100 GPU.
+Validate flat torch.mm FP32 Hadamard H256 opt-in preflight and video exact gate syntax. Default remains unchanged.

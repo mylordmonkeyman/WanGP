@@ -1,0 +1,73 @@
+name: LTX-2.5 publish original Hadamard and reference videos
+
+on:
+  push:
+    branches:
+      - perf/ltx25-convrot-sm70
+    paths:
+      - benchmarks/ltx25_convrot/publish_videos_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  original-videos:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout fixed source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Stage original MP4s without regeneration or recompression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, shutil
+          from pathlib import Path
+          base=Path('/cache/ltx25/results')
+          out=Path('/tmp/ltx25-hadamard-comparison')
+          out.mkdir(parents=True,exist_ok=True)
+          reports={
+            'radix4-hadamard.mp4':base/'runtime_quality_hadamard_585dc54bfc7d.json',
+            'validated-reference.mp4':base/'runtime_quality_e_a566cf56eae8.json',
+          }
+          summary={}
+          for name,report in reports.items():
+              d=json.loads(report.read_text())
+              assert len(d['videos'])==1,(report,d.get('videos'))
+              source=Path(d['videos'][0]['path'])
+              assert source.is_file(),source
+              dest=out/name
+              shutil.copyfile(source,dest)
+              sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+              assert sha(source)==sha(dest),'Copy changed MP4 bytes'
+              summary[name]={
+                  'size_bytes':dest.stat().st_size,
+                  'sha256':sha(dest),
+                  'source_run_id':d['run_id'],
+                  'source_sha':d['source_sha'],
+                  'resolution':d.get('resolution'),
+                  'frames':d.get('frames'),
+                  'seed':d.get('seed'),
+              }
+          (out/'sources.json').write_text(json.dumps(summary,indent=2)+'\n')
+          print('Original MP4 checksums and run provenance:',json.dumps(summary))
+          PY
+      - name: Upload original generated video files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-radix4-hadamard-vs-reference-original-mp4
+          path: |
+            /tmp/ltx25-hadamard-comparison/radix4-hadamard.mp4
+            /tmp/ltx25-hadamard-comparison/validated-reference.mp4
+            /tmp/ltx25-hadamard-comparison/sources.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

@@ -4,3 +4,6 @@ Extensions run: 43384835108
 Variants: SDPA, 1Cat, zhinianqin
 Frames: 49
 Resolution: 576x320
+
+Dispatch: retry-video-route-fix-cb06e7-5c0ced-20261113T0915Z
+Reason: first video run generated all clips but candidate calls were zero; mark video self-attention and override explicit SDPA only for opted-in eligible calls.

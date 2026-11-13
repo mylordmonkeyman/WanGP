@@ -1,0 +1,58 @@
+name: LTX-2.5 ConvRot CPU-only source checks
+
+# Source syntax and static contracts only. No V100 runner, CUDA context or model.
+on:
+  push:
+    branches:
+      - perf/ltx25-convrot-sm70
+    paths:
+      - benchmarks/ltx25_convrot/static_smoke_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Validate changed Python and benchmark workflows without CUDA
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact source commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Compile changed Python modules without importing CUDA
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            shared/kernels/ltx25_cublas_sm70.py \
+            shared/kernels/ltx25_stage_profiler.py \
+            shared/kernels/ltx25_workspace_sm70.py \
+            shared/kernels/ltx25_real_activation_audit.py \
+            benchmarks/ltx25_convrot/candidate_adapter_preflight.py \
+            benchmarks/ltx25_convrot/candidate_workspace_preflight.py \
+            benchmarks/ltx25_convrot/wgp_baseline.py \
+            benchmarks/ltx25_convrot/publish_quality_status.py
+      - name: Check strict opt-in and no persistent weight copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          a = Path('shared/kernels/ltx25_cublas_sm70.py').read_text()
+          w = Path('shared/kernels/ltx25_workspace_sm70.py').read_text()
+          p = Path('shared/kernels/ltx25_stage_profiler.py').read_text()
+          ast.parse(a); ast.parse(w); ast.parse(p)
+          assert 'WAN2GP_LTX25_E_WORKSPACE' in a and 'WAN2GP_LTX25_E_WORKSPACE' in w
+          assert 'WAN2GP_LTX25_PROFILE_STAGES' in a and 'WAN2GP_LTX25_PROFILE_STAGES' in p
+          assert 'w16 = q.to(torch.float16)' in a, 'Weight cast must remain transient'
+          assert 'self.w16' not in w and 'self.weight' not in w, 'Pool must not own weight storage'
+          assert 'lease.release()' in a
+          assert 'torch.cuda.default_stream(device)' in w, 'Pooling must be same-stream only'
+          assert 'enable_timing=True' in p and 'sample.events[-1].synchronize()' in p
+          assert 'atexit.register(_summary)' in p
+          print('STATIC_SMOKE_PASS: syntax, opt-in, lifetime and no persistent weight copies')
+          PY

@@ -9,7 +9,7 @@ the INT8 weights normally. Unsupported shapes, CPU and CUDA graph capture
 always use WanGP's native R0 path.
 
 Activation safety is checked entirely on the GPU: each FP32-rotated input row
-receives a reversible power-of-two scale when representable as normal FP16.
+receives a reversible power-of-two scale when representable as nonzero FP16.
 Exceptional rows execute the same operation in FP32 on the GPU *before* its
 output is used. No per-linear .item(), host-side range flags, or stream sync.
 FP32 rotation is an explicit change from BF16 R0; this remains a research pilot
@@ -42,7 +42,7 @@ _BAD_ROW_COUNTS = {}
 _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
           "sizes": {}, "mode": MODE, "production_eligible": False,
           "range_fallback_units": "rows (device-side FP32 dot)",
-          "row_range_policy": "power_of_two_normal_fp16_else_fp32_dot"}
+          "row_range_policy": "power_of_two_nonzero_fp16_else_fp32_dot"}
 
 
 def _fn():

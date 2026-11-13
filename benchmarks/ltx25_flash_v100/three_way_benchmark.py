@@ -128,7 +128,7 @@ def markdown(report):
     lines = [
         "## LTX-2.5 SM70 three-way attention benchmark",
         "",
-        f"Commit: \`{report['git_sha']}\` | Torch: \`{report['torch']}\` | GPU: {report['gpu']}",
+        f"Commit: {report['git_sha']} | Torch: {report['torch']} | GPU: {report['gpu']}",
         "",
         "| Shape | SDPA wall (ms) | 1Cat wall (ms) | zhinianqin wall (ms) | 1Cat speedup | zhinianqin speedup |",
         "|---|---:|---:|---:|---:|---:|",

@@ -47,6 +47,7 @@ def main():
     variants = {
         "e_workspace_1024": ("quality_workspace", "workspace_video_gate"),
         "e_cast4_1024": ("quality_cast4", "cast4_video_gate"),
+        "e_combo_1024": ("quality_combo", "combo_video_gate"),
     }
     if variant not in variants:
         raise ValueError(f"Unsupported decoded video gate variant {variant!r}")

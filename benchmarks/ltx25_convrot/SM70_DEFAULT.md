@@ -9,7 +9,7 @@ changes to an existing server checkout or affect other Git branches.
 
 | Setting | Value with no environment override | Override |
 |---|---|---|
-| `WAN2GP_LTX25_CUBLAS_E_MODE` | `auto` | `off` disables the SM70 adapter entirely; `fp32rot` is an explicit/strict test mode |
+| `WAN2GP_LTX25_CUBLAS_E_MODE` | `fp32rot` (set at WanGP startup) | `off` disables the adapter entirely; explicit `fp32rot` is strict; `auto` is normalized to the validated `fp32rot` selector |
 | `WAN2GP_LTX25_E_CAST` | `vector4` | `torch` restores PyTorch INT8-to-FP16 conversion within Candidate E |
 | `WAN2GP_LTX25_E_WORKSPACE` | `1` | `0` disables the reusable activation/output workspace |
 | `LTX25_E_WORKSPACE_MAX_MIB` | `96` | Clamp persistent workspace limit up to 256 MiB |
@@ -35,10 +35,10 @@ When the first eligible linear is encountered:
    (or under `XDG_CACHE_HOME`).
 3. Cache key includes the CUDA source digest and PyTorch CUDA version.
    A filesystem lock and atomic rename avoid concurrent partial libraries.
-4. If the compiler, source, or library load is unavailable, **auto** logs
-   once and safely falls back to the original WanGP linear **before**
-   enqueuing any Candidate E operation. Explicit `fp32rot` mode retains
-   strict errors, which are useful for benchmark gates.
+4. When the default is **implicitly** selected, missing compiler/source/
+   library loads log once and fall back to WanGP's original linear **before**
+   any Candidate E operation is enqueued. If a caller explicitly requested
+   `fp32rot`, failures remain strict to aid diagnosis.
 
 There is no download, model conversion, or persistent second weight set.
 Original checkpoint INT8 weights and FP32 scales remain under MMGP control.
@@ -47,6 +47,30 @@ default workspace contains only activation, accumulator and row metadata
 buffers. On nondefault streams or oversized/reentrant operations, it uses
 ephemeral buffers. No CUDA synchronization is performed inside the hot
 linear dispatch.
+
+
+### Why the implicit default selects `fp32rot`, not `auto`
+
+The first direct no-environment `auto` attempt passed CUDA and generation
+but **failed** exact video equality on all 49 frames and executed 14,736
+optimized linear calls instead of the 16,368 from the validated path.
+The failure reproduced. A same-config run with the concrete
+`WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot` selection restored **16,368**
+calls, the 4,434 FP32 exceptional rows, and exact 49-frame equality
+at 95.7 seconds. See:
+
+- Failed auto run: https://github.com/mylordmonkeyman/WanGP/actions/runs/43473397869
+- Failed repeat: https://github.com/mylordmonkeyman/WanGP/actions/runs/43474671547
+- Passing controlled explicit-mode run:
+  https://github.com/mylordmonkeyman/WanGP/actions/runs/43475491051
+
+Therefore, `wgp.py` and the ConvRot qtype module now insert the **proven
+`fp32rot` selector into the process environment at startup** when there
+is no user override. Explicit `off` and empty-string opt-outs remain
+honored. The implicit-default marker allows safe fallback when native
+compilation is missing, without suppressing errors from an explicit
+`fp32rot` request. This selection is empirically grounded; the precise
+cause of the earlier differing `auto` execution graph is not yet proven.
 
 ## Reverting
 

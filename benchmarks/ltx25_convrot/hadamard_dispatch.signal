@@ -1,2 +1,2 @@
 2026-11-13
-Isolated V100 FP32 256-point Hadamard radix4 H4-Kronecker kernel; compare 50-event medians, BF16/FP16 activation precision and torch.matmul. No production integration, no parallel GPU load.
+After radix4 full-video mismatch, compare unchanged torch.matmul [M,K/256,256] vs bitwise FP32 torch.mm [M*K/256,256]. 50-event same-stream V100 trials; retain default, do not load video model.

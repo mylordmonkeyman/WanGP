@@ -382,3 +382,9 @@ class Attention(torch.nn.Module):
         out = out.flatten(2, 3)
         out = self.to_out(out)
         return out
+
+# Label attention inclusive of its ConvRot projections only in an explicitly
+# enabled diagnostic process; never modify the default forward method.
+if __import__("os").environ.get("WAN2GP_LTX25_PROFILE") == "1":
+    from shared.ltx25_v100_profile import profiled_attention_forward
+    Attention.forward = profiled_attention_forward(Attention.forward)

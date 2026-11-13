@@ -15,7 +15,8 @@ VARIANTS = {"r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e",
             "e_workspace_1024": "quality_workspace",
             "e_cast4_1024": "quality_cast4",
             "e_combo_1024": "quality_combo",
-            "e_default_1024": "quality_default"}
+            "e_default_1024": "quality_default",
+            "e_debug_fp32rot_samecfg_1024": "quality_default_explicit"}
 
 
 def main():
@@ -53,6 +54,7 @@ def main():
         "cast4_video_gate": r.get("cast4_video_gate"),
         "combo_video_gate": r.get("combo_video_gate"),
         "default_video_gate": r.get("default_video_gate"),
+        "debug_explicit_video_gate": r.get("debug_explicit_video_gate"),
         "production_eligible": False if variant.startswith("e_") else None,
         "baked_checkpoint_root": "/opt/ltx25/checkpoints",
         "checkpoint_fetched_in_job": False,
@@ -96,6 +98,10 @@ def main():
             "scratch. Unsupported shapes and missing native extension fall "
             "back to original WanGP R0; exact decoded-frame gate required."
             if variant == "e_default_1024" else
+            "DIAGNOSTIC ONLY: shared default-mode configuration, explicit fp32rot "
+            "selection, default vector4 and scratch settings. Compare 49 frames "
+            "and call counts to identify auto-mode rollout mismatch."
+            if variant == "e_debug_fp32rot_samecfg_1024" else
             "Matched 1024x576, 49-frame, 8-step text-to-video quality comparison. "
             "Visual review required; do not infer end-to-end speedup from synthetic layer tests."
         ),

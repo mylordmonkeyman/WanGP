@@ -33,14 +33,15 @@ VARIANTS = {
     "e_profile_1024": ("1024x576", True),
     "e_workspace_1024": ("1024x576", True),
     "e_cast4_1024": ("1024x576", True),
+    "e_combo_1024": ("1024x576", True),
 }
 if VARIANT not in VARIANTS:
     raise ValueError(f"Unsupported LTX25_BENCH_VARIANT: {VARIANT!r}")
 RESOLUTION, IS_CANDIDATE = VARIANTS[VARIANT]
 IS_REAL_AUDIT = VARIANT == "e_real_activation_audit_1024"
 IS_STAGE_PROFILE = VARIANT == "e_profile_1024"
-IS_WORKSPACE = VARIANT == "e_workspace_1024"
-IS_CAST4 = VARIANT == "e_cast4_1024"
+IS_WORKSPACE = VARIANT in ("e_workspace_1024", "e_combo_1024")
+IS_CAST4 = VARIANT in ("e_cast4_1024", "e_combo_1024")
 if IS_CANDIDATE != (os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").lower() == "fp32rot"):
     raise ValueError("Candidate mode and selected benchmark variant disagree")
 CFG = BASE / f"config-{VARIANT}"
@@ -180,7 +181,8 @@ def main():
                    "e_real_activation_audit_1024": "quality_real_audit",
                    "e_profile_1024": "quality_stage_profile",
                    "e_workspace_1024": "quality_workspace",
-                   "e_cast4_1024": "quality_cast4"}[VARIANT]
+                   "e_cast4_1024": "quality_cast4",
+                   "e_combo_1024": "quality_combo"}[VARIANT]
     result_path = OUT / f"runtime_{result_kind}_{sha[:12]}.json"
     try:
         if bootstrap.get("status") != "PASS":
@@ -192,7 +194,7 @@ def main():
         if not MODEL_FILE.is_file() or not TEXT_FILE.is_file():
             report.update(status="BLOCKED", blocker="Image-baked transformer or text encoder checkpoint absent")
             return
-        if VARIANT in ("e_quality_1024", "e_real_activation_audit_1024", "e_profile_1024", "e_workspace_1024", "e_cast4_1024"):
+        if VARIANT in ("e_quality_1024", "e_real_activation_audit_1024", "e_profile_1024", "e_workspace_1024", "e_cast4_1024", "e_combo_1024"):
             refdir = BASE / "videos" / "r0_quality_1024"
             if not refdir.is_dir() or not any(refdir.glob("*.mp4")):
                 report.update(

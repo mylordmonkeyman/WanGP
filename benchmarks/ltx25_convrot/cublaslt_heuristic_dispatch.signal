@@ -1,0 +1,2 @@
+2026-11-13
+Isolated CUDA 12.8 cuBLASLt heuristic GEMM experiment: FP16 operands and FP32 output, compare 10 high-frequency real shape families against existing cuBLAS Candidate E GEMM; exact FP32 correctness required for any deployment consideration. Test 0 and 8 MiB workspace on Tesla V100 SM70. No model generation or production default changes.

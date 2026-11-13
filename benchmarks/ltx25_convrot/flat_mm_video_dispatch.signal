@@ -1,0 +1,2 @@
+2026-11-13
+Opt-in flattened FP32 torch.mm H256: require 8-case BF16/FP16 complete-adapter bit-exact preflight, same 16,368 eligible calls/4434 fallback rows, fixed 49-frame 1024x576 decoded video identity. Default torch.matmul remains unchanged.

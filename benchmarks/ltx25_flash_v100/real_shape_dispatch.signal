@@ -1,0 +1,2 @@
+authorize-realshape-bf16-315tokens-20261113T1515Z
+Original video gate failed: BF16, T315; benchmark conversions, correctness, SDPA and both kernels. No full video generation.

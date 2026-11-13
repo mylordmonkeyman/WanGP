@@ -1,2 +1,2 @@
-2026-11-12 local
-repeat fixed-seed 1024x576 Candidate E device-range policy for timing stability
+2026-11-13
+Fresh same-branch uninstrumented no-sync Candidate E PyTorch-cast control, after individual and combined optimization tests. Fixed seed 20261112, 1024x576, 49 frames, 8 steps; guard GPU idle.

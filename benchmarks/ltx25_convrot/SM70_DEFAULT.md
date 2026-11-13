@@ -220,3 +220,23 @@ Restore validated weight conversion without disabling radix-4:
 ```bash
 export WAN2GP_LTX25_E_CAST=vector4
 ```
+
+### Controlled full-video ABBA cast comparison
+
+The follow-up V100 same-seed/same-settings 49-frame 1024×576 video
+benchmark completed successfully (GitHub Actions
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43511331937).
+In order vector4–vector8–vector8–vector4, generation wall times were
+**99.3, 97.4, 97.8, and 99.0 seconds**, respectively. The medians were
+**99.15 seconds for vector4** and **97.60 seconds for vector8**, a
+**1.55-second reduction** or a **1.01588× throughput improvement**.
+All four runs generated 49 complete video frames **pixel-identical** to
+the historical torch FP32 Hadamard reference; each used 16,368 eligible
+ConvRot calls, and no persistent FP16 weights were copied.
+
+This is measured end-to-end evidence on the short synthetic-prompt T2V
+workload, not an extrapolation from cast microbenchmarks. It does not
+establish identical speedups on 241-frame I2V with LoRA/MMGP memory
+offload. **Vector8 remains opt-in** pending an explicit default decision.
+The normal production defaults remain radix4 rotation + vector4 weight
+conversion.

@@ -39,6 +39,7 @@ jobs:
             shared/qtypes/int8_convrot.py \
             benchmarks/ltx25_convrot/cast_microbench.py \
             benchmarks/ltx25_convrot/hadamard_microbench.py \
+            benchmarks/ltx25_convrot/candidate_hadamard_preflight.py \
             benchmarks/ltx25_convrot/publish_hadamard_microbench.py \
             benchmarks/ltx25_convrot/publish_cast_microbench.py \
             benchmarks/ltx25_convrot/wgp_baseline.py \
@@ -58,6 +59,8 @@ jobs:
           assert 'WAN2GP_LTX25_E_WORKSPACE' in a and 'WAN2GP_LTX25_E_WORKSPACE' in w
           assert 'WAN2GP_LTX25_CUBLAS_E_MODE", "fp32rot"' in a
           assert 'WAN2GP_LTX25_E_CAST", "vector4"' in a
+          assert 'WAN2GP_LTX25_HADAMARD", "torch"' in a
+          assert 'ltx25_cublas_rot256_f32' in a
           assert 'WAN2GP_LTX25_E_WORKSPACE", "1"' in a
           assert 'WAN2GP_LTX25_CUBLAS_E_MODE", "fp32rot"' in dispatch
           assert 'WAN2GP_LTX25_DEFAULT_ON' in dispatch

@@ -1,2 +1,2 @@
 2026-11-13
-Compile-check vector4 integration, preflight, offline video and benchmark scripts without invoking CUDA.
+CPU-only compile and opt-in guard regression after introducing combined cast4+workspace quality variant.

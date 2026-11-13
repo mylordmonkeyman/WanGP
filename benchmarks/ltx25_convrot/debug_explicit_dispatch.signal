@@ -1,0 +1,2 @@
+2026-11-13
+Debug prior default-auto 49-frame mismatch by reusing e_default configuration, disabling library env and using explicit fp32rot with default vector4/scratch options. Compare optimized call counts and exact frames; no production promotion.

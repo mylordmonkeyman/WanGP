@@ -47,6 +47,7 @@ REAL_ACTIVATION_AUDIT = os.environ.get("WAN2GP_LTX25_REAL_ACTIVATION_AUDIT", "")
 PROFILE_STAGES = os.environ.get("WAN2GP_LTX25_PROFILE_STAGES", "") == "1"
 USE_WORKSPACE = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "1") == "1"
 CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector4").strip().lower()
+ROT_MODE = os.environ.get("WAN2GP_LTX25_HADAMARD", "torch").strip().lower()
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
 WEIGHT_CAP = 128 * 1024 * 1024
 # Synthetic checkpoint-backed FP32-rotation gate passed these shapes.
@@ -57,6 +58,7 @@ PASS_SHAPES = {
 }
 _FN = None
 _CAST_FN = None
+_ROT_FN = None
 _NATIVE_UNAVAILABLE = False
 _NATIVE_FAILURE_REPORTED = False
 # Tiny persistent device-side counters, not weights. Read only at process exit.
@@ -69,7 +71,8 @@ _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
           "auto_selected": _MODE_IMPLICIT,
           "auto_native_fallback": 0,
           "range_fallback_units": "rows (device-side FP32 dot)",
-          "row_range_policy": "power_of_two_nonzero_fp16_else_fp32_dot"}
+          "row_range_policy": "power_of_two_nonzero_fp16_else_fp32_dot",
+          "rotation_mode": ROT_MODE}
 
 
 def _native_library():
@@ -158,6 +161,18 @@ def _cast4_fn():
     return _CAST_FN
 
 
+def _rot_fn():
+    """Bind the opt-in same-stream FP32 radix4 Hadamard output kernel."""
+    global _ROT_FN
+    if _ROT_FN is None:
+        fn = _fn()[0].ltx25_cublas_rot256_f32
+        ptr = ctypes.c_void_p
+        fn.argtypes = [ptr, ptr, ctypes.c_size_t, ptr]
+        fn.restype = ctypes.c_int
+        _ROT_FN = fn
+    return _ROT_FN
+
+
 def _bad_row_counter(device):
     index = device.index
     if index is None:
@@ -220,6 +235,8 @@ def maybe_linear(x, weight, bias, group):
         _fn()
         if CAST_MODE == "vector4":
             _cast4_fn()
+        if ROT_MODE == "radix4":
+            _rot_fn()
     except (OSError, RuntimeError, AttributeError, ImportError) as exc:
         if not _MODE_IMPLICIT:
             raise
@@ -240,10 +257,22 @@ def maybe_linear(x, weight, bias, group):
     else:
         profile = None
 
-    # FP32 Hadamard is the explicitly selected research variant (not R0).
-    # Own the temporaries until kernels have been enqueued on this stream;
-    # PyTorch's caching allocator tracks the current stream for their reuse.
-    x32 = _rotate_activation(x.float(), group).reshape(m, k).contiguous()
+    # Default: use the exact already-validated FP32 dense H256 rotation.
+    # Experimental radix4: the same H4-Kronecker matrix in a different
+    # FP32 accumulation order. Keep it opt-in until complete video gates pass.
+    if ROT_MODE == "radix4":
+        x_source32 = x.float().reshape(m, k).contiguous()
+        x32 = torch.empty((m, k), dtype=torch.float32, device=x.device)
+        ptr = ctypes.c_void_p
+        stream = ptr(torch.cuda.current_stream(x.device).cuda_stream)
+        status = _rot_fn()(ptr(x_source32.data_ptr()), ptr(x32.data_ptr()),
+                           x_source32.numel(), stream)
+        if status:
+            raise RuntimeError(f"SM70 radix4 Hadamard failed: status={status}, M={m}, K={k}")
+    elif ROT_MODE in ("torch", ""):
+        x32 = _rotate_activation(x.float(), group).reshape(m, k).contiguous()
+    else:
+        raise ValueError(f"Unknown WAN2GP_LTX25_HADAMARD={ROT_MODE!r}")
     if PROFILE_STAGES:
         profiler.mark(profile, "rotation")
     scale32 = scale.reshape(n).contiguous()

@@ -1,0 +1,1 @@
+2026-11-13: verify exact FP16 vector8 casting/full ConvRot output with historical torch H256 and promoted radix4 Hadamard, BF16+FP16, without generation. Production cast remains vector4.

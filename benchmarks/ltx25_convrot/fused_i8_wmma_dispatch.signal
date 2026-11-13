@@ -1,0 +1,1 @@
+2026-11-13: user-requested SM70 fused INT8 weight tile expansion with Tensor Core GEMM vs existing vector4 cast + cuBLAS. Isolated synthetic A-B-B-A CUDA timed correctness experiment only; do not change production defaults.

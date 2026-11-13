@@ -48,6 +48,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           /opt/venvs/ltx25-cu128/bin/python -m py_compile \
             shared/ltx25_v100_attention.py \
+            models/ltx2/ltx_core/model/transformer/transformer.py \
             benchmarks/ltx25_flash_v100/wgp_three_way_video.py \
             benchmarks/ltx25_flash_v100/summarize_video.py
           /opt/venvs/ltx25-cu128/bin/python \

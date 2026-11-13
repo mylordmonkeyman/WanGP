@@ -333,11 +333,13 @@ def main():
             if (counters.get("mode") != "fp32rot" or
                     counters.get("auto_selected") is not True or
                     counters.get("cast_mode") != "vector4" or
+                    counters.get("rotation_mode") != "radix4" or
+                    counters.get("gemm_tune") != "off" or
                     counters.get("used", 0) != 16368 or
-                    counters.get("range_fallback", -1) != 4434 or
+                    counters.get("range_fallback", -1) != 4600 or
                     counters.get("auto_native_fallback", 0) != 0):
                 report["status"] = "DEFAULT_AUTO_NOT_SELECTED"
-                report["blocker"] = "Default automatic SM70 vector4 mode did not execute successfully"
+                report["blocker"] = "Promoted default radix4 SM70 ConvRot mode did not execute as expected"
         if IS_CAST4 and report["status"] == "PASS":
             cast_mode = report.get("candidate_counters", {}).get("cast_mode")
             if cast_mode != "vector4":

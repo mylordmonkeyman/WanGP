@@ -1,2 +1,2 @@
 2026-11-13
-Repeat CPU-only compile checks after workspace decoded-frame gate addition. No V100 GPU use.
+Compile-check vector4 integration, preflight, offline video and benchmark scripts without invoking CUDA.

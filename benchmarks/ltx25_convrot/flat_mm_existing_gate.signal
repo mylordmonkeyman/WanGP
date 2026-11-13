@@ -1,0 +1,2 @@
+2026-11-13
+CPU-only strict 49-frame video regression of previously generated flat torch.mm sample f46d245732f2. No new GPU work or model generation.

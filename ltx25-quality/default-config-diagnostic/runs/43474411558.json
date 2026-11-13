@@ -1,0 +1,80 @@
+{
+  "config": {
+    "changed_keys": [
+      {
+        "combo_hash": "ea9a9a9ffb5befd3",
+        "combo_missing": false,
+        "default_hash": "0a887991ed575d0d",
+        "default_missing": false,
+        "key": "audio_save_path"
+      },
+      {
+        "combo_hash": "ea9a9a9ffb5befd3",
+        "combo_missing": false,
+        "default_hash": "0a887991ed575d0d",
+        "default_missing": false,
+        "key": "image_save_path"
+      },
+      {
+        "combo_hash": "ea9a9a9ffb5befd3",
+        "combo_missing": false,
+        "default_hash": "0a887991ed575d0d",
+        "default_missing": false,
+        "key": "save_path"
+      }
+    ],
+    "combo_key_count": 99,
+    "default_key_count": 99,
+    "different_key_count": 3
+  },
+  "kind": "CPU-only V100 benchmark config difference (hashed values only)",
+  "log_patterns": {
+    "default_auto": {
+      "file_exists": true,
+      "log_lines": 387,
+      "log_sha256": "2d8bdd79216259a5",
+      "patterns": {
+        "adapters": 0,
+        "denoising first phase": 25,
+        "denoising second phase": 22,
+        "guidance": 0,
+        "loading model": 1,
+        "lora": 12,
+        "model type": 0,
+        "offload": 0,
+        "profile": 1,
+        "quantization": 0,
+        "steps": 0,
+        "task 1 completed": 1
+      }
+    },
+    "known_good_combo": {
+      "file_exists": true,
+      "log_lines": 384,
+      "log_sha256": "1497c848ce564854",
+      "patterns": {
+        "adapters": 0,
+        "denoising first phase": 25,
+        "denoising second phase": 19,
+        "guidance": 0,
+        "loading model": 1,
+        "lora": 12,
+        "model type": 0,
+        "offload": 0,
+        "profile": 1,
+        "quantization": 0,
+        "steps": 0,
+        "task 1 completed": 1
+      }
+    }
+  },
+  "run_id": "43474411558",
+  "settings": {
+    "changed_keys": [],
+    "combo_key_count": 11,
+    "default_key_count": 11,
+    "different_key_count": 0
+  },
+  "source_sha": "82dc19311759db308ea45f5ad236a6843819866e",
+  "status": "PASS"
+}

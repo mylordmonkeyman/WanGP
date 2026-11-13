@@ -10,7 +10,8 @@ from publish_phase0_status import put
 
 OUT = Path("/cache/ltx25/results")
 VARIANTS = {"r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e",
-            "e_real_activation_audit_1024": "quality_real_audit"}
+            "e_real_activation_audit_1024": "quality_real_audit",
+            "e_profile_1024": "quality_stage_profile"}
 
 
 def main():
@@ -42,6 +43,7 @@ def main():
         "candidate_e_enabled": r.get("candidate_e_enabled"),
         "candidate_counters": counters,
         "real_activation_audit": r.get("real_activation_audit"),
+        "stage_profile": r.get("stage_profile"),
         "production_eligible": False if variant.startswith("e_") else None,
         "baked_checkpoint_root": "/opt/ltx25/checkpoints",
         "checkpoint_fetched_in_job": False,
@@ -62,6 +64,11 @@ def main():
             "Only sampled activation rows are checked; visual review and broader "
             "per-shape sampling remain required."
             if variant == "e_real_activation_audit_1024" else
+            "INSTRUMENTED STAGE PROFILING: sparse CUDA events and host tracing "
+            "affect generation timing. Do NOT treat walltime as a performance result. "
+            "Compare only reported stage costs, then rerun a matched uninstrumented "
+            "full-video benchmark."
+            if variant == "e_profile_1024" else
             "Matched 1024x576, 49-frame, 8-step text-to-video quality comparison. "
             "Visual review required; do not infer end-to-end speedup from synthetic layer tests."
         ),
@@ -75,6 +82,8 @@ def main():
         "candidate_used": counters.get("used", 0),
         "real_activation_status": (r.get("real_activation_audit") or {}).get("status"),
         "real_activation_samples": (r.get("real_activation_audit") or {}).get("total_samples"),
+        "stage_profile_status": (r.get("stage_profile") or {}).get("status"),
+        "stage_profile_samples": (r.get("stage_profile") or {}).get("sample_count"),
         "videos": doc["videos"],
     })[:5000], flush=True)
 

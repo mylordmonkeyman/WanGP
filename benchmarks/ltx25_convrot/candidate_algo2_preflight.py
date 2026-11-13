@@ -2,7 +2,7 @@
 """V100 exact full-ConvRot preflight for shape-specific cuBLAS Algo2.
 
 No model required. Compare candidate tuned GEMM versus validated default
-cuBLAS GEMM after the SAME FP32 Hadamard, vector4 cast, range preparation,
+cuBLAS GEMM after the SAME radix4 FP32 Hadamard, vector8 cast, range preparation,
 FP32 exceptional-row fallback and scaling. Require bit-exact final BF16/
 FP16 outputs; do not treat isolated GEMM exactness as enough for promotion.
 """
@@ -23,7 +23,8 @@ from shared.kernels import ltx25_cublas_sm70 as e
 def main():
     assert e.MODE=="fp32rot"
     assert e.GEMM_TUNE=="algo2_m64"
-    assert e.ROT_MODE in ("torch",""),"Must keep validated torch H256"
+    assert e.ROT_MODE=="radix4","Must keep promoted radix4 H256"
+    assert e.CAST_MODE=="vector8","Must keep promoted exact vector8 cast"
     assert torch.cuda.get_device_capability()==(7,0)
     torch.manual_seed(20261113)
     n,k=16384,4096

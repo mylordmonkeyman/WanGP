@@ -2,39 +2,30 @@
   "baked_checkpoint_root": "/opt/ltx25/checkpoints",
   "blocker": "",
   "candidate_counters": {},
-  "candidate_e_enabled": false,
+  "candidate_e_enabled": null,
   "checkpoint_fetched_in_job": false,
   "checkpoint_sha256_in_job": false,
   "error": "",
-  "frames": 49,
+  "frames": null,
   "generation": {
-    "elapsed_seconds": 157.9,
-    "log_tail": " 57.2s\n  [5/8] Denoising First Phase | 41.5s / 57.2s\n  [5/8] Denoising First Phase | 42.6s / 57.2s\n  [5/8] Denoising First Phase | 43.7s / 57.2s\n  [6/8] Denoising First Phase | 44.2s / 56.6s\n 75%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258c  | 6/8 [00:37<00:11,  5.94s/it]\n  [6/8] Denoising First Phase | 45.2s / 56.6s\n  [6/8] Denoising First Phase | 46.3s / 56.6s\n  [6/8] Denoising First Phase | 47.3s / 56.6s\n  [6/8] Denoising First Phase | 48.4s / 56.6s\n  [6/8] Denoising First Phase | 49.5s / 56.6s\n 88%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258a | 7/8 [00:42<00:05,  5.90s/it]\n  [7/8] Denoising First Phase | 50.0s / 56.1s\n  [7/8] Denoising First Phase | 51.0s / 56.1s\n  [7/8] Denoising First Phase | 52.1s / 56.1s\n  [7/8] Denoising First Phase | 53.2s / 56.1s\n  [7/8] Denoising First Phase | 54.2s / 56.1s\n  [7/8] Denoising First Phase | 55.3s / 56.1s\n  [8/8] VAE Decoding | 55.8s / 55.8s         \n100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 8/8 [00:48<00:00,  5.87s/it]\n100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 8/8 [00:48<00:00,  6.09s/it]\n\n  [0/1] VAE Encoding                \n  [0/1] VAE Encoding | 57.5s / 57.5s\n  [0/3] Denoising Second Phase | 57.5s\n  0%|          | 0/3 [00:00<?, ?it/s]\n  [0/3] Denoising Second Phase | 1m 02s\n                                     \nAutomatic VRAM preload of 'transformer': 0 of its 64 blocks to keep in VRAM (the budget's preload until measured)\n\n  0%|          | 0/3 [00:05<?, ?it/s]\n                                     \nStaging ring of 1107.3 MB for the blocks that are not pinned (largest 369.1 MB)\n\n  0%|          | 0/3 [00:06<?, ?it/s]\n  [0/3] Denoising Second Phase | 1m 04s\n  [0/3] Denoising Second Phase | 1m 05s\n  [0/3] Denoising Second Phase | 1m 06s\n  [0/3] Denoising Second Phase | 1m 07s\n  [0/3] Denoising Second Phase | 1m 09s\n  [0/3] Denoising Second Phase | 1m 10s\n  [0/3] Denoising Second Phase | 1m 11s\n  [0/3] Denoising Second Phase | 1m 12s\n  [0/3] Denoising Second Phase | 1m 14s\n  [0/3] Denoising Second Phase | 1m 15s\n  [0/3] Denoising Second Phase | 1m 16s\n  [0/3] Denoising Second Phase | 1m 18s\n  [1/3] Denoising Second Phase | 1m 19s / 2m 03s\n 33%|\u2588\u2588\u2588\u258e      | 1/3 [00:22<00:44, 22.09s/it]\n                                             \nAutomatic VRAM preload of 'transformer': 64 of its 64 blocks to keep in VRAM (428 MB of activations measured)\n\n 33%|\u2588\u2588\u2588\u258e      | 1/3 [00:22<00:44, 22.09s/it]\n  [1/3] Denoising Second Phase | 1m 20s / 2m 03s\n  [1/3] Denoising Second Phase | 1m 22s / 2m 03s\n  [1/3] Denoising Second Phase | 1m 23s / 2m 03s\n  [1/3] Denoising Second Phase | 1m 24s / 2m 03s\n  [1/3] Denoising Second Phase | 1m 25s / 2m 03s\n  [1/3] Denoising Second Phase | 1m 27s / 2m 03s\n  [1/3] Denoising Second Phase | 1m 28s / 2m 03s\n  [1/3] Denoising Second Phase | 1m 29s / 2m 03s\n  [1/3] Denoising Second Phase | 1m 31s / 2m 03s\n  [1/3] Denoising Second Phase | 1m 32s / 2m 03s\n  [1/3] Denoising Second Phase | 1m 33s / 2m 03s\n  [2/3] Denoising Second Phase | 1m 35s / 1m 54s\n 67%|\u2588\u2588\u2588\u2588\u2588\u2588\u258b   | 2/3 [00:37<00:18, 18.28s/it]\n                                             \nAutomatic VRAM preload of 'transformer': 64 of its 64 blocks to keep in VRAM (429 MB of activations measured)\n\n 67%|\u2588\u2588\u2588\u2588\u2588\u2588\u258b   | 2/3 [00:37<00:18, 18.28s/it]\n  [2/3] Denoising Second Phase | 1m 36s / 1m 54s\n  [2/3] Denoising Second Phase | 1m 37s / 1m 54s\n  [2/3] Denoising Second Phase | 1m 38s / 1m 54s\n  [2/3] Denoising Second Phase | 1m 40s / 1m 54s\n  [2/3] Denoising Second Phase | 1m 41s / 1m 54s\n  [2/3] Denoising Second Phase | 1m 42s / 1m 54s\n  [2/3] Denoising Second Phase | 1m 44s / 1m 54s\n  [2/3] Denoising Second Phase | 1m 45s / 1m 54s\n  [2/3] Denoising Second Phase | 1m 46s / 1m 54s\n  [2/3] Denoising Second Phase | 1m 47s / 1m 54s\n  [2/3] Denoising Second Phase | 1m 49s / 1m 54s\n  [3/3] VAE Decoding | 1m 50s / 1m 50s          \n100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:53<00:00, 17.04s/it]\n100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:53<00:00, 17.75s/it]\n\n  [0/7] VAE Decoding | 1m 51s         \n[Kernels] Streamed Conv3D: pytorch (fast).\n\n  [1/7] VAE Decoding | 1m 52s / 1m 56s\n[Kernels] PixelNorm + SiLU: pytorch (fast).\n\n  [1/7] VAE Decoding | 2m 01s / 2m 01s\n  [7/7] VAE Decoding | 2m 01s / 2m 01s\n  [0/1] Audio VAE Decoding            \n  [0/1] Saving File 2026-11-13-0... slowly crosses the blue harbor.mp4\n  [0/1] Saving File 2026-11-13-0... slowly crosses the blue harbor.mp4\nVideo file saved to Path: /cache/ltx25/videos/r0_quality_1024/2026-11-13-00h31m46s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4\n\n\n  Task 1 completed\n\n==================================================\nQueue completed: 1/1 tasks in 2m 21s\n",
-    "returncode": 0
+    "elapsed_seconds": null,
+    "log_tail": "",
+    "returncode": null
   },
-  "gpu_preflight": {
-    "busy": false,
-    "entries": [],
-    "reason": ""
-  },
-  "model_type": "ltx2_25_22B_distilled",
+  "gpu_preflight": null,
+  "model_type": null,
   "note": "Matched 1024x576, 49-frame, 8-step text-to-video quality comparison. Visual review required; do not infer end-to-end speedup from synthetic layer tests.",
-  "num_inference_steps": 8,
+  "num_inference_steps": null,
   "production_eligible": null,
-  "resolution": "1024x576",
-  "run_id": "43336958612",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43336958612",
-  "runtime_bootstrap_status": "PASS",
-  "seed": 20261112,
-  "source_sha": "9d80ef2bccde9cf20cc17832cb08a2fafa638c2a",
-  "status": "PASS",
+  "real_activation_audit": null,
+  "resolution": null,
+  "run_id": "43368380864",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43368380864",
+  "runtime_bootstrap_status": null,
+  "seed": null,
+  "source_sha": "e2d01d1d6dfad99e4349dbe10ac6eb85af969e2a",
+  "status": "not_run",
   "variant": "r0_quality_1024",
-  "videos": [
-    {
-      "filename": "2026-11-13-00h31m46s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
-      "path": "/cache/ltx25/videos/r0_quality_1024/2026-11-13-00h31m46s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
-      "size_bytes": 3118857
-    }
-  ],
-  "workflow_status": "success"
+  "videos": [],
+  "workflow_status": "failure"
 }

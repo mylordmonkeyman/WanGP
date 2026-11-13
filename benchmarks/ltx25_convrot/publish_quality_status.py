@@ -16,6 +16,7 @@ VARIANTS = {"r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e",
             "e_cast4_1024": "quality_cast4",
             "e_combo_1024": "quality_combo",
             "e_default_1024": "quality_default",
+            "e_hadamard_1024": "quality_hadamard",
             "e_debug_fp32rot_samecfg_1024": "quality_default_explicit"}
 
 
@@ -54,6 +55,7 @@ def main():
         "cast4_video_gate": r.get("cast4_video_gate"),
         "combo_video_gate": r.get("combo_video_gate"),
         "default_video_gate": r.get("default_video_gate"),
+        "hadamard_video_gate": r.get("hadamard_video_gate"),
         "debug_explicit_video_gate": r.get("debug_explicit_video_gate"),
         "production_eligible": False if variant.startswith("e_") else None,
         "baked_checkpoint_root": "/opt/ltx25/checkpoints",
@@ -98,6 +100,11 @@ def main():
             "scratch. Unsupported shapes and missing native extension fall "
             "back to original WanGP R0; exact decoded-frame gate required."
             if variant == "e_default_1024" else
+            "Experimental FP32 radix4 H256 rotation, mathematically the same "
+            "Kronecker H4 as WanGP but with different FP32 rounding order. "
+            "Require full-adapter numerical preflight and 49 decoded-frame "
+            "exact-equivalence, not just an isolated microbenchmark."
+            if variant == "e_hadamard_1024" else
             "DIAGNOSTIC ONLY: shared default-mode configuration, explicit fp32rot "
             "selection, default vector4 and scratch settings. Compare 49 frames "
             "and call counts to identify auto-mode rollout mismatch."

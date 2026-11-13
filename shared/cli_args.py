@@ -80,6 +80,10 @@ def parse_wgp_args(config_filename: str, argv: Sequence[str] | None = None):
     add("--compile", action="store_true", help="Enable pytorch compilation")
     add("--listen", action="store_true", help="Server accessible on local network")
     add("--attention", type=str, default="", help="attention mode")
+    add("--ltx25-v100-attention", choices=("off", "1cat", "zhinianqin"), default=None,
+        help="Experimental LTX-2.5 Tesla V100 attention backend (default off; env WANGP_LTX25_V100_ATTENTION)")
+    add("--ltx25-v100-min-tokens", type=int, default=None,
+        help="Minimum unmasked self-attention sequence length for V100 backend (default 1024; env WANGP_LTX25_V100_MIN_TOKENS)")
     add("--vae-config", type=str, default="", help="vae config mode")
     add("--process", type=str, default="", help="Process a saved queue (.zip) or settings file (.json) without launching the web UI")
     add("--offline", action="store_true", help="Never download anything: use only the files already on this computer; a missing file stops the operation with an error")

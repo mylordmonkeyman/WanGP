@@ -34,6 +34,9 @@ jobs:
             benchmarks/ltx25_convrot/candidate_adapter_preflight.py \
             benchmarks/ltx25_convrot/candidate_workspace_preflight.py \
             benchmarks/ltx25_convrot/workspace_video_gate.py \
+            benchmarks/ltx25_convrot/candidate_cast4_preflight.py \
+            benchmarks/ltx25_convrot/cast_microbench.py \
+            benchmarks/ltx25_convrot/publish_cast_microbench.py \
             benchmarks/ltx25_convrot/wgp_baseline.py \
             benchmarks/ltx25_convrot/publish_quality_status.py
       - name: Check strict opt-in and no persistent weight copies

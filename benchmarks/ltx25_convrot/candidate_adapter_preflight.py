@@ -75,6 +75,14 @@ def device_range_check():
     x32[3].fill_(0.0)
     x32[3, 0] = 1.0e+12
     x32[3, 1] = 1.0e-20
+    # Explicit FP16 subnormal Tensor Core test. Row 5 must remain unscaled,
+    # and output column 0 reads only an exactly representable 2^-20 input.
+    x32[5].fill_(2.0 ** -20)
+    x32[5, 0] = 0.5
+    q[0].zero_()
+    q[0, 1] = 1
+    scale[0] = 1.0
+    bias[0] = 0.0
 
     x16 = torch.empty((m, k), dtype=torch.float16, device="cuda")
     c32 = torch.empty((m, n), dtype=torch.float32, device="cuda")
@@ -102,7 +110,12 @@ def device_range_check():
     torch.cuda.synchronize()
     assert int(slow[3].item()) == 1, "Expected mixed range row to use FP32"
     assert int(slow[1].item()) == 1, "Expected high-magnitude row to use FP32"
-    assert all(int(slow[i].item()) == 0 for i in (0, 2)), "Expected small or zero rows to be safe"
+    assert all(int(slow[i].item()) == 0 for i in (0, 2, 5)), "Expected small, zero, or subnormal rows to be safe"
+    assert int(exp[5].item()) == 0, "Subnormal test was scaled, hiding FP16 subnormal behavior"
+    subnormal_value = float(c32[5, 0].item())
+    assert abs(subnormal_value - 2.0 ** -20) < 2.0 ** -22, (
+        f"SM70 cuBLAS FP16 subnormal was lost/FTZ: {subnormal_value}"
+    )
     assert int(counter.item()) >= 1, "Missing GPU exceptional-row count"
     ref = (x32 @ q.float().T) * scale.reshape(1, n) + bias.reshape(1, n)
     normalized = (c32 - ref).abs() / torch.maximum(torch.ones_like(ref), ref.abs())
@@ -111,7 +124,8 @@ def device_range_check():
     assert torch.isfinite(c32).all().item()
     assert max_relative < 0.002, f"row prepare/epilogue error too large: {max_relative}"
     return {"fallback_rows": int(counter.item()), "max_normalized_error": max_relative,
-            "p99_normalized_error": p99_relative, "scales": exp[:4].cpu().tolist()}
+            "p99_normalized_error": p99_relative, "scales": exp[:6].cpu().tolist(),
+            "subnormal_preserved": True}
 
 
 def main():

@@ -1,10 +1,24 @@
-# Experimental SM70 Candidate E — device-side FP16 range guard
+# SM70 Candidate E — device-side FP16 range guard and default optimization
 
-**Scope:** LTX-2.5 22B Distilled INT8 ConvRot, NVIDIA V100 (SM70).
-**Status:** Research-only, opt-in through `WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot`.
-**Production eligible:** NO. This is not an `auto` backend.
-**Reversible snapshot:** `archive/ltx25-convrot-sm70-pre-sync-20261112`, commit
-`4adc57c0d17f960d91415564db68fa6ab9360537`.
+**Scope:** LTX-2.5 22B Distilled INT8 ConvRot, NVIDIA V100 (SM70), plus
+other INT8 ConvRot layers that satisfy the exact validated matrix-shape gate.
+**Status (Nov 13, 2026):** Default-on in this fork's
+`perf/ltx25-convrot-sm70` branch using the proven **`fp32rot`**
+startup selector, vector4 INT8-to-FP16 conversion, and <=96 MiB workspace.
+**Rollback:** `WAN2GP_LTX25_CUBLAS_E_MODE=off` restores original WanGP.
+**Broader production validation:** NOT complete for multiple prompts, seeds,
+LoRA combinations, and offload plans, even though the recorded default
+49-frame generation and numerical gates passed.
+**Default-on validated snapshot:**
+`archive/ltx25-convrot-sm70-default-promoted-validated-20261113`
+(commit `54a888d600ce896e0b40ff00c75fd8ee46f0249d`).
+**Original pre-sync snapshot:**
+`archive/ltx25-convrot-sm70-pre-sync-20261112`
+(commit `4adc57c0d17f960d91415564db68fa6ab9360537`).
+
+Read `benchmarks/ltx25_convrot/SM70_DEFAULT.md` for native compiler/cache,
+environment overrides and deployment behavior. Historical sections below
+describe earlier explicit opt-in experiments and remain as experiment records.
 
 ## What changed
 
@@ -412,3 +426,51 @@ the validated original E video, and the original GPU-side 4,434 FP32
 exceptional row count remained unchanged. No persistent FP16 weight
 copies were introduced. Broader prompts, LoRA/MMGP lifetime tests
 and real-model production numerical/visual gates remain pending.
+
+## Default-on release gate (Nov 13, 2026)
+
+**Successful no-opt-in full V100 workflow:**
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43476591579
+
+- All legacy opt-in variables and `LTX25_CUBLAS_E_LIB` were **unset**
+  for the default-selection preflight and full generation.
+- The native SM70 extension was found/built from bundled CUDA source and
+  cached locally with source/version key, file lock and atomic rename;
+  no manual prebuilt native path required.
+- WanGP startup supplied the concrete **`fp32rot` selector**, which
+  reproduces the earlier validated explicit-mode arithmetic.
+- `WAN2GP_LTX25_E_CAST=vector4` and
+  `WAN2GP_LTX25_E_WORKSPACE=1` are now effective defaults, without
+  requiring either variable to be set.
+- Full fixed 1024x576, 49-frame, eight-step generation completed in
+  **96.1 seconds**. This is a single run, not a timing confidence interval.
+- Exactly **16,368 optimized ConvRot calls**, **4,434** FP32 exceptional
+  input rows, and **16,360** scratch leases; eight oversize calls used
+  ephemeral storage. Workspace peak 100,171,264 bytes (~95.5 MiB);
+  no persistent FP16 weight copies.
+- **49/49 decoded frames exactly matched** the original validated
+  Candidate E output; no native fallback/errors were observed.
+- User opt-out `WAN2GP_LTX25_CUBLAS_E_MODE=off` and native-missing
+  implicit-mode R0 fallback were tested by V100 preflight.
+
+### Why the first proposed automatic selector was rejected
+
+Two separate `MODE=auto` default-on runs loaded and generated a valid
+video, but returned a **different** 49-frame output and only **14,736**
+optimized calls. No reduction in the accuracy gate was permitted:
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43473397869
+and https://github.com/mylordmonkeyman/WanGP/actions/runs/43474671547.
+
+The config-difference audit
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43474411558
+showed identical generation settings and no non-output configuration
+differences. A run using the **same config** but explicitly selecting
+`fp32rot` then restored the **16,368 calls**, exact 49 decoded frames,
+and a 95.7-second generation:
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43475491051.
+
+For this reason the fork now inserts the **tested `fp32rot` selection**
+at startup if unset (or if the rejected `auto` alias is supplied).
+The newer selection is the source default; the 'auto' string itself is
+not used as an execution-mode selector. The true root cause of the
+former mode-string divergence is not yet conclusively established.

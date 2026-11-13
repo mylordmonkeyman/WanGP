@@ -29,6 +29,7 @@ MODE = os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").strip().lower()
 REAL_ACTIVATION_AUDIT = os.environ.get("WAN2GP_LTX25_REAL_ACTIVATION_AUDIT", "") == "1"
 PROFILE_STAGES = os.environ.get("WAN2GP_LTX25_PROFILE_STAGES", "") == "1"
 USE_WORKSPACE = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "") == "1"
+CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "").strip().lower()
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
 WEIGHT_CAP = 128 * 1024 * 1024
 # Synthetic checkpoint-backed FP32-rotation gate passed these shapes.
@@ -38,12 +39,14 @@ PASS_SHAPES = {
     (16384, 4096), (2048, 8192), (8192, 2048),
 }
 _FN = None
+_CAST_FN = None
 # Tiny persistent device-side counters, not weights. Read only at process exit.
 # Allocations/updates happen on the current CUDA stream; normal use is a
 # single-threaded WanGP inference stream (concurrent-stream tests still needed).
 _BAD_ROW_COUNTS = {}
 _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
-          "sizes": {}, "mode": MODE, "production_eligible": False,
+          "sizes": {}, "mode": MODE, "cast_mode": CAST_MODE or "torch_to",
+          "production_eligible": False,
           "range_fallback_units": "rows (device-side FP32 dot)",
           "row_range_policy": "power_of_two_nonzero_fp16_else_fp32_dot"}
 
@@ -69,6 +72,18 @@ def _fn():
     _FN = (dll, gemm, prepare, finish)
     print("[LTX25_CUBLAS_E] Explicit fp32rot GPU-range-guard pilot enabled; no persistent FP16 weights", flush=True)
     return _FN
+
+
+def _cast4_fn():
+    global _CAST_FN
+    if _CAST_FN is None:
+        dll = _fn()[0]
+        fn = dll.ltx25_cublas_cast_int8_to_f16_4
+        ptr = ctypes.c_void_p
+        fn.argtypes = [ptr, ptr, ctypes.c_size_t, ptr]
+        fn.restype = ctypes.c_int
+        _CAST_FN = fn
+    return _CAST_FN
 
 
 def _bad_row_counter(device):
@@ -157,7 +172,20 @@ def maybe_linear(x, weight, bias, group):
     if PROFILE_STAGES:
         profiler.mark(profile, "alloc")
     try:
-        w16 = q.to(torch.float16)  # Exact INT8 -> FP16, transient and bounded.
+        if CAST_MODE == "vector4":
+            # Faster exact integer conversion, still a *transient* weight
+            # expansion. No duplicate weights survive this linear call.
+            w16 = torch.empty(q.shape, dtype=torch.float16, device=q.device)
+            ptr = ctypes.c_void_p
+            stream_ptr = ptr(torch.cuda.current_stream(x.device).cuda_stream)
+            rc = _cast4_fn()(ptr(q.data_ptr()), ptr(w16.data_ptr()),
+                             q.numel(), stream_ptr)
+            if rc:
+                raise RuntimeError(f"Candidate E vector4 INT8 cast failed, status={rc}")
+        elif CAST_MODE in ("", "torch"):
+            w16 = q.to(torch.float16)
+        else:
+            raise ValueError(f"Unsupported WAN2GP_LTX25_E_CAST={CAST_MODE!r}")
         if PROFILE_STAGES:
             profiler.mark(profile, "weight_cast")
 

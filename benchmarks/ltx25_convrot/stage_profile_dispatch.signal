@@ -1,2 +1,2 @@
 2026-11-13
-Retry sparse real-model stage profiling. Skip actual generation if V100 still has another compute owner; preserve GPU isolation.
+Authorized stage profiler retry after user confirmed other GPU compute process terminated. Preserve early GPU ownership check and run only on idle V100.

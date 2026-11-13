@@ -428,6 +428,20 @@ def _migrate_loras():
             source = fl.locate_file(filename, error_if_none=False)
             if source is None:
                 continue
+            # LTX-2.5 SM70 quality benchmarks use an immutable checkpoint
+            # image. They do not activate LoRAs, so relocating baked LoRA
+            # files at CLI startup is unnecessary and destructive. In
+            # particular, shutil.move() crosses from the image filesystem to
+            # the workspace and can copy 1+ GiB before failing to unlink the
+            # source. Only skip this migration when explicitly opted in by
+            # the benchmark and the resolved source is INSIDE the baked
+            # checkpoint root. Normal WanGP LoRA migration is unchanged.
+            if os.environ.get("WAN2GP_LTX2_SKIP_BAKED_LORA_MIGRATION") == "1":
+                root = Path(os.environ.get("LTX25_CHECKPOINT_ROOT", "/opt/ltx25/checkpoints")).resolve()
+                if Path(source).resolve().is_relative_to(root):
+                    print(f"[WAN2GP][LTX2] Preserving image-baked {key} LoRA at '{source}' (no migration)")
+                    moved.add(filename)
+                    continue
             target = lora_dir / filename
             if Path(source).resolve() == target.resolve() or target.exists():
                 moved.add(filename)

@@ -46,6 +46,7 @@ def main():
         "real_activation_audit": r.get("real_activation_audit"),
         "stage_profile": r.get("stage_profile"),
         "workspace_stats": r.get("workspace_stats"),
+        "workspace_video_gate": r.get("workspace_video_gate"),
         "production_eligible": False if variant.startswith("e_") else None,
         "baked_checkpoint_root": "/opt/ltx25/checkpoints",
         "checkpoint_fetched_in_job": False,

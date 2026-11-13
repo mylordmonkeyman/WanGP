@@ -131,3 +131,15 @@ server checkout to this branch (preserving local changes) and restart
 its WanGP process to activate these source-code defaults. An existing
 long-running Python process continues using previously imported modules
 until restarted.
+
+### Strict-repeat verification
+
+The second no-env default-on generation also **PASSED** all the
+reference-count and decoded-video gates:
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43477341297 .
+It completed in **95.9 s**, with exactly **16,368** optimized linears,
+**4,434** FP32 fallback rows, **16,360** workspace leases, and
+**49/49 identical decoded frames**, matching the first 96.1 s no-env
+default result. The strict-reference snapshot is
+`archive/ltx25-convrot-sm70-default-strict-validated-20261113`
+at commit `ae6051e99e173bd81375065ebf30f135b0f87881`.

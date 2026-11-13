@@ -1,3 +1,2 @@
 2026-11-12
-Run isolated real-generation activation R0/R1/Candidate E numerical audit on V100 (49 frames, 1024x576).
-This is not a speed benchmark.
+Retry real LTX-2.5 activation numerical audit after workflow bash regex quoting fix.

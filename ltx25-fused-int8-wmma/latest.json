@@ -1,0 +1,7 @@
+{
+  "reason": "Benchmark not executed; inspect CUDA compile and GPU-busy logs",
+  "run_id": "43507091799",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43507091799",
+  "source_sha": "5defbf3aec1fb6c03e412820945ed7e2c3c867c2",
+  "status": "NOT_RUN"
+}

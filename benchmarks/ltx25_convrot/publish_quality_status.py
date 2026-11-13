@@ -17,6 +17,7 @@ VARIANTS = {"r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e",
             "e_combo_1024": "quality_combo",
             "e_default_1024": "quality_default",
             "e_hadamard_1024": "quality_hadamard",
+            "e_flat_mm_1024": "quality_flat_mm",
             "e_debug_fp32rot_samecfg_1024": "quality_default_explicit"}
 
 
@@ -56,6 +57,7 @@ def main():
         "combo_video_gate": r.get("combo_video_gate"),
         "default_video_gate": r.get("default_video_gate"),
         "hadamard_video_gate": r.get("hadamard_video_gate"),
+        "flat_mm_video_gate": r.get("flat_mm_video_gate"),
         "debug_explicit_video_gate": r.get("debug_explicit_video_gate"),
         "production_eligible": False if variant.startswith("e_") else None,
         "baked_checkpoint_root": "/opt/ltx25/checkpoints",
@@ -105,6 +107,11 @@ def main():
             "Require full-adapter numerical preflight and 49 decoded-frame "
             "exact-equivalence, not just an isolated microbenchmark."
             if variant == "e_hadamard_1024" else
+            "Opt-in torch.mm on flattened H256 groups using the original "
+            "FP32 matrix, tested bit-identical in all standalone shapes. "
+            "Full Candidate E exact numerical and decoded-video regression "
+            "required; no default change unless repeatable speed improvement."
+            if variant == "e_flat_mm_1024" else
             "DIAGNOSTIC ONLY: shared default-mode configuration, explicit fp32rot "
             "selection, default vector4 and scratch settings. Compare 49 frames "
             "and call counts to identify auto-mode rollout mismatch."

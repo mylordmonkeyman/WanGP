@@ -1,0 +1,91 @@
+name: LTX-2.5 V100 cuBLAS algorithm exactness sweep
+
+on:
+  push:
+    branches:
+      - perf/ltx25-convrot-sm70
+    paths:
+      - benchmarks/ltx25_convrot/gemm_algo_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  gemm:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 40
+    env:
+      LTX25_GEMM_PROBE_LIB: /tmp/ltx25_gemm_algo_sm70.so
+    steps:
+      - name: Checkout exact experimental sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Refuse competing GPU compute process
+        shell: bash
+        run: |
+          set -euo pipefail
+          owners="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader)"
+          active="$(printf '%s\n' "$owners" | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$active" ]]; then
+            printf '%s\n' "$active"
+            echo "::warning::V100 is occupied, refusing cuBLAS sweep"
+            exit 1
+          fi
+          nvidia-smi -L
+      - name: Compile isolated SM70 cuBLAS GEMM selector wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_gemm_algo_sm70.cu \
+            -lcublas -o "$LTX25_GEMM_PROBE_LIB"
+          test -s "$LTX25_GEMM_PROBE_LIB"
+      - name: Sweep 26 cuBLAS selectors with exact FP32-output comparisons
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/gemm_algo_microbench.py
+      - name: Publish isolated synthetic matrix results
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,sys
+          from pathlib import Path
+          sys.path.insert(0,'benchmarks/ltx25_convrot')
+          from publish_phase0_status import put
+          p=Path('/cache/ltx25/results')/('gemm_algo_sweep_'+os.environ['GITHUB_SHA'][:12]+'.json')
+          if p.exists():
+              d=json.loads(p.read_text())
+          else:
+              d={'status':'ERROR','reason':'Missing GEMM sweep artifact'}
+          d['run_url']='https://github.com/mylordmonkeyman/WanGP/actions/runs/'+os.environ['GITHUB_RUN_ID']
+          put('ltx25-gemm-algo-sweep/latest.json',d)
+          put('ltx25-gemm-algo-sweep/runs/'+os.environ['GITHUB_RUN_ID']+'.json',d)
+          PY
+      - name: Assert complete four-shape sweep
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path('/cache/ltx25/results')/('gemm_algo_sweep_'+os.environ['GITHUB_SHA'][:12]+'.json')
+          assert p.exists(),p
+          d=json.loads(p.read_text())
+          assert d['status']=='PASS' and len(d['shapes'])==4
+          assert all(any(x['selector']==-1 and x['bit_exact_fp32']
+                         for x in sh['candidates'] if x['status']=='PASS')
+                     for sh in d['shapes'])
+          PY

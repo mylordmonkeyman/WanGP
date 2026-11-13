@@ -1,0 +1,1 @@
+2026-11-13: begin isolated V100 SM70 packed8/packed16 conversion widths, warp/grid geometry vs production vector4. Synthetic exact-output A-B timing only; no production dispatch change.

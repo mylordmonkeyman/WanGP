@@ -1,0 +1,2 @@
+Authorized by user for exact SDPA CUDA kernel discovery and 1CatAI lower-level BHMD API test.
+Uses original validated extension artifact from run 43384835108; GPU profiler + multiple synthetic attention shapes; no video or model weight loading.

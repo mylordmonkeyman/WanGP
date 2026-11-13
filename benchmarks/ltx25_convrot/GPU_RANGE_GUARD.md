@@ -102,9 +102,11 @@ whose *entire linear* was rejected; the revised counter counts individual
 
 - Repeat R0/E trials under controlled GPU clocks, PCIe/thermal state,
   and offload profile, and report complete generation and denoising timing.
-- Capture representative *actual* LTX-2.5 activations, validate candidate
-  **versus R1** and R0 versus R1 using the spec's per-shape p99/max
-  normalized error acceptance rule. Synthetic preflight is insufficient.
+- **Completed bounded actual-activation screen:** 17/17 R0/R1/E sampled
+  comparisons passed over seven eligible shapes (up to 16 rows per call).
+  Broader token-row coverage, different prompts/seeds, real LoRA workloads,
+  and full-output distribution tests are still required for production.
+  Synthetic preflight alone remains insufficient.
 - Compare at least three matched rendered clips with blind review and
   appropriate quantitative quality metrics; the present clip is not a
   claim of visual equivalence.
@@ -115,3 +117,66 @@ whose *entire linear* was rejected; the revised counter counts individual
   conversion is still allocated per call and is a separate optimization.
 - Do not change other GPU backends, global dtype, checkpoint quantization,
   or the default selection while this work remains experimental.
+
+## Real LTX-2.5 generation activation gate (completed)
+
+The opt-in-only audit samples actual WanGP tensors during the fixed-seed
+1024×576 generation. It computes the original native BF16 rotated
+`F.linear` quantized-weight leaf (R0), an independent FP32 rotation/GEMM/
+scale/bias reference (R1), and the candidate's already-generated BF16 output
+(E) for the same live token rows. R1 is column-tiled, with at most 256 INT8
+weight rows converted transiently to FP32 per chunk. The production fast path
+does not import or execute this audit.
+
+**Run:** https://github.com/mylordmonkeyman/WanGP/actions/runs/43368460982
+
+- **17/17 samples passed**, zero numerical-gate failures and zero execution
+  errors; all 7 passing checkpoint matrix-shape families were represented.
+- Sampled calls 1, 64, and 1024 when reached by the family; only call 1
+  was available for two low-frequency shapes.
+- Each sample examined 16 token rows, selected across the actual M tokens;
+  the test is not a full M×N numerical distribution audit.
+- The FP32 reference observed output error for E was no worse than R0 at
+  both p99 and maximum normalized error in every sample.
+- The video was generated successfully, with 16,368 optimized linear calls
+  and 4,434 device-side FP32 exceptional rows, consistent with previous
+  no-sync tests. The audit run time (98.5 seconds) is not a speed benchmark
+  because it performs extra reference work.
+
+| Shape (N×K) | Samples | Max E p99 normalized | Max R0 p99 normalized |
+|---|---:|---:|---:|
+| 4096×4096 | 3 | 0.00339 | 0.00789 |
+| 16384×4096 | 3 | 0.00353 | 0.00722 |
+| 4096×16384 | 3 | 0.00341 | 0.00559 |
+| 2048×2048 | 3 | 0.00340 | 0.01790 |
+| 8192×2048 | 1 | 0.00346 | 0.00728 |
+| 2048×8192 | 1 | 0.00238 | 0.00434 |
+| 2048×4096 | 3 | 0.00379 | 0.02852 |
+
+Maxima in different columns may come from different samples; consult the
+per-sample JSON rather than treating this table as a matched numerator/
+denominator ratio.
+
+## Decoded-video reproducibility and pixel-difference audit (completed)
+
+The isolated **no-generation** analysis uses cached R0, archived E, no-sync
+E and audit E MP4s from the same prompt/seed/settings. It decodes and
+verifies 49 frames per clip using FFmpeg framemd5, calculates SSIM and PSNR
+on the decoded pixel stream, and uploads a five-frame-per-clip contact sheet.
+
+**Run and contact sheet artifact:**
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43369208361
+
+| Comparison | Decoded pixels identical? | SSIM | PSNR (dB) |
+|---|---|---:|---:|
+| R0 vs archived E | No | 0.888115 | 26.3523 |
+| R0 vs no-sync E | No | 0.891763 | 26.5518 |
+| Archived E vs no-sync E | No | 0.939273 | 30.0955 |
+| No-sync E vs live-audit E | **Yes, all 49 frames** | 1.000000 | Infinite |
+
+Inter-version differences are expected when the arithmetic is changed;
+neither SSIM nor PSNR is a perceptual-quality metric or a pass/fail visual
+gate. These outputs visibly vary in sail color, boat position and water
+texture. Blind human assessment across several prompts/seeds is still
+required before `auto` promotion. Reproducibility of no-sync E with
+and without the audit strengthens the runtime consistency evidence only.

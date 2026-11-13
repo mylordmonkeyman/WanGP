@@ -41,7 +41,12 @@ def main():
                 for extreme in (False, True):
                     xx=x.clone()
                     if extreme:
-                        xx[0] *= 1e5
+                        # 40000 is finite in both FP16 and BF16, and the
+                        # H256 of a uniform row stays close to 40000:
+                        # this triggers the >32768 GPU FP32 fallback
+                        # without injecting infinities or NaN payloads.
+                        xx[0].fill_(40000.0)
+                    assert bool(torch.isfinite(xx).all().item()), "Test must use finite inputs"
                     _=e.maybe_linear(xx,wt,None,256)
                     before=e._STATS["gemm_algo2_calls"]
                     with patch.object(torch.Tensor,"item",side_effect=AssertionError("host scalar read")), \

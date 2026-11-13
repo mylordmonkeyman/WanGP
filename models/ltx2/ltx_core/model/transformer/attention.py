@@ -205,6 +205,17 @@ class Attention(torch.nn.Module):
     def _v100_attention_override(self, x: torch.Tensor, mask: torch.Tensor | None) -> str | None:
         # Decide before attention_kit allocates/projects Q/K/V. Ineligible calls
         # keep their original Sage/SDPA staging and VRAM behavior.
+        # Log one eligibility snapshot per module without GPU synchronization.
+        if getattr(self, "_ltx25_v100_candidate", False) and not getattr(self, "_ltx25_v100_diagnostic_logged", False):
+            self._ltx25_v100_diagnostic_logged = True
+            print(
+                "[WanGP][LTX25] V100 candidate eligibility "
+                f"backend={ltx25_v100_attention_override()!r} "
+                f"shape={tuple(x.shape)} dtype={x.dtype} device={x.device} "
+                f"dim_head={self.dim_head} mask_shape={None if mask is None else tuple(mask.shape)} "
+                f"min_tokens={ltx25_v100_min_tokens()}",
+                flush=True,
+            )
         if not getattr(self, "_ltx25_v100_candidate", False) or mask is not None:
             return None
         selected = ltx25_v100_attention_override()

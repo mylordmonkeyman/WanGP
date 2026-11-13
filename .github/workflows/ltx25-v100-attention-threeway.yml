@@ -1,0 +1,106 @@
+name: LTX-2.5 V100 three-way attention benchmark
+
+# DO NOT run on ordinary commits. Explicitly authorize by workflow_dispatch
+# (choose the experimental branch), or by changing benchmark_dispatch.signal
+# in a separate, user-approved commit. No signal file is committed by default.
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: "Per-round measurements for each backend/shape"
+        required: true
+        type: choice
+        default: '8'
+        options: ['4', '8', '12']
+      rounds:
+        description: "Rotated backend-order rounds"
+        required: true
+        type: choice
+        default: '3'
+        options: ['1', '2', '3']
+  push:
+    branches:
+      - perf/ltx25-v100-flash-attn-dual
+    paths:
+      - benchmarks/ltx25_flash_v100/benchmark_dispatch.signal
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ltx25-v100-threeway-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  three-way-attention:
+    if: github.ref == 'refs/heads/perf/ltx25-v100-flash-attn-dual'
+    name: SDPA vs 1Cat vs zhinianqin; SM70 FP16 correctness/time/VRAM
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 150
+    env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      CUDA_HOME: /usr/local/cuda-12.8
+    steps:
+      - name: Checkout exact authorized source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify branch, source, and static syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "perf/ltx25-v100-flash-attn-dual"
+          bash -n benchmarks/ltx25_flash_v100/compile_on_runner.sh
+          bash -n benchmarks/ltx25_flash_v100/prepare_three_way.sh
+          /opt/venvs/ltx25-cu128/bin/python -m py_compile \
+            benchmarks/ltx25_flash_v100/three_way_benchmark.py \
+            benchmarks/ltx25_flash_v100/compile_smoke.py \
+            shared/ltx25_v100_attention.py
+
+      - name: Bootstrap isolated dependencies and build both SM70 extensions
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash benchmarks/ltx25_flash_v100/prepare_three_way.sh
+
+      - name: Matched-seed three-way WanGP attention microbenchmark
+        shell: bash
+        env:
+          BENCH_ITERATIONS: ${{ inputs.iterations || '8' }}
+          BENCH_ROUNDS: ${{ inputs.rounds || '3' }}
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/ltx25-flash-v100-compile"
+          export PYTHONPATH="$WORK/build-tools:$WORK/cat/flash-attention-v100:$WORK/zhin:$PWD${PYTHONPATH:+:$PYTHONPATH}"
+          export CUDA_HOME=/usr/local/cuda-12.8
+          export LD_LIBRARY_PATH="$CUDA_HOME/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_flash_v100/three_way_benchmark.py \
+            --shapes benchmarks/ltx25_flash_v100/three_way_shapes.json \
+            --output-dir "$WORK/benchmark-results" \
+            --warmup 3 --iterations "$BENCH_ITERATIONS" --rounds "$BENCH_ROUNDS"
+          cat "$WORK/benchmark-results/three_way_summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark results and build logs, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ltx25-v100-threeway-reports-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/ltx25-flash-v100-compile/logs/
+            ${{ runner.temp }}/ltx25-flash-v100-compile/benchmark-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload reusable CUDA extensions with strict ABI manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ltx25-v100-sm70-cu128-extensions-${{ github.run_id }}
+          path: ${{ runner.temp }}/ltx25-flash-v100-compile/compiled-v100-attention-sm70-cu128.tar.gz
+          if-no-files-found: warn
+          retention-days: 14

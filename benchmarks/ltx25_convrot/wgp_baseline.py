@@ -29,10 +29,12 @@ VARIANTS = {
     "e_fp32rot": ("576x320", True),
     "r0_quality_1024": ("1024x576", False),
     "e_quality_1024": ("1024x576", True),
+    "e_real_activation_audit_1024": ("1024x576", True),
 }
 if VARIANT not in VARIANTS:
     raise ValueError(f"Unsupported LTX25_BENCH_VARIANT: {VARIANT!r}")
 RESOLUTION, IS_CANDIDATE = VARIANTS[VARIANT]
+IS_REAL_AUDIT = VARIANT == "e_real_activation_audit_1024"
 if IS_CANDIDATE != (os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").lower() == "fp32rot"):
     raise ValueError("Candidate mode and selected benchmark variant disagree")
 CFG = BASE / f"config-{VARIANT}"
@@ -63,6 +65,12 @@ def run(cmd, timeout, log_path):
     began = time.monotonic()
     env = os.environ.copy()
     env["HF_HUB_OFFLINE"] = "1"
+    if IS_REAL_AUDIT:
+        # Numerically instrumented run, never compare its wall time with
+        # an uninstrumented baseline. Keep the summary in isolated cache.
+        env["WAN2GP_LTX25_REAL_ACTIVATION_AUDIT"] = "1"
+        env["LTX25_REAL_AUDIT_PATH"] = str(
+            OUT / f"real_activation_{os.environ.get('GITHUB_SHA', 'local')[:12]}.json")
     # This fixed T2V benchmark activates no LoRAs. Keep all 17 assets
     # immutable inside /opt/ltx25/checkpoints; don't try to move a baked
     # HDR LoRA into the checkout's loras/ directory during CLI startup.
@@ -137,7 +145,8 @@ def main():
         "runtime_bootstrap_status": bootstrap.get("status", "not_run"),
     }
     result_kind = {"r0_baseline": "baseline", "e_fp32rot": "candidate",
-                   "r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e"}[VARIANT]
+                   "r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e",
+                   "e_real_activation_audit_1024": "quality_real_audit"}[VARIANT]
     result_path = OUT / f"runtime_{result_kind}_{sha[:12]}.json"
     try:
         if bootstrap.get("status") != "PASS":
@@ -149,7 +158,7 @@ def main():
         if not MODEL_FILE.is_file() or not TEXT_FILE.is_file():
             report.update(status="BLOCKED", blocker="Image-baked transformer or text encoder checkpoint absent")
             return
-        if VARIANT == "e_quality_1024":
+        if VARIANT in ("e_quality_1024", "e_real_activation_audit_1024"):
             refdir = BASE / "videos" / "r0_quality_1024"
             if not refdir.is_dir() or not any(refdir.glob("*.mp4")):
                 report.update(
@@ -224,6 +233,16 @@ def main():
             if report["status"] == "PASS" and report.get("candidate_counters", {}).get("used", 0) <= 0:
                 report["status"] = "NO_CANDIDATE_CALLS"
                 report["blocker"] = "A clip was generated but no ConvRot Candidate E calls were recorded"
+        if IS_REAL_AUDIT:
+            audit_path = OUT / f"real_activation_{sha[:12]}.json"
+            if audit_path.is_file():
+                report["real_activation_audit"] = json.loads(audit_path.read_text())
+                if report["status"] == "PASS" and report["real_activation_audit"].get("status") != "PASS":
+                    report["status"] = "NUMERICAL_GATE_FAILED"
+                    report["blocker"] = "Real activation R0/R1/Candidate E accuracy gate failed; see published audit"
+            elif report["status"] == "PASS":
+                report["status"] = "NO_REAL_ACTIVATION_AUDIT"
+                report["blocker"] = "No real activation audit summary was written by generation process"
     except Exception as err:
         report.update(status="ERROR", error_type=type(err).__name__, error=str(err)[:800])
     finally:

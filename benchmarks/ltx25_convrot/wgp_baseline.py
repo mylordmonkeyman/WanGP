@@ -119,8 +119,23 @@ def gpu_busy():
         return {"busy": True, "reason":"nvidia-smi query failed", "detail": proc.stderr[-300:]}
     owners = [x.strip() for x in proc.stdout.splitlines() if x.strip()
               and not x.strip().startswith("No running processes")]
+    entries = []
+    for owner in owners[:6]:
+        pid = owner.split(",", 1)[0].strip()
+        # Only executable name, never process args: avoid leaking tokens or
+        # private strings embedded in another GPU user's command line.
+        name = ""
+        if pid.isdecimal():
+            try:
+                p = subprocess.run(["ps", "-p", pid, "-o", "comm="],
+                                   capture_output=True, text=True, timeout=3)
+                if p.returncode == 0:
+                    name = p.stdout.strip()[:80]
+            except Exception:
+                pass
+        entries.append({"gpu_entry": owner, "process_name": name or "unknown"})
     return {"busy": bool(owners), "reason":"other GPU compute processes" if owners else "",
-            "entries": owners[:6]}
+            "entries": entries}
 
 
 def cmd(dry_run):

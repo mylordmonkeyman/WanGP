@@ -202,6 +202,10 @@ class Attention(torch.nn.Module):
                 return "flash", 3
         return None, None
 
+    def _v100_attention_override(self) -> str | None:
+        # Marked only on genuine LTX-2.5 model instances by ltx2.py.
+        return ltx25_v100_attention_override() if getattr(self, "_ltx25_v100_candidate", False) else None
+
     def _head_mean_squares(self, project):
         # LTX uses vector_norm followed by square, including that rounding point. Compute each full-width statistic once;
         # retain only per-token FP32 scalars while projecting/attending groups of heads.
@@ -247,7 +251,7 @@ class Attention(torch.nn.Module):
             gate_logits = None if self.to_gate_logits is None else self.to_gate_logits(x_list[0])
             callback = lambda query, key, group: self._norm_rope_(query, key, pe, k_pe, group)
             options = dict(split_heads=split_heads, norm_spans_heads=True, norm_stats=self._head_mean_squares,
-                           attention_mask=mask, force_attention=ltx25_v100_attention_override() if context_list is None else None)
+                           attention_mask=mask, force_attention=self._v100_attention_override() if context_list is None else None)
             if context_list is None:
                 out = attention_kit.qkv_attention(x_list, self.to_q, self.to_k, self.to_v, self.heads, self.dim_head, callback, **options)
             else:
@@ -285,7 +289,7 @@ class Attention(torch.nn.Module):
         force_attention, attention_version = self._resolve_attention_override()
         # Preserve explicit LTX attention choices; only DEFAULT opts into this pilot.
         if force_attention is None and not cross_attn:
-            force_attention = ltx25_v100_attention_override()
+            force_attention = self._v100_attention_override()
 
         if cross_attn and NAG is not None:
             cap_len = int(NAG.get("cap_embed_len", 0) or 0)

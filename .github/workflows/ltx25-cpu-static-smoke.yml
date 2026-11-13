@@ -35,11 +35,13 @@ jobs:
             benchmarks/ltx25_convrot/candidate_workspace_preflight.py \
             benchmarks/ltx25_convrot/workspace_video_gate.py \
             benchmarks/ltx25_convrot/candidate_cast4_preflight.py \
+            benchmarks/ltx25_convrot/default_auto_preflight.py \
+            shared/qtypes/int8_convrot.py \
             benchmarks/ltx25_convrot/cast_microbench.py \
             benchmarks/ltx25_convrot/publish_cast_microbench.py \
             benchmarks/ltx25_convrot/wgp_baseline.py \
             benchmarks/ltx25_convrot/publish_quality_status.py
-      - name: Check strict opt-in and no persistent weight copies
+      - name: Check default SM70 scoping, native fallback and no persistent weight copies
         shell: bash
         run: |
           set -euo pipefail
@@ -47,10 +49,19 @@ jobs:
           import ast
           from pathlib import Path
           a = Path('shared/kernels/ltx25_cublas_sm70.py').read_text()
+          dispatch = Path('shared/qtypes/int8_convrot.py').read_text()
           w = Path('shared/kernels/ltx25_workspace_sm70.py').read_text()
           p = Path('shared/kernels/ltx25_stage_profiler.py').read_text()
           ast.parse(a); ast.parse(w); ast.parse(p)
           assert 'WAN2GP_LTX25_E_WORKSPACE' in a and 'WAN2GP_LTX25_E_WORKSPACE' in w
+          assert 'WAN2GP_LTX25_CUBLAS_E_MODE", "auto"' in a
+          assert 'WAN2GP_LTX25_E_CAST", "vector4"' in a
+          assert 'WAN2GP_LTX25_E_WORKSPACE", "1"' in a
+          assert 'WAN2GP_LTX25_CUBLAS_E_MODE", "auto"' in dispatch
+          assert 'WAN2GP_LTX25_CUBLAS_E_MODE=off' in dispatch
+          assert 'get_device_capability(x.device) != (7, 0)' in a
+          assert '_NATIVE_UNAVAILABLE' in a and '_native_library()' in a
+          assert 'fcntl.flock' in a and 'os.replace(tmp_path, target)' in a
           assert 'WAN2GP_LTX25_PROFILE_STAGES' in a and 'WAN2GP_LTX25_PROFILE_STAGES' in p
           assert 'w16 = q.to(torch.float16)' in a, 'Weight cast must remain transient'
           assert 'self.w16' not in w and 'self.weight' not in w, 'Pool must not own weight storage'
@@ -58,5 +69,5 @@ jobs:
           assert 'torch.cuda.default_stream(device)' in w, 'Pooling must be same-stream only'
           assert 'enable_timing=True' in p and 'sample.events[-1].synchronize()' in p
           assert 'atexit.register(_summary)' in p
-          print('STATIC_SMOKE_PASS: syntax, opt-in, lifetime and no persistent weight copies')
+          print('STATIC_SMOKE_PASS: syntax, no-env SM70 default, explicit R0 override, native auto fallback, no persistent weight copies')
           PY

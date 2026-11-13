@@ -303,7 +303,11 @@ class Attention(torch.nn.Module):
         v = v.view(v.shape[0], -1, self.heads, self.dim_head)
         force_attention, attention_version = self._resolve_attention_override()
         # Preserve explicit LTX attention choices; only DEFAULT opts into this pilot.
-        # The CLI's --attention sdpa maps to AttentionFunction.PYTORCH.\n        # An explicitly opted-in video self-attention candidate must override\n        # that baseline only for eligible calls; cross-attention stays SDPA.\n        if not cross_attn and v100_force is not None:\n            force_attention = v100_force
+        # The CLI's --attention sdpa maps to AttentionFunction.PYTORCH.
+        # An explicitly opted-in video self-attention candidate must override
+        # that baseline only for eligible calls; cross-attention stays SDPA.
+        if not cross_attn and v100_force is not None:
+            force_attention = v100_force
 
         if cross_attn and NAG is not None:
             cap_len = int(NAG.get("cap_embed_len", 0) or 0)

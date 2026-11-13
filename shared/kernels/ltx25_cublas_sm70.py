@@ -48,6 +48,7 @@ PROFILE_STAGES = os.environ.get("WAN2GP_LTX25_PROFILE_STAGES", "") == "1"
 USE_WORKSPACE = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "1") == "1"
 CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector4").strip().lower()
 ROT_MODE = os.environ.get("WAN2GP_LTX25_HADAMARD", "torch").strip().lower()
+GEMM_TUNE = os.environ.get("WAN2GP_LTX25_GEMM_TUNE", "off").strip().lower()
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
 WEIGHT_CAP = 128 * 1024 * 1024
 # Synthetic checkpoint-backed FP32-rotation gate passed these shapes.
@@ -59,6 +60,7 @@ PASS_SHAPES = {
 _FN = None
 _CAST_FN = None
 _ROT_FN = None
+_ALGO2_FN = None
 _NATIVE_UNAVAILABLE = False
 _NATIVE_FAILURE_REPORTED = False
 # Tiny persistent device-side counters, not weights. Read only at process exit.
@@ -72,7 +74,8 @@ _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
           "auto_native_fallback": 0,
           "range_fallback_units": "rows (device-side FP32 dot)",
           "row_range_policy": "power_of_two_nonzero_fp16_else_fp32_dot",
-          "rotation_mode": ROT_MODE}
+          "rotation_mode": ROT_MODE,
+          "gemm_tune": GEMM_TUNE, "gemm_algo2_calls": 0}
 
 
 def _native_library():
@@ -173,6 +176,19 @@ def _rot_fn():
     return _ROT_FN
 
 
+def _algo2_fn():
+    """Bind the optional bit-exact SM70 cuBLAS Algo2 for one tested shape."""
+    global _ALGO2_FN
+    if _ALGO2_FN is None:
+        fn = _fn()[0].ltx25_cublas_gemm_f16_f32_algo2
+        ptr = ctypes.c_void_p
+        fn.argtypes = [ptr, ptr, ptr, ctypes.c_int, ctypes.c_int,
+                       ctypes.c_int, ptr]
+        fn.restype = ctypes.c_int
+        _ALGO2_FN = fn
+    return _ALGO2_FN
+
+
 def _bad_row_counter(device):
     index = device.index
     if index is None:
@@ -237,6 +253,8 @@ def maybe_linear(x, weight, bias, group):
             _cast4_fn()
         if ROT_MODE == "radix4":
             _rot_fn()
+        if GEMM_TUNE == "algo2_m64" and (n, k, m) == (16384, 4096, 64):
+            _algo2_fn()
     except (OSError, RuntimeError, AttributeError, ImportError) as exc:
         if not _MODE_IMPLICIT:
             raise
@@ -256,6 +274,10 @@ def maybe_linear(x, weight, bias, group):
                                  torch.cuda.current_stream(x.device))
     else:
         profile = None
+
+    if GEMM_TUNE not in ("off", "", "algo2_m64"):
+        raise ValueError(f"Unsupported WAN2GP_LTX25_GEMM_TUNE={GEMM_TUNE!r}")
+    use_algo2 = GEMM_TUNE == "algo2_m64" and (n, k, m) == (16384, 4096, 64)
 
     # Default: use the exact already-validated FP32 dense H256 rotation.
     # Experimental radix4: the same H4-Kronecker matrix in a different
@@ -329,10 +351,13 @@ def maybe_linear(x, weight, bias, group):
             raise RuntimeError(f"Candidate E row prepare failed, status={status}, N={n}, M={m}, K={k}")
         if PROFILE_STAGES:
             profiler.mark(profile, "prepare")
-        status = gemm(ptr(w16.data_ptr()), ptr(x16.data_ptr()),
-                      ptr(c32.data_ptr()), n, m, k, stream)
+        selected_gemm = _algo2_fn() if use_algo2 else gemm
+        status = selected_gemm(ptr(w16.data_ptr()), ptr(x16.data_ptr()),
+                               ptr(c32.data_ptr()), n, m, k, stream)
         if status:
             raise RuntimeError(f"Candidate E cuBLAS GEMM failed, status={status}, N={n}, M={m}, K={k}")
+        if use_algo2:
+            _STATS["gemm_algo2_calls"] += 1
         if PROFILE_STAGES:
             profiler.mark(profile, "gemm")
         status = finish(ptr(c32.data_ptr()), ptr(x32.data_ptr()), ptr(q.data_ptr()),

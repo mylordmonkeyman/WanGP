@@ -1,0 +1,92 @@
+name: LTX-2.5 V100 isolated fused INT8 WMMA GEMM benchmark
+
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths:
+      - benchmarks/ltx25_convrot/fused_i8_wmma_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 40
+    env:
+      LTX25_FUSED_WMMA_LIB: /tmp/ltx25_fused_i8_wmma_sm70.so
+    steps:
+      - name: Checkout isolated experiment source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Require idle V100 before benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          owners="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader)"
+          active="$(printf '%s\n' "$owners" | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$active" ]]; then
+            printf '%s\n' "$active"
+            echo "V100 is busy; refused to benchmark concurrently" >&2
+            exit 1
+          fi
+          nvidia-smi -L
+      - name: Compile SM70 tiled on-the-fly INT8-to-WMMA GEMM
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_fused_i8_wmma_sm70.cu \
+            -lcublas -o "$LTX25_FUSED_WMMA_LIB"
+          test -s "$LTX25_FUSED_WMMA_LIB"
+      - name: Compare five real matrix shapes with A-B-B-A CUDA event timings
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/fused_i8_wmma_microbench.py
+      - name: Publish isolated experiment results
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,sys
+          from pathlib import Path
+          sys.path.insert(0,'benchmarks/ltx25_convrot')
+          from publish_phase0_status import put
+          p=Path('/cache/ltx25/results')/('fused_int8_wmma_'+os.environ['GITHUB_SHA'][:12]+'.json')
+          if p.exists():
+              d=json.loads(p.read_text())
+          else:
+              d={'status':'ERROR','reason':'No completed fused WMMA microbench report; inspect GitHub job logs'}
+          d['run_url']='https://github.com/mylordmonkeyman/WanGP/actions/runs/'+os.environ['GITHUB_RUN_ID']
+          put('ltx25-fused-int8-wmma/latest.json',d)
+          put('ltx25-fused-int8-wmma/runs/'+os.environ['GITHUB_RUN_ID']+'.json',d)
+          print('Published:',d['run_url'],d['status'],flush=True)
+          PY
+      - name: Assert complete synthetic-only result
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path('/cache/ltx25/results')/('fused_int8_wmma_'+os.environ['GITHUB_SHA'][:12]+'.json')
+          assert p.is_file(),p
+          d=json.loads(p.read_text())
+          assert d['status']=='PASS' and len(d['shapes'])==5
+          assert d['production_eligible'] is False
+          assert all(x['fp32_finite'] and x['baseline_cast_plus_cublas_ms']>0
+                     and x['fused_int8_wmma_ms']>0 for x in d['shapes'])
+          print('SYNTHETIC_FUSED_WMMA_RESEARCH_COMPLETED',flush=True)
+          PY

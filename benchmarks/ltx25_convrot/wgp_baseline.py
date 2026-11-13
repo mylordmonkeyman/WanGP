@@ -82,6 +82,11 @@ def run(cmd, timeout, log_path):
     began = time.monotonic()
     env = os.environ.copy()
     env["HF_HUB_OFFLINE"] = "1"
+    # Keep all legacy exact-reference comparisons on their historically
+    # validated torch H256, now that radix4 is the no-override default.
+    # The promoted default and experimental Hadamard variants exercise radix4.
+    if IS_CANDIDATE and not (IS_DEFAULT or IS_HADAMARD or IS_FLAT_MM):
+        env["WAN2GP_LTX25_HADAMARD"] = "torch"
     if IS_HADAMARD:
         env["WAN2GP_LTX25_HADAMARD"] = "radix4"
     if IS_FLAT_MM:
@@ -100,6 +105,7 @@ def run(cmd, timeout, log_path):
         # including no explicit library path: force auto native build/cache.
         for name in ("WAN2GP_LTX25_CUBLAS_E_MODE", "WAN2GP_LTX25_E_CAST",
                      "WAN2GP_LTX25_E_WORKSPACE", "WAN2GP_LTX25_E_AUTO_BUILD",
+                     "WAN2GP_LTX25_HADAMARD", "WAN2GP_LTX25_GEMM_TUNE",
                      "LTX25_CUBLAS_E_LIB"):
             env.pop(name, None)
     if IS_CAST4:

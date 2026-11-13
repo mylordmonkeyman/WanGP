@@ -37,6 +37,7 @@ VARIANTS = {
     "e_default_1024": ("1024x576", True),
     "e_hadamard_1024": ("1024x576", True),
     "e_flat_mm_1024": ("1024x576", True),
+    "e_algo2_1024": ("1024x576", True),
     "e_debug_fp32rot_samecfg_1024": ("1024x576", True),
 }
 if VARIANT not in VARIANTS:
@@ -49,6 +50,7 @@ IS_CAST4 = VARIANT in ("e_cast4_1024", "e_combo_1024")
 IS_DEFAULT = VARIANT == "e_default_1024"
 IS_HADAMARD = VARIANT == "e_hadamard_1024"
 IS_FLAT_MM = VARIANT == "e_flat_mm_1024"
+IS_ALGO2 = VARIANT == "e_algo2_1024"
 IS_DEBUG_EXPLICIT = VARIANT == "e_debug_fp32rot_samecfg_1024"
 if not IS_DEFAULT and IS_CANDIDATE != (os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").lower() == "fp32rot"):
     raise ValueError("Candidate mode and selected benchmark variant disagree")
@@ -84,6 +86,8 @@ def run(cmd, timeout, log_path):
         env["WAN2GP_LTX25_HADAMARD"] = "radix4"
     if IS_FLAT_MM:
         env["WAN2GP_LTX25_HADAMARD"] = "flat_mm"
+    if IS_ALGO2:
+        env["WAN2GP_LTX25_GEMM_TUNE"] = "algo2_m64"
     if IS_DEBUG_EXPLICIT:
         # Diagnostic: same e_default config and default cast/workspace, but
         # explicit fp32rot mode to isolate dispatch selection from settings.
@@ -212,6 +216,7 @@ def main():
                    "e_default_1024": "quality_default",
                    "e_hadamard_1024": "quality_hadamard",
                    "e_flat_mm_1024": "quality_flat_mm",
+                   "e_algo2_1024": "quality_algo2",
                    "e_debug_fp32rot_samecfg_1024": "quality_default_explicit"}[VARIANT]
     result_path = OUT / f"runtime_{result_kind}_{sha[:12]}.json"
     try:
@@ -224,7 +229,7 @@ def main():
         if not MODEL_FILE.is_file() or not TEXT_FILE.is_file():
             report.update(status="BLOCKED", blocker="Image-baked transformer or text encoder checkpoint absent")
             return
-        if VARIANT in ("e_quality_1024", "e_real_activation_audit_1024", "e_profile_1024", "e_workspace_1024", "e_cast4_1024", "e_combo_1024", "e_default_1024", "e_debug_fp32rot_samecfg_1024", "e_hadamard_1024", "e_flat_mm_1024"):
+        if VARIANT in ("e_quality_1024", "e_real_activation_audit_1024", "e_profile_1024", "e_workspace_1024", "e_cast4_1024", "e_combo_1024", "e_default_1024", "e_debug_fp32rot_samecfg_1024", "e_hadamard_1024", "e_flat_mm_1024", "e_algo2_1024"):
             refdir = BASE / "videos" / "r0_quality_1024"
             if not refdir.is_dir() or not any(refdir.glob("*.mp4")):
                 report.update(
@@ -304,6 +309,13 @@ def main():
             if counters.get("used") != 16368 or counters.get("rotation_mode") != "flat_mm":
                 report["status"] = "FLAT_MM_NOT_SELECTED"
                 report["blocker"] = "Expected flat_mm on all validated eligible ConvRot linears"
+        if IS_ALGO2 and report["status"] == "PASS":
+            counters = report.get("candidate_counters", {})
+            if (counters.get("gemm_tune") != "algo2_m64" or
+                    counters.get("gemm_algo2_calls", 0) <= 0 or
+                    counters.get("used") != 16368):
+                report["status"] = "ALGO2_NOT_SELECTED"
+                report["blocker"] = "SM70 cuBLAS Algo2 never executed for N16384 K4096 M64"
         if IS_HADAMARD and report["status"] == "PASS":
             counters = report.get("candidate_counters", {})
             if (counters.get("used") != 16368 or
@@ -325,7 +337,7 @@ def main():
             if cast_mode != "vector4":
                 report["status"] = "CAST4_NOT_SELECTED"
                 report["blocker"] = f"Expected vector4 cast counters, got {cast_mode!r}"
-        if IS_WORKSPACE or IS_DEFAULT or IS_DEBUG_EXPLICIT or IS_HADAMARD or IS_FLAT_MM:
+        if IS_WORKSPACE or IS_DEFAULT or IS_DEBUG_EXPLICIT or IS_HADAMARD or IS_FLAT_MM or IS_ALGO2:
             import re
             # The workspace prints a bounded JSON summary at interpreter exit.
             ws_matches = re.findall(r"\[LTX25_WORKSPACE\] (\{[^\n]+\})",

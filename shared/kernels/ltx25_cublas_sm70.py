@@ -27,6 +27,7 @@ import torch
 
 MODE = os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").strip().lower()
 REAL_ACTIVATION_AUDIT = os.environ.get("WAN2GP_LTX25_REAL_ACTIVATION_AUDIT", "") == "1"
+PROFILE_STAGES = os.environ.get("WAN2GP_LTX25_PROFILE_STAGES", "") == "1"
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
 WEIGHT_CAP = 128 * 1024 * 1024
 # Synthetic checkpoint-backed FP32-rotation gate passed these shapes.
@@ -123,18 +124,31 @@ def maybe_linear(x, weight, bias, group):
 
     from shared.qtypes.int8_convrot import _rotate_activation
 
+    if PROFILE_STAGES:
+        from shared.kernels import ltx25_stage_profiler as profiler
+        profile = profiler.begin(n, k, m, x.dtype, x.device,
+                                 torch.cuda.current_stream(x.device))
+    else:
+        profile = None
+
     # FP32 Hadamard is the explicitly selected research variant (not R0).
     # Own the temporaries until kernels have been enqueued on this stream;
     # PyTorch's caching allocator tracks the current stream for their reuse.
     x32 = _rotate_activation(x.float(), group).reshape(m, k).contiguous()
+    if PROFILE_STAGES:
+        profiler.mark(profile, "rotation")
     x16 = torch.empty((m, k), dtype=torch.float16, device=x.device)
     exponents = torch.empty((m,), dtype=torch.int32, device=x.device)
     slow_rows = torch.empty((m,), dtype=torch.int32, device=x.device)
     c32 = torch.empty((m, n), dtype=torch.float32, device=x.device)
-    w16 = q.to(torch.float16)  # Exact INT8 -> FP16, transient and bounded.
     scale32 = scale.reshape(n).contiguous()
     bias32 = None if bias is None else bias.float().reshape(n).contiguous()
     bad_rows = _bad_row_counter(x.device)
+    if PROFILE_STAGES:
+        profiler.mark(profile, "alloc")
+    w16 = q.to(torch.float16)  # Exact INT8 -> FP16, transient and bounded.
+    if PROFILE_STAGES:
+        profiler.mark(profile, "weight_cast")
 
     dll, gemm, prepare, finish = _fn()
     ptr = ctypes.c_void_p
@@ -144,10 +158,14 @@ def maybe_linear(x, weight, bias, group):
                      ptr(bad_rows.data_ptr()), m, k, stream)
     if status:
         raise RuntimeError(f"Candidate E row prepare failed, status={status}, N={n}, M={m}, K={k}")
+    if PROFILE_STAGES:
+        profiler.mark(profile, "prepare")
     status = gemm(ptr(w16.data_ptr()), ptr(x16.data_ptr()),
                   ptr(c32.data_ptr()), n, m, k, stream)
     if status:
         raise RuntimeError(f"Candidate E cuBLAS GEMM failed, status={status}, N={n}, M={m}, K={k}")
+    if PROFILE_STAGES:
+        profiler.mark(profile, "gemm")
     status = finish(ptr(c32.data_ptr()), ptr(x32.data_ptr()), ptr(q.data_ptr()),
                     ptr(scale32.data_ptr()),
                     ptr(0 if bias32 is None else bias32.data_ptr()),
@@ -155,7 +173,11 @@ def maybe_linear(x, weight, bias, group):
                     m, n, k, stream)
     if status:
         raise RuntimeError(f"Candidate E FP32 epilogue failed, status={status}, N={n}, M={m}, K={k}")
+    if PROFILE_STAGES:
+        profiler.mark(profile, "epilogue")
     out = c32.to(x.dtype).reshape(*x.shape[:-1], n)
+    if PROFILE_STAGES:
+        profiler.mark(profile, "output")
     _record("used", n, k, m)
     if REAL_ACTIVATION_AUDIT:
         # NOT a performance run: shed the large no-longer-needed temporary

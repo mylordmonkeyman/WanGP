@@ -1,2 +1,2 @@
 2026-11-13
-CPU-only compile and opt-in guard regression after introducing combined cast4+workspace quality variant.
+Test promoted no-env SM70 defaults, automatic native-extension build/caching and fail-safe R0, while preserving previous staged benchmarks.

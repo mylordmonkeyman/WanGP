@@ -429,8 +429,13 @@ and real-model production numerical/visual gates remain pending.
 
 ## Default-on release gate (Nov 13, 2026)
 
-**Successful no-opt-in full V100 workflow:**
+**Two successful no-opt-in full V100 workflows:**
 https://github.com/mylordmonkeyman/WanGP/actions/runs/43476591579
+(**96.1 s**), and the stricter repeated gate
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43477341297
+(**95.9 s**). Both reproduced all 49 decoded reference frames and the
+**16,368 optimized calls**, **4,434 FP32 fallback rows** and
+**16,360 workspace leases**.
 
 - All legacy opt-in variables and `LTX25_CUBLAS_E_LIB` were **unset**
   for the default-selection preflight and full generation.
@@ -474,3 +479,10 @@ at startup if unset (or if the rejected `auto` alias is supplied).
 The newer selection is the source default; the 'auto' string itself is
 not used as an execution-mode selector. The true root cause of the
 former mode-string divergence is not yet conclusively established.
+
+**Strict-gate snapshot:** `archive/ltx25-convrot-sm70-default-strict-validated-20261113`
+(commit `ae6051e99e173bd81375065ebf30f135b0f87881`).
+This includes source assertions that the fixed benchmark's operation
+counts and decoded frames match the validated reference. The two default
+runs are 96.1 and 95.9 seconds; these are still single-prompt tests,
+not statistical quality or speed intervals.

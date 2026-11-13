@@ -83,11 +83,19 @@ def main():
             x = torch.randn((m, k), device="cuda", dtype=torch.float32).to(dtype).float()
             ref = torch.empty_like(x)
             candidate = torch.empty_like(x)
+            flat_result = torch.empty_like(x)
 
             def torch_path():
                 torch.matmul(x.view(-1, k // 256, 256), H,
                              out=ref.view(-1, k // 256, 256))
                 return ref
+
+            def flat_mm_path():
+                # Same H matrix, same FP32 arithmetic; tests whether
+                # torch.mm on flattened 256-wide groups uses a better
+                # launch path than torch.matmul on [M,K/256,256].
+                torch.mm(x.view(-1,256), H, out=flat_result.view(-1,256))
+                return flat_result
 
             def cuda_path():
                 rc = native(ptr(x.data_ptr()), ptr(candidate.data_ptr()),
@@ -98,8 +106,10 @@ def main():
 
             # Compare results only AFTER both kernels have fully completed.
             torch_path()
+            flat_mm_path()
             cuda_path()
             torch.cuda.synchronize()
+            flat_exact=bool(torch.equal(flat_result,ref))
             assert bool(torch.isfinite(candidate).all().item())
             diff = (ref - candidate).abs()
             norm = diff / torch.maximum(ref.abs(), torch.ones_like(ref))
@@ -114,11 +124,14 @@ def main():
                 f"max_norm={max_norm} RMS={rel_rms}"
             )
             a = timed(torch_path)
+            flat = timed(flat_mm_path)
             z = timed(cuda_path)
             speedup = a["median_ms"] / z["median_ms"]
             row = {
                 "M": m, "K": k, "dtype": str(dtype),
-                "torch_matmul": a, "radix4_cuda": z,
+                "torch_matmul": a, "torch_flat_mm": flat, "radix4_cuda": z,
+                "torch_flat_mm_bit_exact": flat_exact,
+                "flat_mm_speedup": round(a["median_ms"]/flat["median_ms"],4),
                 "max_normalized_error": max_norm,
                 "p99_normalized_error": p99_norm,
                 "relative_rms_error": rel_rms,
@@ -127,7 +140,7 @@ def main():
             }
             result["shape_results"].append(row)
             print("LTX25_HADAMARD_RESULT " + json.dumps(row, sort_keys=True), flush=True)
-            del x, ref, candidate
+            del x, ref, candidate, flat_result
     result["status"] = "PASS"
     OUT.mkdir(parents=True, exist_ok=True)
     path = OUT / f"hadamard_microbench_{result['source_sha'][:12]}.json"
@@ -135,6 +148,8 @@ def main():
     print("LTX25_HADAMARD_SUMMARY " + json.dumps({
         "status": result["status"], "cases": len(result["shape_results"]),
         "faster_cases": sum(row["speedup"] > 1.0 for row in result["shape_results"]),
+        "flat_mm_bit_exact_cases": sum(row["torch_flat_mm_bit_exact"] for row in result["shape_results"]),
+        "flat_mm_faster_cases": sum(row["flat_mm_speedup"] > 1.0 for row in result["shape_results"]),
         "max_normalized_error": max(x["max_normalized_error"] for x in result["shape_results"]),
     }), flush=True)
 

@@ -228,7 +228,7 @@ jobs:
             benchmarks/ltx25_convrot/wgp_baseline.py
 
       - name: Require experimental video to match validated no-sync E decoded frames
-        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' || env.LTX25_BENCH_VARIANT == 'e_cast4_1024' || env.LTX25_BENCH_VARIANT == 'e_combo_1024' || env.LTX25_BENCH_VARIANT == 'e_default_1024' || env.LTX25_BENCH_VARIANT == 'e_debug_fp32rot_samecfg_1024' || env.LTX25_BENCH_VARIANT == 'e_hadamard_1024' }}
+        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' || env.LTX25_BENCH_VARIANT == 'e_cast4_1024' || env.LTX25_BENCH_VARIANT == 'e_combo_1024' || env.LTX25_BENCH_VARIANT == 'e_default_1024' || env.LTX25_BENCH_VARIANT == 'e_debug_fp32rot_samecfg_1024' || env.LTX25_BENCH_VARIANT == 'e_hadamard_1024' || env.LTX25_BENCH_VARIANT == 'e_flat_mm_1024' }}
         shell: bash
         run: |
           set -euo pipefail

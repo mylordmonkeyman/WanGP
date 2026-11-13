@@ -103,7 +103,9 @@ class BasicAVTransformerBlock(torch.nn.Module):
                 attention_function=attention_function,
                 apply_gated_attention=video.apply_gated_attention,
             )
-            # Explicitly scope experimental V100 kernels to video self-attention.\n            self.attn1._ltx25_v100_candidate = True\n            self.attn2 = Attention(
+            # Explicitly scope experimental V100 kernels to video self-attention.
+            self.attn1._ltx25_v100_candidate = True
+            self.attn2 = Attention(
                 query_dim=video.dim,
                 context_dim=video.context_dim,
                 heads=video.heads,

@@ -1,5 +1,5 @@
 # Copyright (c) 2026. Experimental LTX-2.5 V100 ConvRot workspace.
-"""Opt-in reusable CUDA scratch, not a weight cache.
+"""Default bounded CUDA scratch for eligible SM70 ConvRot, not a weight cache.
 
 Only stores *activation, accumulator, and row metadata* tensors. Does NOT
 retain any FP16 copy of a model weight: q.to(float16) is transient per
@@ -24,7 +24,9 @@ import threading
 
 import torch
 
-ENABLED = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "") == "1"
+ENABLED = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "1") == "1"
+# Default enabled under the SM70 ConvRot adapter; set
+# WAN2GP_LTX25_E_WORKSPACE=0 to use ephemeral allocations.
 # Constrain persistent scratch to 96 MiB / GPU by default. This does not
 # include transient FP16 weight conversion, FP32 rotated activations or
 # PyTorch's own unrelated allocator cache.

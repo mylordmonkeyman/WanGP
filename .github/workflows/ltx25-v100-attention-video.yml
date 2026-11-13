@@ -50,7 +50,8 @@ jobs:
             shared/ltx25_v100_attention.py \
             models/ltx2/ltx_core/model/transformer/transformer.py \
             benchmarks/ltx25_flash_v100/wgp_three_way_video.py \
-            benchmarks/ltx25_flash_v100/summarize_video.py
+            benchmarks/ltx25_flash_v100/summarize_video.py \
+            benchmarks/ltx25_flash_v100/real_shape_benchmark.py
           /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/runtime_validate_baked.py
 
@@ -79,7 +80,17 @@ jobs:
           find "$DEST/zhinianqin" -name '*_vllm_fa2_C*.so' | grep -q .
           echo "PYTHONPATH=$DEST/1cat:$DEST/zhinianqin:$PWD${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
+      - name: Real-shape BF16 attention benchmark (no video generation)
+        if: contains(github.event.head_commit.message, 'realshape')
+        shell: bash
+        run: |
+          set -euo pipefail
+          export LTX25_REAL_SHAPE_OUT="$RUNNER_TEMP/ltx25-v100-video-reports"
+          mkdir -p "$LTX25_REAL_SHAPE_OUT"
+          /opt/venvs/ltx25-cu128/bin/python benchmarks/ltx25_flash_v100/real_shape_benchmark.py
+
       - name: Generate three variants, count real attention calls, compare
+        if: ${{ !contains(github.event.head_commit.message, 'realshape') }}
         shell: bash
         run: |
           set -euo pipefail

@@ -1,0 +1,2 @@
+2026-11-13
+Authorized V100 opt-in vector4 weight-cast candidate. Run CUDA preflight, full 49-frame 1024x576 LTX generation and mandatory exact pixel comparison to known-good Candidate E. Never cache FP16 weights.

@@ -47,7 +47,7 @@ REAL_ACTIVATION_AUDIT = os.environ.get("WAN2GP_LTX25_REAL_ACTIVATION_AUDIT", "")
 PROFILE_STAGES = os.environ.get("WAN2GP_LTX25_PROFILE_STAGES", "") == "1"
 USE_WORKSPACE = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "1") == "1"
 CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector4").strip().lower()
-ROT_MODE = os.environ.get("WAN2GP_LTX25_HADAMARD", "torch").strip().lower()
+ROT_MODE = os.environ.get("WAN2GP_LTX25_HADAMARD", "radix4").strip().lower()
 GEMM_TUNE = os.environ.get("WAN2GP_LTX25_GEMM_TUNE", "off").strip().lower()
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
 WEIGHT_CAP = 128 * 1024 * 1024
@@ -165,7 +165,7 @@ def _cast4_fn():
 
 
 def _rot_fn():
-    """Bind the opt-in same-stream FP32 radix4 Hadamard output kernel."""
+    """Bind the default-on V100 same-stream FP32 radix-4 Hadamard kernel."""
     global _ROT_FN
     if _ROT_FN is None:
         fn = _fn()[0].ltx25_cublas_rot256_f32
@@ -279,9 +279,11 @@ def maybe_linear(x, weight, bias, group):
         raise ValueError(f"Unsupported WAN2GP_LTX25_GEMM_TUNE={GEMM_TUNE!r}")
     use_algo2 = GEMM_TUNE == "algo2_m64" and (n, k, m) == (16384, 4096, 64)
 
-    # Default: use the exact already-validated FP32 dense H256 rotation.
-    # Experimental radix4: the same H4-Kronecker matrix in a different
-    # FP32 accumulation order. Keep it opt-in until complete video gates pass.
+    # Default: fast FP32 radix-4 rotation with the same H4-Kronecker transform.
+    # This changes accumulation order relative to the previous torch H256.
+    # User-reviewed 241-frame i2v output looked essentially identical,
+    # but decoded pixels are not generally bit-identical.
+    # HADAMARD=torch restores the historical dense FP32 H256 rotation.
     if ROT_MODE == "radix4":
         x_source32 = x.float().reshape(m, k).contiguous()
         x32 = torch.empty((m, k), dtype=torch.float32, device=x.device)

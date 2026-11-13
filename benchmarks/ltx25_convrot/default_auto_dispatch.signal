@@ -1,2 +1,1 @@
-2026-11-13
-Post-research regression: assert no-env SM70 default is unchanged after opt-in Hadamard and cuBLAS Algo2 source additions. Strict 16368 linears/4434 fallback/16360 leases and exact 49 decoded frames, with GPU owner guard.
+2026-11-13: verify promoted radix4 default on live V100 with native extension auto build, BF16/FP16 preflight and 49-frame decoded-video diagnostic

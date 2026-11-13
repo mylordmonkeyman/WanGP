@@ -27,9 +27,9 @@ from shared.kernels import ltx25_workspace_sm70 as ws
 from shared.qtypes.int8_convrot import _rotate_activation
 
 def main():
-    assert e.MODE == "auto" and e.CAST_MODE == "vector4" and e.USE_WORKSPACE
+    assert e.MODE == "fp32rot" and e._MODE_IMPLICIT and e.CAST_MODE == "vector4" and e.USE_WORKSPACE
     assert ws.ENABLED and ws.LIMIT_BYTES == 96 * (1 << 20)
-    assert e.LIB == ""
+    assert e.LIB == "" and e._STATS["auto_selected"] is True
     assert torch.cuda.get_device_capability(0) == (7, 0)
     assert not e._NATIVE_UNAVAILABLE
     torch.manual_seed(20261113)

@@ -84,3 +84,21 @@ jobs:
               assert result.returncode != 0, "A false positive candidate escaped the gate"
               print("PASS: three-way summary and missing-call negative gate")
           PY
+
+          python - <<'PY'
+          import importlib.util, os, pathlib
+          file = pathlib.Path("benchmarks/ltx25_flash_v100/wgp_three_way_video.py").resolve()
+          for backend in ("sdpa", "1cat", "zhinianqin"):
+              os.environ["LTX25_ATTENTION_VIDEO_VARIANT"] = f"attn_{backend}_576"
+              spec = importlib.util.spec_from_file_location(f"video_{backend}", file)
+              module = importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(module)
+              expected = "off" if backend == "sdpa" else backend
+              args = module.cmd(dry_run=True)
+              assert args[args.index("--ltx25-v100-attention") + 1] == expected
+              assert "--fp16" in args and "--attention" in args and "--dry-run" in args
+              assert module.queue_seconds_from_log("Queue completed: 1/1 tasks in 1m 22s") == 82
+              assert module.queue_seconds_from_log("Queue completed: 2/2 tasks in 1h 2m 3.5s") == 3723.5
+              assert module.queue_seconds_from_log("No queue report available") is None
+          print("PASS: isolated CLI candidate selection and WanGP queue time parser")
+          PY

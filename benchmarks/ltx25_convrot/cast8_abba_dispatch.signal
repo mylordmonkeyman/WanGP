@@ -1,0 +1,1 @@
+2026-11-13: controlled 49-frame exact-reference four-run cast4/cast8/cast8/cast4 alternating wall-time. No source default change; isolated runner + immutable model checkpoints.

@@ -1,0 +1,92 @@
+name: LTX-2.5 V100 packed INT8-to-FP16 cast-width sweep
+
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths:
+      - benchmarks/ltx25_convrot/cast_width_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  cast-width:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 40
+    env:
+      LTX25_CAST_SWEEP_LIB: /tmp/libltx25_cast_width_sm70.so
+    steps:
+      - name: Checkout exact experiment source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Compile isolated SM70 conversion width variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_cast_width_sweep_sm70.cu \
+            -o "$LTX25_CAST_SWEEP_LIB"
+          test -s "$LTX25_CAST_SWEEP_LIB"
+      - name: Refuse GPU contention before any measurement
+        shell: bash
+        run: |
+          set -euo pipefail
+          owners="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader)"
+          active="$(printf '%s\n' "$owners" | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$active" ]]; then
+            printf '%s\n' "$active"
+            echo "V100 busy; refusing conversion microbench" >&2
+            exit 1
+          fi
+          nvidia-smi -L
+      - name: Benchmark nine exact INT8-to-FP16 conversion methods
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python benchmarks/ltx25_convrot/cast_width_sweep.py
+      - name: Publish isolated report
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,sys
+          from pathlib import Path
+          sys.path.insert(0,"benchmarks/ltx25_convrot")
+          from publish_phase0_status import put
+          file=Path("/cache/ltx25/results")/("cast_width_sweep_"+os.environ["GITHUB_SHA"][:12]+".json")
+          if file.exists():
+              d=json.loads(file.read_text())
+          else:
+              d={"status":"NOT_RUN","reason":"GPU busy or compile/runtime error; inspect job logs"}
+          d["run_id"]=os.environ["GITHUB_RUN_ID"]
+          d["source_sha"]=os.environ["GITHUB_SHA"]
+          d["run_url"]="https://github.com/mylordmonkeyman/WanGP/actions/runs/"+d["run_id"]
+          put("ltx25-cast-width/latest.json",d)
+          put("ltx25-cast-width/runs/"+d["run_id"]+".json",d)
+          PY
+      - name: Assert all five exact-output shape sweeps completed
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path("/cache/ltx25/results")/("cast_width_sweep_"+os.environ["GITHUB_SHA"][:12]+".json")
+          assert p.is_file(),p
+          d=json.loads(p.read_text())
+          assert d["status"]=="PASS" and len(d["shapes"])==5
+          for sh in d["shapes"]:
+              assert len(sh["variants"])==8
+              assert all(v["exact_fp16_output"] for v in sh["variants"])
+          print("SM70_CAST_WIDTH_SWEEP_PASS")
+          PY

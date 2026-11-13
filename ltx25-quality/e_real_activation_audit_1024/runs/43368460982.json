@@ -1,0 +1,701 @@
+{
+  "baked_checkpoint_root": "/opt/ltx25/checkpoints",
+  "blocker": "",
+  "candidate_counters": {
+    "fallback": 7056,
+    "mode": "fp32rot",
+    "production_eligible": false,
+    "range_fallback": 4434,
+    "range_fallback_units": "rows (device-side FP32 dot)",
+    "row_range_policy": "power_of_two_nonzero_fp16_else_fp32_dot",
+    "sizes": {
+      "15360x3840": {
+        "calls": 96,
+        "eligible_calls": 0
+      },
+      "16384x4096": {
+        "calls": 4712,
+        "eligible_calls": 4712
+      },
+      "2048x2048": {
+        "calls": 6368,
+        "eligible_calls": 1088
+      },
+      "2048x4096": {
+        "calls": 1584,
+        "eligible_calls": 1584
+      },
+      "2048x8192": {
+        "calls": 536,
+        "eligible_calls": 8
+      },
+      "3840x15360": {
+        "calls": 48,
+        "eligible_calls": 0
+      },
+      "3840x4096": {
+        "calls": 40,
+        "eligible_calls": 0
+      },
+      "3840x8192": {
+        "calls": 8,
+        "eligible_calls": 0
+      },
+      "4096x16384": {
+        "calls": 4712,
+        "eligible_calls": 4712
+      },
+      "4096x2048": {
+        "calls": 528,
+        "eligible_calls": 0
+      },
+      "4096x4096": {
+        "calls": 4256,
+        "eligible_calls": 4256
+      },
+      "8192x2048": {
+        "calls": 536,
+        "eligible_calls": 8
+      }
+    },
+    "used": 16368
+  },
+  "candidate_e_enabled": true,
+  "checkpoint_fetched_in_job": false,
+  "checkpoint_sha256_in_job": false,
+  "error": "",
+  "frames": 49,
+  "generation": {
+    "elapsed_seconds": 98.5,
+    "log_tail": "s/it]\n  [1/3] Denoising Second Phase | 41.2s / 1m 02s\n  [1/3] Denoising Second Phase | 42.3s / 1m 02s\n  [1/3] Denoising Second Phase | 43.4s / 1m 02s\n  [1/3] Denoising Second Phase | 44.4s / 1m 02s\n  [1/3] Denoising Second Phase | 45.5s / 1m 02s\n  [2/3] Denoising Second Phase | 45.8s / 54.2s \n 67%|\u2588\u2588\u2588\u2588\u2588\u2588\u258b   | 2/3 [00:16<00:07,  7.86s/it]\n                                             \nAutomatic VRAM preload of 'transformer': 64 of its 64 blocks to keep in VRAM (549 MB of activations measured)\n\n 67%|\u2588\u2588\u2588\u2588\u2588\u2588\u258b   | 2/3 [00:16<00:07,  7.86s/it]\n  [2/3] Denoising Second Phase | 46.8s / 54.2s\nLTX25_REAL_ACTIVATION_SAMPLE {\"E\": {\"max_abs\": 0.12292098999023438, \"max_normalized\": 0.006109196227043867, \"nonfinite\": 0, \"p99_abs\": 0.02802940458059311, \"p99_normalized\": 0.0033937301486730576}, \"K\": 2048, \"M\": 1024, \"N\": 2048, \"R0\": {\"max_abs\": 0.19405364990234375, \"max_normalized\": 0.047489166259765625, \"nonfinite\": 0, \"p99_abs\": 0.05262172967195511, \"p99_normalized\": 0.017897671088576317}, \"R0_leaf\": \"actual F.linear(rotated_input, qweight, bias)\", \"R1\": \"FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias\", \"call_index\": 1024, \"gate\": true, \"group\": 256, \"has_bias\": true, \"input_dtype\": \"torch.bfloat16\", \"output_dtype\": \"torch.bfloat16\", \"sample_strategy\": \"uniform_across_token_rows\", \"sampled_rows\": 16, \"shape\": \"2048x2048\", \"status\": \"PASS\"}\n\n  [2/3] Denoising Second Phase | 47.9s / 54.2s\n  [2/3] Denoising Second Phase | 49.0s / 54.2s\n  [2/3] Denoising Second Phase | 50.0s / 54.2s\n  [2/3] Denoising Second Phase | 51.0s / 54.2s\n  [3/3] VAE Decoding | 51.4s / 51.4s          \n100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:22<00:00,  6.82s/it]\n100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:22<00:00,  7.42s/it]\n\n  [0/7] VAE Decoding | 52.0s        \n[Kernels] Streamed Conv3D: pytorch (fast).\n\n  [1/7] VAE Decoding | 52.7s / 56.8s\n[Kernels] PixelNorm + SiLU: pytorch (fast).\n\n  [1/7] VAE Decoding | 1m 02s / 1m 02s\n  [7/7] VAE Decoding | 1m 02s / 1m 02s\n  [0/1] Audio VAE Decoding            \n  [0/1] Saving File 2026-11-13-0... slowly crosses the blue harbor.mp4\n  [0/1] Saving File 2026-11-13-0... slowly crosses the blue harbor.mp4\nVideo file saved to Path: /cache/ltx25/videos/e_real_activation_audit_1024/2026-11-13-04h56m29s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4\n\n\n  Task 1 completed\n\n==================================================\nQueue completed: 1/1 tasks in 1m 22s\nLTX25_REAL_ACTIVATION_SUMMARY {\"by_shape\": {\"16384x4096\": {\"errors\": 0, \"fails\": 0, \"passes\": 3, \"samples\": 3}, \"2048x2048\": {\"errors\": 0, \"fails\": 0, \"passes\": 3, \"samples\": 3}, \"2048x4096\": {\"errors\": 0, \"fails\": 0, \"passes\": 3, \"samples\": 3}, \"2048x8192\": {\"errors\": 0, \"fails\": 0, \"passes\": 1, \"samples\": 1}, \"4096x16384\": {\"errors\": 0, \"fails\": 0, \"passes\": 3, \"samples\": 3}, \"4096x4096\": {\"errors\": 0, \"fails\": 0, \"passes\": 3, \"samples\": 3}, \"8192x2048\": {\"errors\": 0, \"fails\": 0, \"passes\": 1, \"samples\": 1}}, \"calls_observed\": {\"16384x4096\": 4712, \"2048x2048\": 1088, \"2048x4096\": 1584, \"2048x8192\": 8, \"4096x16384\": 4712, \"4096x4096\": 4256, \"8192x2048\": 8}, \"candidate_e_enabled\": true, \"execution_errors\": 0, \"full_output_distribution_tested\": false, \"gate_failures\": 0, \"gate_passes\": 17, \"kind\": \"Real WanGP LTX-2.5 generation activation, sampled-row FP32 accuracy audit\", \"max_fp32_weight_rows_temporary\": 256, \"max_rows_per_sample\": 16, \"production_validated\": false, \"real_model_activations\": true, \"source_sha\": \"e8e1398a09c6d13cbaab1f418ca8d0f78fc12e23\", \"status\": \"PASS\", \"targets\": [1, 64, 1024], \"total_samples\": 17, \"utc\": \"2026-11-13T04:56:31.362183+00:00\"}\n[LTX25_CUBLAS_E] {\"fallback\": 7056, \"mode\": \"fp32rot\", \"production_eligible\": false, \"range_fallback\": 4434, \"range_fallback_units\": \"rows (device-side FP32 dot)\", \"row_range_policy\": \"power_of_two_nonzero_fp16_else_fp32_dot\", \"sizes\": {\"15360x3840\": {\"calls\": 96, \"eligible_calls\": 0}, \"16384x4096\": {\"calls\": 4712, \"eligible_calls\": 4712}, \"2048x2048\": {\"calls\": 6368, \"eligible_calls\": 1088}, \"2048x4096\": {\"calls\": 1584, \"eligible_calls\": 1584}, \"2048x8192\": {\"calls\": 536, \"eligible_calls\": 8}, \"3840x15360\": {\"calls\": 48, \"eligible_calls\": 0}, \"3840x4096\": {\"calls\": 40, \"eligible_calls\": 0}, \"3840x8192\": {\"calls\": 8, \"eligible_calls\": 0}, \"4096x16384\": {\"calls\": 4712, \"eligible_calls\": 4712}, \"4096x2048\": {\"calls\": 528, \"eligible_calls\": 0}, \"4096x4096\": {\"calls\": 4256, \"eligible_calls\": 4256}, \"8192x2048\": {\"calls\": 536, \"eligible_calls\": 8}}, \"used\": 16368}\n",
+    "returncode": 0
+  },
+  "gpu_preflight": {
+    "busy": false,
+    "entries": [],
+    "reason": ""
+  },
+  "model_type": "ltx2_25_22B_distilled",
+  "note": "INSTRUMENTED REAL MODEL ACTIVATIONS: R0/R1/Candidate E comparisons synchronize and add expensive FP32 work; the recorded generation time MUST NOT be compared to normal runtime performance. Only sampled activation rows are checked; visual review and broader per-shape sampling remain required.",
+  "num_inference_steps": 8,
+  "production_eligible": false,
+  "real_activation_audit": {
+    "by_shape": {
+      "16384x4096": {
+        "errors": 0,
+        "fails": 0,
+        "passes": 3,
+        "samples": 3
+      },
+      "2048x2048": {
+        "errors": 0,
+        "fails": 0,
+        "passes": 3,
+        "samples": 3
+      },
+      "2048x4096": {
+        "errors": 0,
+        "fails": 0,
+        "passes": 3,
+        "samples": 3
+      },
+      "2048x8192": {
+        "errors": 0,
+        "fails": 0,
+        "passes": 1,
+        "samples": 1
+      },
+      "4096x16384": {
+        "errors": 0,
+        "fails": 0,
+        "passes": 3,
+        "samples": 3
+      },
+      "4096x4096": {
+        "errors": 0,
+        "fails": 0,
+        "passes": 3,
+        "samples": 3
+      },
+      "8192x2048": {
+        "errors": 0,
+        "fails": 0,
+        "passes": 1,
+        "samples": 1
+      }
+    },
+    "calls_observed": {
+      "16384x4096": 4712,
+      "2048x2048": 1088,
+      "2048x4096": 1584,
+      "2048x8192": 8,
+      "4096x16384": 4712,
+      "4096x4096": 4256,
+      "8192x2048": 8
+    },
+    "candidate_e_enabled": true,
+    "execution_errors": 0,
+    "full_output_distribution_tested": false,
+    "gate_failures": 0,
+    "gate_passes": 17,
+    "kind": "Real WanGP LTX-2.5 generation activation, sampled-row FP32 accuracy audit",
+    "max_fp32_weight_rows_temporary": 256,
+    "max_rows_per_sample": 16,
+    "production_validated": false,
+    "real_model_activations": true,
+    "samples": [
+      {
+        "E": {
+          "max_abs": 0.03141975402832031,
+          "max_normalized": 0.0042129019275307655,
+          "nonfinite": 0,
+          "p99_abs": 0.012346869334578514,
+          "p99_normalized": 0.0033868029713630676
+        },
+        "K": 4096,
+        "M": 1024,
+        "N": 4096,
+        "R0": {
+          "max_abs": 0.07291889190673828,
+          "max_normalized": 0.014648647047579288,
+          "nonfinite": 0,
+          "p99_abs": 0.019800208508968353,
+          "p99_normalized": 0.00789174996316433
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 1,
+        "gate": true,
+        "group": 256,
+        "has_bias": true,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "4096x4096",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.04176521301269531,
+          "max_normalized": 0.004164801444858313,
+          "nonfinite": 0,
+          "p99_abs": 0.017801985144615173,
+          "p99_normalized": 0.0034600212238729
+        },
+        "K": 4096,
+        "M": 1024,
+        "N": 16384,
+        "R0": {
+          "max_abs": 0.08257484436035156,
+          "max_normalized": 0.013248657807707787,
+          "nonfinite": 0,
+          "p99_abs": 0.03429359197616577,
+          "p99_normalized": 0.007215831428766251
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 1,
+        "gate": true,
+        "group": 256,
+        "has_bias": true,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "16384x4096",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 1.000091552734375,
+          "max_normalized": 0.004193764179944992,
+          "nonfinite": 0,
+          "p99_abs": 0.32989048957824707,
+          "p99_normalized": 0.003152039833366871
+        },
+        "K": 16384,
+        "M": 1024,
+        "N": 4096,
+        "R0": {
+          "max_abs": 1.664337158203125,
+          "max_normalized": 0.02264741063117981,
+          "nonfinite": 0,
+          "p99_abs": 0.41153684258461,
+          "p99_normalized": 0.005263797007501125
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 1,
+        "gate": true,
+        "group": 256,
+        "has_bias": true,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "4096x16384",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.03000926971435547,
+          "max_normalized": 0.004169332329183817,
+          "nonfinite": 0,
+          "p99_abs": 0.009437356144189835,
+          "p99_normalized": 0.003339931135997176
+        },
+        "K": 2048,
+        "M": 1024,
+        "N": 2048,
+        "R0": {
+          "max_abs": 0.07753181457519531,
+          "max_normalized": 0.013324379920959473,
+          "nonfinite": 0,
+          "p99_abs": 0.018545567989349365,
+          "p99_normalized": 0.008064303547143936
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 1,
+        "gate": true,
+        "group": 256,
+        "has_bias": true,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "2048x2048",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.025903701782226562,
+          "max_normalized": 0.004111700225621462,
+          "nonfinite": 0,
+          "p99_abs": 0.01455443724989891,
+          "p99_normalized": 0.00345594878308475
+        },
+        "K": 2048,
+        "M": 1024,
+        "N": 8192,
+        "R0": {
+          "max_abs": 0.05071735382080078,
+          "max_normalized": 0.011590851470828056,
+          "nonfinite": 0,
+          "p99_abs": 0.029370829463005066,
+          "p99_normalized": 0.007278068456798792
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 1,
+        "gate": true,
+        "group": 256,
+        "has_bias": true,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "8192x2048",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.009076595306396484,
+          "max_normalized": 0.0038495680782943964,
+          "nonfinite": 0,
+          "p99_abs": 0.003331054700538516,
+          "p99_normalized": 0.0023844160605221987
+        },
+        "K": 8192,
+        "M": 1024,
+        "N": 2048,
+        "R0": {
+          "max_abs": 0.024782657623291016,
+          "max_normalized": 0.00997831765562296,
+          "nonfinite": 0,
+          "p99_abs": 0.0055314842611551285,
+          "p99_normalized": 0.004344081971794367
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 1,
+        "gate": true,
+        "group": 256,
+        "has_bias": true,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "2048x8192",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.24939727783203125,
+          "max_normalized": 0.008171319961547852,
+          "nonfinite": 0,
+          "p99_abs": 0.06816674768924713,
+          "p99_normalized": 0.0035048681311309338
+        },
+        "K": 4096,
+        "M": 1008,
+        "N": 2048,
+        "R0": {
+          "max_abs": 0.6630325317382812,
+          "max_normalized": 0.0738527774810791,
+          "nonfinite": 0,
+          "p99_abs": 0.11983796954154968,
+          "p99_normalized": 0.013529432006180286
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 1,
+        "gate": true,
+        "group": 256,
+        "has_bias": true,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "2048x4096",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.0016502737998962402,
+          "max_normalized": 0.0016502737998962402,
+          "nonfinite": 0,
+          "p99_abs": 0.00025007850490510464,
+          "p99_normalized": 0.00025007850490510464
+        },
+        "K": 4096,
+        "M": 1008,
+        "N": 4096,
+        "R0": {
+          "max_abs": 0.0016502737998962402,
+          "max_normalized": 0.0016502737998962402,
+          "nonfinite": 0,
+          "p99_abs": 0.0002586939081083983,
+          "p99_normalized": 0.0002586939081083983
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 64,
+        "gate": true,
+        "group": 256,
+        "has_bias": true,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "4096x4096",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.015871524810791016,
+          "max_normalized": 0.00400605658069253,
+          "nonfinite": 0,
+          "p99_abs": 0.014758862555027008,
+          "p99_normalized": 0.003534147050231695
+        },
+        "K": 4096,
+        "M": 144,
+        "N": 16384,
+        "R0": {
+          "max_abs": 0.036086082458496094,
+          "max_normalized": 0.009402614086866379,
+          "nonfinite": 0,
+          "p99_abs": 0.022290781140327454,
+          "p99_normalized": 0.005546980071812868
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 64,
+        "gate": true,
+        "group": 256,
+        "has_bias": false,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "16384x4096",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.015390396118164062,
+          "max_normalized": 0.004009829368442297,
+          "nonfinite": 0,
+          "p99_abs": 0.0038823201321065426,
+          "p99_normalized": 0.0031030236277729273
+        },
+        "K": 16384,
+        "M": 144,
+        "N": 4096,
+        "R0": {
+          "max_abs": 0.02284383773803711,
+          "max_normalized": 0.008556080982089043,
+          "nonfinite": 0,
+          "p99_abs": 0.006622542627155781,
+          "p99_normalized": 0.004669943358749151
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 64,
+        "gate": true,
+        "group": 256,
+        "has_bias": false,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "4096x16384",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.108734130859375,
+          "max_normalized": 0.005656921770423651,
+          "nonfinite": 0,
+          "p99_abs": 0.027289962396025658,
+          "p99_normalized": 0.0033985846675932407
+        },
+        "K": 2048,
+        "M": 1024,
+        "N": 2048,
+        "R0": {
+          "max_abs": 0.23376846313476562,
+          "max_normalized": 0.04446667432785034,
+          "nonfinite": 0,
+          "p99_abs": 0.051441289484500885,
+          "p99_normalized": 0.017903193831443787
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 64,
+        "gate": true,
+        "group": 256,
+        "has_bias": true,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "2048x2048",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.2336578369140625,
+          "max_normalized": 0.007947444915771484,
+          "nonfinite": 0,
+          "p99_abs": 0.08426658809185028,
+          "p99_normalized": 0.003792870556935668
+        },
+        "K": 4096,
+        "M": 1008,
+        "N": 2048,
+        "R0": {
+          "max_abs": 0.661712646484375,
+          "max_normalized": 0.07644546031951904,
+          "nonfinite": 0,
+          "p99_abs": 0.1462315320968628,
+          "p99_normalized": 0.028521280735731125
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 64,
+        "gate": true,
+        "group": 256,
+        "has_bias": true,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "2048x4096",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.12258529663085938,
+          "max_normalized": 0.003879325231537223,
+          "nonfinite": 0,
+          "p99_abs": 0.00360043253749609,
+          "p99_normalized": 0.0023254500702023506
+        },
+        "K": 4096,
+        "M": 1008,
+        "N": 4096,
+        "R0": {
+          "max_abs": 0.12258529663085938,
+          "max_normalized": 0.01669156551361084,
+          "nonfinite": 0,
+          "p99_abs": 0.00802404060959816,
+          "p99_normalized": 0.005651355255395174
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 1024,
+        "gate": true,
+        "group": 256,
+        "has_bias": true,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "4096x4096",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.015613079071044922,
+          "max_normalized": 0.0039450544863939285,
+          "nonfinite": 0,
+          "p99_abs": 0.0076982975006103516,
+          "p99_normalized": 0.0034040198661386967
+        },
+        "K": 4096,
+        "M": 144,
+        "N": 16384,
+        "R0": {
+          "max_abs": 0.026767253875732422,
+          "max_normalized": 0.007973597384989262,
+          "nonfinite": 0,
+          "p99_abs": 0.014202732592821121,
+          "p99_normalized": 0.005558999255299568
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 1024,
+        "gate": true,
+        "group": 256,
+        "has_bias": false,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "16384x4096",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.11637115478515625,
+          "max_normalized": 0.004043301567435265,
+          "nonfinite": 0,
+          "p99_abs": 0.019284997135400772,
+          "p99_normalized": 0.003407341195270419
+        },
+        "K": 16384,
+        "M": 144,
+        "N": 4096,
+        "R0": {
+          "max_abs": 0.1680145263671875,
+          "max_normalized": 0.011707305908203125,
+          "nonfinite": 0,
+          "p99_abs": 0.027173954993486404,
+          "p99_normalized": 0.005592696368694305
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 1024,
+        "gate": true,
+        "group": 256,
+        "has_bias": false,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "4096x16384",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.4824066162109375,
+          "max_normalized": 0.005028599873185158,
+          "nonfinite": 0,
+          "p99_abs": 0.0547107569873333,
+          "p99_normalized": 0.003427565563470125
+        },
+        "K": 4096,
+        "M": 1008,
+        "N": 2048,
+        "R0": {
+          "max_abs": 0.7446136474609375,
+          "max_normalized": 0.04822671413421631,
+          "nonfinite": 0,
+          "p99_abs": 0.0903066024184227,
+          "p99_normalized": 0.011970519088208675
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 1024,
+        "gate": true,
+        "group": 256,
+        "has_bias": true,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "2048x4096",
+        "status": "PASS"
+      },
+      {
+        "E": {
+          "max_abs": 0.12292098999023438,
+          "max_normalized": 0.006109196227043867,
+          "nonfinite": 0,
+          "p99_abs": 0.02802940458059311,
+          "p99_normalized": 0.0033937301486730576
+        },
+        "K": 2048,
+        "M": 1024,
+        "N": 2048,
+        "R0": {
+          "max_abs": 0.19405364990234375,
+          "max_normalized": 0.047489166259765625,
+          "nonfinite": 0,
+          "p99_abs": 0.05262172967195511,
+          "p99_normalized": 0.017897671088576317
+        },
+        "R0_leaf": "actual F.linear(rotated_input, qweight, bias)",
+        "R1": "FP32 rotation x original INT8 q FP32 GEMM x original FP32 scale + FP32 bias",
+        "call_index": 1024,
+        "gate": true,
+        "group": 256,
+        "has_bias": true,
+        "input_dtype": "torch.bfloat16",
+        "output_dtype": "torch.bfloat16",
+        "sample_strategy": "uniform_across_token_rows",
+        "sampled_rows": 16,
+        "shape": "2048x2048",
+        "status": "PASS"
+      }
+    ],
+    "source_sha": "e8e1398a09c6d13cbaab1f418ca8d0f78fc12e23",
+    "status": "PASS",
+    "targets": [
+      1,
+      64,
+      1024
+    ],
+    "total_samples": 17,
+    "utc": "2026-11-13T04:56:31.362183+00:00"
+  },
+  "resolution": "1024x576",
+  "run_id": "43368460982",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43368460982",
+  "runtime_bootstrap_status": "PASS",
+  "seed": 20261112,
+  "source_sha": "e8e1398a09c6d13cbaab1f418ca8d0f78fc12e23",
+  "status": "PASS",
+  "variant": "e_real_activation_audit_1024",
+  "videos": [
+    {
+      "filename": "2026-11-13-04h56m29s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "path": "/cache/ltx25/videos/e_real_activation_audit_1024/2026-11-13-04h56m29s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "size_bytes": 3056874
+    }
+  ],
+  "workflow_status": "success"
+}

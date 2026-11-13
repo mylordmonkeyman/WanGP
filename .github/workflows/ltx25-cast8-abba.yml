@@ -1,0 +1,146 @@
+name: LTX-2.5 V100 vector4 versus vector8 49-frame ABBA timing
+
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths:
+      - benchmarks/ltx25_convrot/cast8_abba_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  timed-abba:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 35
+    env:
+      LTX25_CUBLAS_E_LIB: /tmp/libltx25_cast8_abba.so
+      LTX25_CHECKPOINT_ROOT: /opt/ltx25/checkpoints
+      WAN2GP_LTX25_CUBLAS_E_MODE: fp32rot
+    steps:
+      - name: Checkout exact source under test
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Guard GPU and verify immutable baked checkpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          active="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader |
+            grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$active" ]]; then
+            echo "$active"
+            echo "V100 is busy, refusing measured ABBA run" >&2
+            exit 1
+          fi
+          test -f /opt/ltx25/model-image-manifest.json
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/runtime_validate_baked.py
+      - name: Compile unchanged Candidate E plus opt-in exact vector8 cast
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_cublas_e.cu \
+            -lcublas -o "$LTX25_CUBLAS_E_LIB"
+          test -s "$LTX25_CUBLAS_E_LIB"
+      - name: Generate A-B-B-A matched 49-frame videos and exact decoded gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          JSONL="/cache/ltx25/results/cast8_abba_${GITHUB_SHA:0:12}.jsonl"
+          rm -f "$JSONL"
+          for variant in e_cast4_1024 e_cast8_1024 e_cast8_1024 e_cast4_1024; do
+            case "$variant" in
+              e_cast4_1024) kind=vector4; suffix=quality_cast4 ;;
+              e_cast8_1024) kind=vector8; suffix=quality_cast8 ;;
+            esac
+            echo "Starting ABBA round for $variant"
+            LTX25_BENCH_VARIANT="$variant" \
+              /opt/venvs/ltx25-cu128/bin/python \
+                benchmarks/ltx25_convrot/wgp_baseline.py
+            LTX25_BENCH_VARIANT="$variant" \
+              /opt/venvs/ltx25-cu128/bin/python \
+                benchmarks/ltx25_convrot/workspace_video_gate.py
+            EXPERIMENT_VARIANT="$variant" EXPERIMENT_KIND="$kind" \
+              EXPERIMENT_SUFFIX="$suffix" EXPERIMENT_JSONL="$JSONL" \
+              /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+          import json,os
+          from pathlib import Path
+          sha=os.environ["GITHUB_SHA"][:12]
+          r=json.loads((Path("/cache/ltx25/results")/f"runtime_{os.environ['EXPERIMENT_SUFFIX']}_{sha}.json").read_text())
+          counters=r.get("candidate_counters") or {}
+          gate=r.get("cast8_video_gate") or r.get("cast4_video_gate") or {}
+          assert r.get("status")=="PASS",r.get("blocker",r.get("status"))
+          assert counters.get("cast_mode")==os.environ["EXPERIMENT_KIND"],counters
+          assert counters.get("rotation_mode")=="torch",counters
+          assert counters.get("used")==16368,counters
+          assert r.get("workspace_stats",{}).get("persistent_weight_copies")==0
+          assert gate.get("decoded_pixels_identical") is True
+          assert gate.get("total_frames")==49
+          row={
+              "variant":os.environ["EXPERIMENT_KIND"],
+              "generation_seconds":r["generation"]["elapsed_seconds"],
+              "correct_49_frames":True,
+              "candidate_used":counters["used"],
+              "native_fallback":counters.get("auto_native_fallback",0)
+          }
+          with open(os.environ["EXPERIMENT_JSONL"],"a") as fd:
+              fd.write(json.dumps(row)+"\n")
+          print("LTX25_CAST8_ABBA_ROUND "+json.dumps(row,sort_keys=True),flush=True)
+          PY
+          done
+      - name: Summarize paired A-B-B-A walltime and quality
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+          import json,os,statistics
+          from pathlib import Path
+          root=Path("/cache/ltx25/results")
+          sha=os.environ["GITHUB_SHA"][:12]
+          rows=[json.loads(x) for x in (root/f"cast8_abba_{sha}.jsonl").read_text().splitlines() if x.strip()]
+          assert [x["variant"] for x in rows]==["vector4","vector8","vector8","vector4"],rows
+          assert all(x["correct_49_frames"] for x in rows)
+          a=statistics.median(x["generation_seconds"] for x in rows if x["variant"]=="vector4")
+          b=statistics.median(x["generation_seconds"] for x in rows if x["variant"]=="vector8")
+          report={
+            "status":"PASS","kind":"controlled 49-frame V100 ConvRot cast A-B-B-A",
+            "source_sha":os.environ["GITHUB_SHA"],"run_id":os.environ["GITHUB_RUN_ID"],
+            "synthetic_only":False,"production_eligible":False,
+            "same_prompt_seed_steps_resolution":True,
+            "cast4_median_seconds":round(a,3),"cast8_median_seconds":round(b,3),
+            "cast8_seconds_saved":round(a-b,3),
+            "cast8_speedup":round(a/b,5),
+            "all_videos_decoded_pixel_identical_to_torch_reference":True,
+            "rows":rows,
+          }
+          (root/f"cast8_abba_{sha}.json").write_text(json.dumps(report,indent=2)+"\n")
+          print("LTX25_CAST8_ABBA_SUMMARY "+json.dumps(report,sort_keys=True),flush=True)
+          PY
+      - name: Publish controlled comparison results
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,sys
+          from pathlib import Path
+          sys.path.insert(0,"benchmarks/ltx25_convrot")
+          from publish_phase0_status import put
+          p=Path("/cache/ltx25/results")/("cast8_abba_"+os.environ["GITHUB_SHA"][:12]+".json")
+          d=json.loads(p.read_text()) if p.exists() else {
+             "status":"NOT_RUN","reason":"Benchmark aborted, inspect workflow logs"}
+          d["run_id"]=os.environ["GITHUB_RUN_ID"]
+          d["source_sha"]=os.environ["GITHUB_SHA"]
+          d["run_url"]="https://github.com/mylordmonkeyman/WanGP/actions/runs/"+d["run_id"]
+          put("ltx25-cast8-abba/latest.json",d)
+          put("ltx25-cast8-abba/runs/"+d["run_id"]+".json",d)
+          PY

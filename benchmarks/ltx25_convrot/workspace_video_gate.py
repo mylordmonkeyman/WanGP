@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Strict decoded-frame comparison against the validated no-sync Candidate E.
+"""Decoded-frame diagnostic and strict equality gate for LTX-2.5 V100.
 
-Runs after selected default/experimental E variants generate a video. All 49
-frames are decoded as yuv420p by the same ffmpeg command. A difference is
-recorded as a failed gate, never silently classified as visually equivalent.
-
-This script does not create a video, download models, or use CUDA.
+All 49 frames are decoded as yuv420p using the same ffmpeg command.
+Only historical torch/exact variants require pixel equality. The user-approved
+radix4 Hadamard accumulation legitimately changes decoded pixels; for those
+variants, record the mismatch count without treating it as a generation error.
+A passing non-strict gate means valid/complete decoding, NOT verified quality.
+This script does not create video, download models, or use CUDA.
 """
 from __future__ import annotations
 
@@ -57,10 +58,13 @@ def main():
     if variant not in variants:
         raise ValueError(f"Unsupported decoded video gate variant {variant!r}")
     suffix, gate_key = variants[variant]
+    strict_equality = variant not in ("e_default_1024", "e_hadamard_1024")
     current = BASE / f"runtime_{suffix}_{sha}.json"
     video, report = video_from(current)
     gate = {"status": "ERROR", "reference_report": str(REFERENCE_REPORT),
-            "comparison": "49 decoded yuv420p frames, exact equality",
+            "comparison": "49 decoded yuv420p frames, reference equality diagnostic",
+            "strict_equality_required": strict_equality,
+            "quality_assessment": "visual review required for nonidentical frames",
             "new_video": str(video)}
     try:
         reference, _ = video_from(REFERENCE_REPORT)
@@ -70,7 +74,7 @@ def main():
             ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
         a, b = hashes(ffmpeg, reference), hashes(ffmpeg, video)
         mismatches = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
-        gate.update(status="PASS" if not mismatches else "FAIL",
+        gate.update(status="PASS" if (not strict_equality or not mismatches) else "FAIL",
                     total_frames=49, mismatched_frames=len(mismatches),
                     first_mismatch=mismatches[:10],
                     decoded_pixels_identical=not mismatches)
@@ -79,7 +83,7 @@ def main():
     report[gate_key] = gate
     if gate["status"] != "PASS":
         report["status"] = "DECODED_VIDEO_MISMATCH"
-        report["blocker"] = "Decoded experimental video differs from validated no-sync Candidate E"
+        report["blocker"] = "Video decode failed or strict decoded equality test did not pass"
     current.write_text(json.dumps(report, indent=2) + "\n")
     print("LTX25_DECODED_VIDEO_GATE " + json.dumps({
         "variant": variant, **gate}, sort_keys=True), flush=True)

@@ -1,0 +1,1 @@
+CPU-only preflight authorized: video CLI flags and queue-duration parser. This path never starts a V100 runner.

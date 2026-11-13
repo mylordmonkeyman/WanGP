@@ -10,3 +10,4 @@ Reason: first video run generated all clips but candidate calls were zero; mark 
 
 Dispatch: retry-video-fix-literal-newline-transformer-1457d68-20261113T1118Z
 Reason: retry run 43399547931 failed baked import with IndentationError at transformer.py:107 caused by literal backslash-n in candidate marking. Fixed source and added transformer compile preflight.
+retry-video-unescape-active-override-3344672-20261113T1220Z

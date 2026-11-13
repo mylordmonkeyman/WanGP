@@ -38,6 +38,8 @@ jobs:
             benchmarks/ltx25_convrot/default_auto_preflight.py \
             shared/qtypes/int8_convrot.py \
             benchmarks/ltx25_convrot/cast_microbench.py \
+            benchmarks/ltx25_convrot/hadamard_microbench.py \
+            benchmarks/ltx25_convrot/publish_hadamard_microbench.py \
             benchmarks/ltx25_convrot/publish_cast_microbench.py \
             benchmarks/ltx25_convrot/wgp_baseline.py \
             benchmarks/ltx25_convrot/publish_quality_status.py

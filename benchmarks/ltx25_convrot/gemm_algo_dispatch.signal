@@ -1,2 +1,2 @@
 2026-11-13
-Run exact FP32-output cuBLAS Tensor-Op algorithm sweep on single V100, four synthetic checkpoint-realistic matrix shapes, 30 CUDA event trials; do not modify inference defaults or run concurrently with another GPU owner.
+Repeat exact FP32 output cuBLAS sweep on 8 realistic SM70 shapes, covering live model M=64,144,1024 for both large N/K directions. Need bit exactness and speed before integrating; no default change.

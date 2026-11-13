@@ -1,0 +1,2 @@
+2026-11-13
+V100 idle after successful workspace equivalence run. Benchmark PyTorch int8->FP16 against standalone scalar and vector4 CUDA conversions. No production integration.

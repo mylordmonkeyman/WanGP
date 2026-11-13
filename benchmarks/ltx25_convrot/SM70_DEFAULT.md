@@ -10,7 +10,7 @@ changes to an existing server checkout or affect other Git branches.
 | Setting | Value with no environment override | Override |
 |---|---|---|
 | `WAN2GP_LTX25_CUBLAS_E_MODE` | `fp32rot` (set at WanGP startup) | `off` disables the adapter entirely; explicit `fp32rot` is strict; `auto` is normalized to the validated `fp32rot` selector |
-| `WAN2GP_LTX25_E_CAST` | `vector4` | `torch` restores PyTorch INT8-to-FP16 conversion within Candidate E |
+| `WAN2GP_LTX25_E_CAST` | `vector4` | `vector8` opts into exact packed-eight conversion (pilot); `torch` restores PyTorch INT8-to-FP16 conversion within Candidate E |
 | `WAN2GP_LTX25_HADAMARD` | `radix4` | `torch` restores the historical FP32 H256 rotation; `flat_mm` is a separately tested torch.mm alternative |
 | `WAN2GP_LTX25_E_WORKSPACE` | `1` | `0` disables the reusable activation/output workspace |
 | `LTX25_E_WORKSPACE_MAX_MIB` | `96` | Clamp persistent workspace limit up to 256 MiB |
@@ -182,3 +182,41 @@ generation test must still pass numerical preflights, create a complete
 decodable video, use the expected optimized linears, and respect bounded
 workspace/no-persistent-weight-copy constraints. Pixel mismatch must not be
 misrepresented as either exact equality or an automatic quality regression.
+
+### Opt-in packed-vector8 INT8-to-FP16 cast pilot (not default)
+
+A synthetic Tesla V100 SM70 five-shape CUDA-event sweep compared the current
+validated vector4 weight-conversion kernel with aligned packed8 and packed16
+loads/stores. The packed8/256 variant converted the *same signed INT8 weights*
+to the *same FP16 bits* and improved isolated conversion throughput by
+approximately 1.29× (2048×2048), 1.43× (2048×4096), 1.47× (4096×4096),
+and 1.51× (both 64 Mi-element shapes). Packed16 was slower. The best launch
+geometry varied marginally between 128/256/512 threads; 256 is the practical
+candidate. Results: GitHub Actions run
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43509629041 .
+
+Experimental invocation, on a freshly started WanGP process with the revised
+native extension:
+
+```bash
+export WAN2GP_LTX25_E_CAST=vector8
+```
+
+No persistent FP16 master weight is introduced. The exact original INT8
+checkpoint remains authoritative, the cast output is transient, and the
+BF16 activation path outside eligible linears is unchanged. The V100
+complete-adapter BF16/FP16 numerical preflight passed, and a 49-frame
+1024×576 torch-H256 video matched all 49 decoded frames of the strict
+reference (https://github.com/mylordmonkeyman/WanGP/actions/runs/43510285511).
+The isolated conversion speedup **does not guarantee any full-generation
+gain**: a single vector8 video took 98.4 seconds versus 95.8 seconds in
+an earlier non-paired vector4 run, so generation-order/clock/host variance
+is unresolved. An independent A–B–B–A workflow
+`ltx25-cast8-abba.yml` is provided to measure end-to-end gains.
+Only promote to default if controlled generation benchmarking supports it.
+
+Restore validated weight conversion without disabling radix-4:
+
+```bash
+export WAN2GP_LTX25_E_CAST=vector4
+```

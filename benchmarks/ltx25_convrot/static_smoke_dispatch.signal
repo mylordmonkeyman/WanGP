@@ -1,2 +1,2 @@
 2026-11-13
-Validate flat torch.mm FP32 Hadamard H256 opt-in preflight and video exact gate syntax. Default remains unchanged.
+CPU-only verify V100 shape-gated cuBLAS Algo2 opt-in and exact preflight syntax. Confirm old default remains CUBLAS_GEMM_DEFAULT_TENSOR_OP.

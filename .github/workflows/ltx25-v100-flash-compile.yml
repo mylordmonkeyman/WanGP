@@ -1,0 +1,60 @@
+name: LTX-2.5 SM70 dual FlashAttention compile probe
+
+# Runs only when an explicit compile_dispatch.signal is committed to the
+# experimental branch, or when manually dispatched. Other pushes are inert.
+on:
+  push:
+    branches:
+      - perf/ltx25-v100-flash-attn-dual
+    paths:
+      - benchmarks/ltx25_flash_v100/compile_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ltx25-v100-flash-compile-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  compile-and-smoke:
+    name: Build and import 1Cat + zhinianqin on V100 (isolated temp)
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 120
+    env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout exact WanGP source commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate checkout and compile Python adapters (no model load)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          /opt/venvs/ltx25-cu128/bin/python -m py_compile \
+            shared/ltx25_v100_attention.py \
+            shared/attention.py \
+            models/ltx2/ltx2.py \
+            models/ltx2/ltx_core/model/transformer/attention.py \
+            benchmarks/ltx25_flash_v100/compile_smoke.py
+
+      - name: Compile both pinned external CUDA extensions and run FP16 smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash benchmarks/ltx25_flash_v100/compile_on_runner.sh
+
+      - name: Upload compile logs (even when build fails)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ltx25-sm70-flash-compile-${{ github.run_id }}
+          path: ${{ runner.temp }}/ltx25-flash-v100-compile/logs/
+          retention-days: 7
+          if-no-files-found: warn

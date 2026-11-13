@@ -56,7 +56,7 @@ IS_ALGO2 = VARIANT == "e_algo2_1024"
 IS_DEBUG_EXPLICIT = VARIANT == "e_debug_fp32rot_samecfg_1024"
 if not IS_DEFAULT and IS_CANDIDATE != (os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").lower() == "fp32rot"):
     raise ValueError("Candidate mode and selected benchmark variant disagree")
-CFG = BASE / ("config-e_default_1024" if IS_DEBUG_EXPLICIT else f"config-{VARIANT}")
+CFG = BASE / ("config-e_default_1024" if (IS_DEBUG_EXPLICIT or IS_ALGO2) else f"config-{VARIANT}")
 VIDEOS = BASE / "videos" / VARIANT
 PARAMS = BASE / f"{VARIANT}_49frame_settings.json"
 SRC = Path(os.environ.get("LTX25_CHECKPOINT_ROOT", "/opt/ltx25/checkpoints"))
@@ -87,13 +87,16 @@ def run(cmd, timeout, log_path):
     # Keep all legacy exact-reference comparisons on their historically
     # validated torch H256, now that radix4 is the no-override default.
     # The promoted default and experimental Hadamard variants exercise radix4.
-    if IS_CANDIDATE and not (IS_DEFAULT or IS_HADAMARD or IS_FLAT_MM):
+    if IS_CANDIDATE and not (IS_DEFAULT or IS_HADAMARD or IS_FLAT_MM or IS_ALGO2):
         env["WAN2GP_LTX25_HADAMARD"] = "torch"
     if IS_HADAMARD:
         env["WAN2GP_LTX25_HADAMARD"] = "radix4"
     if IS_FLAT_MM:
         env["WAN2GP_LTX25_HADAMARD"] = "flat_mm"
     if IS_ALGO2:
+        # Compare Algo2 only against the current radix4 + vector8 defaults.
+        env["WAN2GP_LTX25_HADAMARD"] = "radix4"
+        env["WAN2GP_LTX25_E_CAST"] = "vector8"
         env["WAN2GP_LTX25_GEMM_TUNE"] = "algo2_m64"
     if IS_DEBUG_EXPLICIT:
         # Diagnostic: same e_default config and default cast/workspace, but
@@ -337,7 +340,7 @@ def main():
             counters = report.get("candidate_counters", {})
             if (counters.get("mode") != "fp32rot" or
                     counters.get("auto_selected") is not True or
-                    counters.get("cast_mode") != "vector4" or
+                    counters.get("cast_mode") != "vector8" or
                     counters.get("rotation_mode") != "radix4" or
                     counters.get("gemm_tune") != "off" or
                     counters.get("used", 0) != 16368 or

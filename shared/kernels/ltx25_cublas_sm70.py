@@ -28,6 +28,7 @@ import torch
 MODE = os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").strip().lower()
 REAL_ACTIVATION_AUDIT = os.environ.get("WAN2GP_LTX25_REAL_ACTIVATION_AUDIT", "") == "1"
 PROFILE_STAGES = os.environ.get("WAN2GP_LTX25_PROFILE_STAGES", "") == "1"
+USE_WORKSPACE = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "") == "1"
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
 WEIGHT_CAP = 128 * 1024 * 1024
 # Synthetic checkpoint-backed FP32-rotation gate passed these shapes.
@@ -137,47 +138,61 @@ def maybe_linear(x, weight, bias, group):
     x32 = _rotate_activation(x.float(), group).reshape(m, k).contiguous()
     if PROFILE_STAGES:
         profiler.mark(profile, "rotation")
-    x16 = torch.empty((m, k), dtype=torch.float16, device=x.device)
-    exponents = torch.empty((m,), dtype=torch.int32, device=x.device)
-    slow_rows = torch.empty((m,), dtype=torch.int32, device=x.device)
-    c32 = torch.empty((m, n), dtype=torch.float32, device=x.device)
     scale32 = scale.reshape(n).contiguous()
     bias32 = None if bias is None else bias.float().reshape(n).contiguous()
     bad_rows = _bad_row_counter(x.device)
+    lease = None
+    if USE_WORKSPACE:
+        from shared.kernels import ltx25_workspace_sm70
+        lease = ltx25_workspace_sm70.try_acquire(
+            m, n, k, x.device, torch.cuda.current_stream(x.device))
+    if lease is not None:
+        x16, exponents, slow_rows, c32 = (
+            lease.x16, lease.exponents, lease.slow_rows, lease.c32)
+    else:
+        x16 = torch.empty((m, k), dtype=torch.float16, device=x.device)
+        exponents = torch.empty((m,), dtype=torch.int32, device=x.device)
+        slow_rows = torch.empty((m,), dtype=torch.int32, device=x.device)
+        c32 = torch.empty((m, n), dtype=torch.float32, device=x.device)
     if PROFILE_STAGES:
         profiler.mark(profile, "alloc")
-    w16 = q.to(torch.float16)  # Exact INT8 -> FP16, transient and bounded.
-    if PROFILE_STAGES:
-        profiler.mark(profile, "weight_cast")
+    try:
+        w16 = q.to(torch.float16)  # Exact INT8 -> FP16, transient and bounded.
+        if PROFILE_STAGES:
+            profiler.mark(profile, "weight_cast")
 
-    dll, gemm, prepare, finish = _fn()
-    ptr = ctypes.c_void_p
-    stream = ptr(torch.cuda.current_stream(x.device).cuda_stream)
-    status = prepare(ptr(x32.data_ptr()), ptr(x16.data_ptr()),
-                     ptr(exponents.data_ptr()), ptr(slow_rows.data_ptr()),
-                     ptr(bad_rows.data_ptr()), m, k, stream)
-    if status:
-        raise RuntimeError(f"Candidate E row prepare failed, status={status}, N={n}, M={m}, K={k}")
-    if PROFILE_STAGES:
-        profiler.mark(profile, "prepare")
-    status = gemm(ptr(w16.data_ptr()), ptr(x16.data_ptr()),
-                  ptr(c32.data_ptr()), n, m, k, stream)
-    if status:
-        raise RuntimeError(f"Candidate E cuBLAS GEMM failed, status={status}, N={n}, M={m}, K={k}")
-    if PROFILE_STAGES:
-        profiler.mark(profile, "gemm")
-    status = finish(ptr(c32.data_ptr()), ptr(x32.data_ptr()), ptr(q.data_ptr()),
-                    ptr(scale32.data_ptr()),
-                    ptr(0 if bias32 is None else bias32.data_ptr()),
-                    ptr(exponents.data_ptr()), ptr(slow_rows.data_ptr()),
-                    m, n, k, stream)
-    if status:
-        raise RuntimeError(f"Candidate E FP32 epilogue failed, status={status}, N={n}, M={m}, K={k}")
-    if PROFILE_STAGES:
-        profiler.mark(profile, "epilogue")
-    out = c32.to(x.dtype).reshape(*x.shape[:-1], n)
-    if PROFILE_STAGES:
-        profiler.mark(profile, "output")
+        dll, gemm, prepare, finish = _fn()
+        ptr = ctypes.c_void_p
+        stream = ptr(torch.cuda.current_stream(x.device).cuda_stream)
+        status = prepare(ptr(x32.data_ptr()), ptr(x16.data_ptr()),
+                         ptr(exponents.data_ptr()), ptr(slow_rows.data_ptr()),
+                         ptr(bad_rows.data_ptr()), m, k, stream)
+        if status:
+            raise RuntimeError(f"Candidate E row prepare failed, status={status}, N={n}, M={m}, K={k}")
+        if PROFILE_STAGES:
+            profiler.mark(profile, "prepare")
+        status = gemm(ptr(w16.data_ptr()), ptr(x16.data_ptr()),
+                      ptr(c32.data_ptr()), n, m, k, stream)
+        if status:
+            raise RuntimeError(f"Candidate E cuBLAS GEMM failed, status={status}, N={n}, M={m}, K={k}")
+        if PROFILE_STAGES:
+            profiler.mark(profile, "gemm")
+        status = finish(ptr(c32.data_ptr()), ptr(x32.data_ptr()), ptr(q.data_ptr()),
+                        ptr(scale32.data_ptr()),
+                        ptr(0 if bias32 is None else bias32.data_ptr()),
+                        ptr(exponents.data_ptr()), ptr(slow_rows.data_ptr()),
+                        m, n, k, stream)
+        if status:
+            raise RuntimeError(f"Candidate E FP32 epilogue failed, status={status}, N={n}, M={m}, K={k}")
+        if PROFILE_STAGES:
+            profiler.mark(profile, "epilogue")
+        out = c32.to(x.dtype).reshape(*x.shape[:-1], n)
+        if PROFILE_STAGES:
+            profiler.mark(profile, "output")
+    finally:
+        if lease is not None:
+            # Output conversion is enqueued: same-stream reuse is safe.
+            lease.release()
     _record("used", n, k, m)
     if REAL_ACTIVATION_AUDIT:
         # NOT a performance run: shed the large no-longer-needed temporary

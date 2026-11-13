@@ -1,0 +1,80 @@
+name: LTX-2.5 V100 FP32 Hadamard kernel microbenchmark
+
+on:
+  push:
+    branches:
+      - perf/ltx25-convrot-sm70
+    paths:
+      - benchmarks/ltx25_convrot/hadamard_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  hadamard:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 35
+    env:
+      LTX25_HADAMARD_LIB: /tmp/ltx25_hadamard_sm70.so
+    steps:
+      - name: Checkout pinned benchmark source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Refuse GPU contention before compiling/running
+        shell: bash
+        run: |
+          set -euo pipefail
+          owners="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader)"
+          active="$(printf '%s\n' "$owners" | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$active" ]]; then
+            echo "::warning::V100 compute owner detected: refusing microbenchmark"
+            printf '%s\n' "$active"
+            exit 1
+          fi
+          test -x /opt/venvs/ltx25-cu128/bin/python
+          nvidia-smi -L
+      - name: Compile standalone radix-4 H256 CUDA kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_hadamard_sm70.cu \
+            -o "$LTX25_HADAMARD_LIB"
+          test -s "$LTX25_HADAMARD_LIB"
+      - name: Benchmark FP32 H256 kernel against torch.matmul
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/hadamard_microbench.py
+      - name: Publish independent results
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 benchmarks/ltx25_convrot/publish_hadamard_microbench.py
+      - name: Assert 16 synthetic real-shaped rotation checks
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+          import json,os
+          from pathlib import Path
+          path=Path('/cache/ltx25/results')/('hadamard_microbench_'+os.environ['GITHUB_SHA'][:12]+'.json')
+          assert path.is_file(), path
+          data=json.loads(path.read_text())
+          assert data['status']=='PASS',data.get('error')
+          assert len(data['shape_results'])==16
+          assert all(x['max_normalized_error']<1e-4 for x in data['shape_results'])
+          assert all(x['relative_rms_error']<1e-5 for x in data['shape_results'])
+          PY

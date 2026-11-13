@@ -56,6 +56,11 @@ __global__ void prepare_rows(const float* __restrict__ input,
   if (lane == 0) {
     int exp2 = 0;
     int slow = invalid[0];
+    if (!slow && largest[0] > 32768.0f) {
+      // Large-magnitude FP16 operands can magnify cancellation error on
+      // unscale. Preserve FP32 arithmetic for this entire row instead.
+      slow = 1;
+    }
     if (!slow && largest[0] > 0.0f) {
       // max*2^exp2 < 2^15 and min*2^exp2 >= 2^-14.
       // Keep the cast away from FP16 overflow AND subnormals/FTZ.

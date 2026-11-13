@@ -41,6 +41,34 @@ export PYTHONPATH="$WORK/build-tools:$WORK/cat/flash-attention-v100:$WORK/zhin:$
 export LD_LIBRARY_PATH="$CUDA_HOME/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export TORCH_CUDA_ARCH_LIST=7.0
 
+# Fill any missing *Python-only* build/runtime dependencies in RUNNER_TEMP.
+# The version-locked PyTorch CUDA installation and MMGP are never changed.
+mapfile -t EXTRA_PYTHON_DEPS < <("$PYTHON" - <<'PY'
+import importlib.util
+optional = {
+    "packaging": "packaging>=24.2",
+    "setuptools": "setuptools>=77.0.3,<81",
+    "wheel": "wheel>=0.45",
+    "jinja2": "jinja2>=3.1",
+    "einops": "einops>=0.8,<1",
+    "numpy": "numpy>=1.26,<3",
+    "tqdm": "tqdm>=4.66",
+    "psutil": "psutil>=6",
+}
+for module, package in optional.items():
+    if importlib.util.find_spec(module) is None:
+        print(package)
+PY
+)
+if (( ${#EXTRA_PYTHON_DEPS[@]} )); then
+    echo "Installing missing pure-Python/runtime wheels into temporary directory: ${EXTRA_PYTHON_DEPS[*]}"
+    "$PYTHON" -m pip install --no-deps --target "$WORK/build-tools" \
+        "${EXTRA_PYTHON_DEPS[@]}" \
+        2>&1 | tee "$WORK/logs/benchmark-missing-deps-install.log"
+fi
+"$PYTHON" -m unittest benchmarks.ltx25_flash_v100.test_routes \
+    2>&1 | tee "$WORK/logs/adapter-contract-tests.log"
+
 echo "=== Verify Python imports and provenance ==="
 "$PYTHON" - <<'PY' | tee "$WORK/logs/benchmark-dependencies.log"
 import importlib, json, pathlib, sys, sysconfig

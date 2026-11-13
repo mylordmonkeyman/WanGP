@@ -1,0 +1,1 @@
+2026-11-13: vector8 cast pilot. Preflight exact signed INT8 -> FP16; 8 BF16/FP16 full ConvRot adapter cases; run one matched 49-frame 1024x576 reference torch-H256 video; strict decoded pixel equality required; preserve production vector4/radix4 defaults.

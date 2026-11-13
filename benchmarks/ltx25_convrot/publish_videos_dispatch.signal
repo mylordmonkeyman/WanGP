@@ -1,0 +1,2 @@
+2026-11-13
+User requested directly viewing original radix4 Hadamard and validated reference MP4s. Copy original bytes from runner and publish GitHub Action artifact; no regeneration or GPU use.

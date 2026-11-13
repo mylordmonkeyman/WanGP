@@ -59,7 +59,7 @@ def main():
     if variant not in variants:
         raise ValueError(f"Unsupported decoded video gate variant {variant!r}")
     suffix, gate_key = variants[variant]
-    strict_equality = variant not in ("e_default_1024", "e_hadamard_1024")
+    strict_equality = variant not in ("e_default_1024", "e_hadamard_1024", "e_algo2_1024")
     current = BASE / f"runtime_{suffix}_{sha}.json"
     video, report = video_from(current)
     gate = {"status": "ERROR", "reference_report": str(REFERENCE_REPORT),

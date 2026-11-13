@@ -17,6 +17,7 @@ on:
       - benchmarks/ltx25_convrot/default_auto_dispatch.signal
       - benchmarks/ltx25_convrot/hadamard_video_dispatch.signal
       - benchmarks/ltx25_convrot/flat_mm_video_dispatch.signal
+      - benchmarks/ltx25_convrot/algo2_video_dispatch.signal
       - benchmarks/ltx25_convrot/debug_explicit_dispatch.signal
   workflow_dispatch:
     inputs:
@@ -36,6 +37,7 @@ on:
           - e_default_1024
           - e_hadamard_1024
           - e_flat_mm_1024
+          - e_algo2_1024
           - e_debug_fp32rot_samecfg_1024
 
 permissions:
@@ -69,7 +71,7 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
             changed="$(git diff-tree --no-commit-id --name-only -r HEAD |
-              grep -E '^benchmarks/ltx25_convrot/(quality_(r0|e)|real_activation_audit|stage_profile|workspace|cast4|combo|default_auto|debug_explicit|hadamard_video|flat_mm_video)_dispatch[.]signal$' || true)"
+              grep -E '^benchmarks/ltx25_convrot/(quality_(r0|e)|real_activation_audit|stage_profile|workspace|cast4|combo|default_auto|debug_explicit|hadamard_video|flat_mm_video|algo2_video)_dispatch[.]signal$' || true)"
             case "$changed" in
               benchmarks/ltx25_convrot/quality_r0_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=r0_quality_1024" >> "$GITHUB_ENV"
@@ -100,6 +102,9 @@ jobs:
                 ;;
               benchmarks/ltx25_convrot/flat_mm_video_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=e_flat_mm_1024" >> "$GITHUB_ENV"
+                ;;
+              benchmarks/ltx25_convrot/algo2_video_dispatch.signal)
+                echo "LTX25_BENCH_VARIANT=e_algo2_1024" >> "$GITHUB_ENV"
                 ;;
               benchmarks/ltx25_convrot/debug_explicit_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=e_debug_fp32rot_samecfg_1024" >> "$GITHUB_ENV"
@@ -143,7 +148,7 @@ jobs:
             r0_quality_1024)
               echo "WAN2GP_LTX25_CUBLAS_E_MODE=" >> "$GITHUB_ENV"
               ;;
-            e_quality_1024|e_real_activation_audit_1024|e_profile_1024|e_workspace_1024|e_cast4_1024|e_combo_1024|e_debug_fp32rot_samecfg_1024|e_hadamard_1024|e_flat_mm_1024)
+            e_quality_1024|e_real_activation_audit_1024|e_profile_1024|e_workspace_1024|e_cast4_1024|e_combo_1024|e_debug_fp32rot_samecfg_1024|e_hadamard_1024|e_flat_mm_1024|e_algo2_1024)
               echo "WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot" >> "$GITHUB_ENV"
               ;;
             e_default_1024)
@@ -220,6 +225,15 @@ jobs:
             /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/candidate_flat_mm_preflight.py
 
+      - name: Preflight bit-exact full ConvRot outputs for shape-specific cuBLAS Algo2
+        if: ${{ env.LTX25_BENCH_VARIANT == 'e_algo2_1024' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          WAN2GP_LTX25_GEMM_TUNE=algo2_m64 \
+            /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/candidate_algo2_preflight.py
+
       - name: Generate one 49-frame 1024x576 video offline from baked weights
         shell: bash
         run: |
@@ -228,7 +242,7 @@ jobs:
             benchmarks/ltx25_convrot/wgp_baseline.py
 
       - name: Require experimental video to match validated no-sync E decoded frames
-        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' || env.LTX25_BENCH_VARIANT == 'e_cast4_1024' || env.LTX25_BENCH_VARIANT == 'e_combo_1024' || env.LTX25_BENCH_VARIANT == 'e_default_1024' || env.LTX25_BENCH_VARIANT == 'e_debug_fp32rot_samecfg_1024' || env.LTX25_BENCH_VARIANT == 'e_hadamard_1024' || env.LTX25_BENCH_VARIANT == 'e_flat_mm_1024' }}
+        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' || env.LTX25_BENCH_VARIANT == 'e_cast4_1024' || env.LTX25_BENCH_VARIANT == 'e_combo_1024' || env.LTX25_BENCH_VARIANT == 'e_default_1024' || env.LTX25_BENCH_VARIANT == 'e_debug_fp32rot_samecfg_1024' || env.LTX25_BENCH_VARIANT == 'e_hadamard_1024' || env.LTX25_BENCH_VARIANT == 'e_flat_mm_1024' || env.LTX25_BENCH_VARIANT == 'e_algo2_1024' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -263,6 +277,7 @@ jobs:
                     "e_default_1024": "quality_default",
                     "e_hadamard_1024": "quality_hadamard",
                     "e_flat_mm_1024": "quality_flat_mm",
+                    "e_algo2_1024": "quality_algo2",
                     "e_debug_fp32rot_samecfg_1024": "quality_default_explicit"}[variant]
           sha = os.environ["GITHUB_SHA"][:12]
           path = Path("/cache/ltx25/results") / f"runtime_{suffix}_{sha}.json"
@@ -283,6 +298,18 @@ jobs:
               assert gate.get("total_frames") == 49
               # Exact mismatch is an observed diagnostic, not an infrastructure
               # failure. Do not claim promotion when mismatched.
+          if variant == "e_algo2_1024":
+              counters = r.get("candidate_counters") or {}
+              gate = r.get("algo2_video_gate") or {}
+              print("ALGO2_GEMM_QUALITY_GATE", counters.get("gemm_algo2_calls"), gate)
+              assert counters.get("gemm_tune") == "algo2_m64"
+              assert counters.get("gemm_algo2_calls", 0) > 0
+              assert counters.get("used") == 16368
+              assert counters.get("range_fallback") == 4434
+              assert counters.get("rotation_mode") == "torch"
+              assert r.get("workspace_stats", {}).get("persistent_weight_copies") == 0
+              assert gate.get("total_frames") == 49
+              assert gate.get("decoded_pixels_identical") is True
           if variant == "e_flat_mm_1024":
               counters = r.get("candidate_counters") or {}
               gate = r.get("flat_mm_video_gate") or {}

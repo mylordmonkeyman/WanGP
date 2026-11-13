@@ -183,7 +183,7 @@ decodable video, use the expected optimized linears, and respect bounded
 workspace/no-persistent-weight-copy constraints. Pixel mismatch must not be
 misrepresented as either exact equality or an automatic quality regression.
 
-### Opt-in packed-vector8 INT8-to-FP16 cast pilot (not default)
+### Historical opt-in packed-vector8 INT8-to-FP16 cast pilot (before promotion)
 
 A synthetic Tesla V100 SM70 five-shape CUDA-event sweep compared the current
 validated vector4 weight-conversion kernel with aligned packed8 and packed16
@@ -237,9 +237,9 @@ ConvRot calls, and no persistent FP16 weights were copied.
 This is measured end-to-end evidence on the short synthetic-prompt T2V
 workload, not an extrapolation from cast microbenchmarks. It does not
 establish identical speedups on 241-frame I2V with LoRA/MMGP memory
-offload. **Vector8 remains opt-in** pending an explicit default decision.
-The normal production defaults remain radix4 rotation + vector4 weight
-conversion.
+offload. **At the time of this pilot**, Vector8 remained opt-in pending an explicit
+default decision. The subsequent 241-frame I2V result and user-directed
+promotion below supersede that earlier default status.
 
 The integrated vector8 preflight additionally passed on SM70 with **both**
 `WAN2GP_LTX25_HADAMARD=torch` and the promoted

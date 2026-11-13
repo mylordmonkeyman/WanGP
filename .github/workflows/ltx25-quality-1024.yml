@@ -259,7 +259,8 @@ jobs:
               gate = r.get("default_video_gate") or {}
               print("DEFAULT_AUTO_GATE", counters.get("mode"), counters.get("cast_mode"),
                     stats.get("acquired"), gate.get("status"))
-              assert counters.get("mode") == "auto" and counters.get("cast_mode") == "vector4"
+              assert counters.get("mode") == "fp32rot" and counters.get("auto_selected") is True
+              assert counters.get("cast_mode") == "vector4"
               assert counters.get("auto_native_fallback") == 0, "Auto extension unavailable"
               assert counters.get("used", 0) > 0, "Auto backend never used"
               assert stats.get("acquired", 0) > 0, "Default scratch not used"

@@ -1,7 +1,7 @@
 # Copyright (c) 2026. Experimental LTX-2.5 SM70 cuBLAS ConvRot research.
-"""Explicitly opt-in cuBLAS HGEMM/FP32-output ConvRot pilot on V100.
+"""SM70-specific auto-selected cuBLAS FP32-output ConvRot on V100.
 
-This is NOT auto-selection or a validated production backend. It uses only the
+Default on eligible V100 INT8 ConvRot shape families. It uses only the
 checkpoint-backed numerical-audit passing shape families and the original
 INT8 weight (the FP16 expansion is a bounded *transient* scratch allocation).
 No FP16 master weights are saved or cached, so MMGP can continue to offload
@@ -12,8 +12,11 @@ Activation safety is checked entirely on the GPU: each FP32-rotated input row
 receives a reversible power-of-two scale when representable as nonzero FP16.
 Exceptional rows execute the same operation in FP32 on the GPU *before* its
 output is used. No per-linear .item(), host-side range flags, or stream sync.
-FP32 rotation is an explicit change from BF16 R0; this remains a research pilot
-until real-activation numerical and video quality gates pass.
+FP32 rotation changes arithmetic relative to native BF16 R0. Candidate E
+passed the recorded single-seed numerical/video gates, but this is NOT a
+claim of universal perceptual equivalence. Set WAN2GP_LTX25_CUBLAS_E_MODE=off
+to restore WanGP's original dispatch without rebuilding or changing weights.
+If the compiled extension is unavailable, auto mode safely uses native R0.
 """
 from __future__ import annotations
 
@@ -21,15 +24,20 @@ import atexit
 import ctypes
 import json
 import os
+import hashlib
+import shutil
+import subprocess
+import tempfile
+import fcntl
 from pathlib import Path
 
 import torch
 
-MODE = os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").strip().lower()
+MODE = os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "auto").strip().lower()
 REAL_ACTIVATION_AUDIT = os.environ.get("WAN2GP_LTX25_REAL_ACTIVATION_AUDIT", "") == "1"
 PROFILE_STAGES = os.environ.get("WAN2GP_LTX25_PROFILE_STAGES", "") == "1"
-USE_WORKSPACE = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "") == "1"
-CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "").strip().lower()
+USE_WORKSPACE = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "1") == "1"
+CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector4").strip().lower()
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
 WEIGHT_CAP = 128 * 1024 * 1024
 # Synthetic checkpoint-backed FP32-rotation gate passed these shapes.
@@ -40,6 +48,8 @@ PASS_SHAPES = {
 }
 _FN = None
 _CAST_FN = None
+_NATIVE_UNAVAILABLE = False
+_NATIVE_FAILURE_REPORTED = False
 # Tiny persistent device-side counters, not weights. Read only at process exit.
 # Allocations/updates happen on the current CUDA stream; normal use is a
 # single-threaded WanGP inference stream (concurrent-stream tests still needed).
@@ -47,17 +57,67 @@ _BAD_ROW_COUNTS = {}
 _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
           "sizes": {}, "mode": MODE, "cast_mode": CAST_MODE or "torch_to",
           "production_eligible": False,
+          "auto_selected": MODE == "auto",
+          "auto_native_fallback": 0,
           "range_fallback_units": "rows (device-side FP32 dot)",
           "row_range_policy": "power_of_two_nonzero_fp16_else_fp32_dot"}
+
+
+def _native_library():
+    """Use an explicit built library, or build/cache the bundled SM70 source.
+
+    No network, model download, checkpoint mutation or persistent weight set.
+    Compiles once per source/CUDA version under a filesystem lock. Compilation
+    happens before enqueuing any CUDA work for the first eligible linear.
+    """
+    if LIB:
+        if not Path(LIB).is_file():
+            raise FileNotFoundError(f"LTX25_CUBLAS_E_LIB does not exist: {LIB}")
+        return LIB
+    if os.environ.get("WAN2GP_LTX25_E_AUTO_BUILD", "1") != "1":
+        raise RuntimeError("Automatic SM70 extension compilation disabled")
+    nvcc = shutil.which("nvcc")
+    if not nvcc:
+        raise RuntimeError("nvcc not on PATH; install CUDA toolkit or set LTX25_CUBLAS_E_LIB")
+    source = Path(__file__).resolve().parents[2] / "benchmarks" / "ltx25_convrot" / "ltx25_cublas_e.cu"
+    if not source.is_file():
+        raise FileNotFoundError(f"Bundled SM70 source missing: {source}")
+    key = hashlib.sha256(source.read_bytes() + str(torch.version.cuda).encode()).hexdigest()[:20]
+    cache = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "wan2gp" / "sm70-convrot"
+    cache.mkdir(parents=True, exist_ok=True)
+    target = cache / f"libltx25_sm70_{key}.so"
+    lock_path = cache / f"libltx25_sm70_{key}.lock"
+    if target.is_file() and target.stat().st_size > 0:
+        return str(target)
+    with lock_path.open("a+b") as lockfile:
+        fcntl.flock(lockfile.fileno(), fcntl.LOCK_EX)
+        try:
+            if target.is_file() and target.stat().st_size > 0:
+                return str(target)
+            with tempfile.NamedTemporaryFile(prefix="ltx25-sm70-", suffix=".so",
+                                             dir=cache, delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+            try:
+                cmd = [nvcc, "-O3", "-std=c++17", "-arch=sm_70", "-shared",
+                       "-Xcompiler", "-fPIC", str(source), "-lcublas", "-o", str(tmp_path)]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=180,
+                                        check=False)
+                if result.returncode != 0 or not tmp_path.is_file() or tmp_path.stat().st_size == 0:
+                    raise RuntimeError("sm70 extension nvcc failed: " + result.stderr[-800:])
+                os.replace(tmp_path, target)
+            finally:
+                tmp_path.unlink(missing_ok=True)
+        finally:
+            fcntl.flock(lockfile.fileno(), fcntl.LOCK_UN)
+    return str(target)
 
 
 def _fn():
     global _FN
     if _FN is not None:
         return _FN
-    if not LIB or not Path(LIB).is_file():
-        raise RuntimeError("Explicit ConvRot pilot requires LTX25_CUBLAS_E_LIB with compiled sm_70 cuBLAS extension")
-    dll = ctypes.CDLL(LIB)
+    resolved_lib = _native_library()
+    dll = ctypes.CDLL(resolved_lib)
     ptr = ctypes.c_void_p
     gemm = dll.ltx25_cublas_gemm_f16_f32
     gemm.argtypes = [ptr, ptr, ptr, ctypes.c_int, ctypes.c_int, ctypes.c_int, ptr]
@@ -70,7 +130,7 @@ def _fn():
                        ctypes.c_int, ctypes.c_int, ptr]
     finish.restype = ctypes.c_int
     _FN = (dll, gemm, prepare, finish)
-    print("[LTX25_CUBLAS_E] Explicit fp32rot GPU-range-guard pilot enabled; no persistent FP16 weights", flush=True)
+    print("[LTX25_CUBLAS_E] SM70 ConvRot enabled: GPU range guard, vector4 cast and bounded scratch defaults; no persistent FP16 weights", flush=True)
     return _FN
 
 
@@ -114,7 +174,7 @@ def maybe_linear(x, weight, bias, group):
     escapes: the row correction runs on the same stream after cuBLAS and before
     conversion to the input dtype. CUDA graph capture remains unsupported.
     """
-    if MODE != "fp32rot":
+    if MODE not in ("fp32rot", "auto"):
         return None
     q = getattr(weight, "_data", None)
     scale = getattr(weight, "_scale", None)
@@ -136,6 +196,27 @@ def maybe_linear(x, weight, bias, group):
             or torch.compiler.is_compiling()
             or torch.cuda.is_current_stream_capturing()):
         _record("shape", n, k, m)
+        return None
+
+    # Resolve/build the native dependency before touching any activation,
+    # ensuring auto mode can safely return to WanGP's original R0 path.
+    global _NATIVE_UNAVAILABLE, _NATIVE_FAILURE_REPORTED
+    if _NATIVE_UNAVAILABLE:
+        _STATS["auto_native_fallback"] += 1
+        return None
+    try:
+        _fn()
+        if CAST_MODE == "vector4":
+            _cast4_fn()
+    except (OSError, RuntimeError, AttributeError) as exc:
+        if MODE != "auto":
+            raise
+        _NATIVE_UNAVAILABLE = True
+        _STATS["auto_native_fallback"] += 1
+        if not _NATIVE_FAILURE_REPORTED:
+            print("[LTX25_CUBLAS_E] SM70 native extension unavailable; using original R0: "
+                  + f"{type(exc).__name__}: {str(exc)[:450]}", flush=True)
+            _NATIVE_FAILURE_REPORTED = True
         return None
 
     from shared.qtypes.int8_convrot import _rotate_activation
@@ -232,7 +313,7 @@ def maybe_linear(x, weight, bias, group):
     return out
 
 def _summary():
-    if MODE != "fp32rot":
+    if MODE not in ("fp32rot", "auto"):
         return
     # One synchronization, only AFTER generation has finished at interpreter
     # exit. This is never in the measured per-linear hot path.
@@ -243,5 +324,5 @@ def _summary():
     print("[LTX25_CUBLAS_E] " + json.dumps(_STATS, sort_keys=True)[:6000], flush=True)
 
 
-if MODE == "fp32rot":
+if MODE in ("fp32rot", "auto"):
     atexit.register(_summary)

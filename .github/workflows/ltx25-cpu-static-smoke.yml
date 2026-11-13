@@ -41,6 +41,8 @@ jobs:
             benchmarks/ltx25_convrot/hadamard_microbench.py \
             benchmarks/ltx25_convrot/candidate_hadamard_preflight.py \
             benchmarks/ltx25_convrot/candidate_flat_mm_preflight.py \
+            benchmarks/ltx25_convrot/candidate_algo2_preflight.py \
+            benchmarks/ltx25_convrot/gemm_algo_microbench.py \
             benchmarks/ltx25_convrot/hadamard_video_metrics.py \
             benchmarks/ltx25_convrot/publish_hadamard_microbench.py \
             benchmarks/ltx25_convrot/publish_cast_microbench.py \
@@ -63,6 +65,8 @@ jobs:
           assert 'WAN2GP_LTX25_E_CAST", "vector4"' in a
           assert 'WAN2GP_LTX25_HADAMARD", "torch"' in a
           assert 'ltx25_cublas_rot256_f32' in a
+          assert 'WAN2GP_LTX25_GEMM_TUNE", "off"' in a
+          assert 'ltx25_cublas_gemm_f16_f32_algo2' in a
           assert 'WAN2GP_LTX25_E_WORKSPACE", "1"' in a
           assert 'WAN2GP_LTX25_CUBLAS_E_MODE", "fp32rot"' in dispatch
           assert 'WAN2GP_LTX25_DEFAULT_ON' in dispatch

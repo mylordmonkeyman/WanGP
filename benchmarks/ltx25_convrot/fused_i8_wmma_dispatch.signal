@@ -1,1 +1,1 @@
-2026-11-13: user-requested SM70 fused INT8 weight tile expansion with Tensor Core GEMM vs existing vector4 cast + cuBLAS. Isolated synthetic A-B-B-A CUDA timed correctness experiment only; do not change production defaults.
+2026-11-13: compile-only safe verification even if GPU occupied; benchmark will refuse GPU contention. Rerun after first busy GPU check found PID 235354 occupying 25046 MiB. Do not interrupt user workload.

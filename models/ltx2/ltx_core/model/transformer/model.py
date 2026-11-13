@@ -475,6 +475,16 @@ class LTXModel(torch.nn.Module):
         Returns:
             Processed output tensors
         """
+        # Trace one *real* warmed transformer forward only in the explicitly
+        # opted-in SM70 diagnostic run. The ordinary production path is unchanged.
+        if __import__("os").environ.get("WAN2GP_LTX25_PROFILE") == "1":
+            from shared.ltx25_v100_profile import profile_one_forward
+
+            def original_forward():
+                with cuda_graphs.scope():
+                    return self._forward(video, audio, perturbations)
+
+            return profile_one_forward(original_forward)
         with cuda_graphs.scope():  # with CUDA graphs, the preparation and the head run in the graph pool's idle memory (cuda_graphs.pooled)
             return self._forward(video, audio, perturbations)
 

@@ -1,2 +1,2 @@
-2026-11-12 22:xx America/Chicago
-rerun Candidate E with magnitude/cancellation FP32 guard + no per-call CPU scalar sync
+2026-11-12 local
+run no-sync Candidate E allowing experimentally verified sm70 half subnormals; compare wall time

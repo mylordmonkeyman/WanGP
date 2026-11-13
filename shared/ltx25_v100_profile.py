@@ -39,6 +39,16 @@ def profiled_convrot_forward(original):
     return wrapped
 
 
+def profiled_attention_forward(original):
+    """Label full LTX attention modules, including their Q/K/V projection."""
+    if not _ENABLED:
+        return original
+
+    def wrapped(self, *args, **kwargs):
+        with scope("ltx25.attention.full_module"):
+            return original(self, *args, **kwargs)
+    return wrapped
+
 def _save(p, *, call_index: int, elapsed: float, exception=None):
     import torch
     target = Path(os.environ.get("LTX25_PROFILE_DIR", "/tmp/ltx25-actual-attention-profile"))

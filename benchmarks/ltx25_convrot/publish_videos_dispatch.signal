@@ -1,2 +1,2 @@
 2026-11-13
-User requested directly viewing original radix4 Hadamard and validated reference MP4s. Copy original bytes from runner and publish GitHub Action artifact; no regeneration or GPU use.
+Retry unchanged original MP4 staging after accommodating historical reference metadata; make both user-playable files available in Actions artifact.

@@ -1,0 +1,83 @@
+{
+  "contact_sheet": {
+    "bytes": 351436,
+    "path": "/cache/ltx25/results/video_comparison_current/contact-sheet.jpg",
+    "status": "PASS"
+  },
+  "downloaded_checkpoints": false,
+  "kind": "Independent cached LTX-2.5 decoded-video reproducibility and pixel difference check",
+  "new_generation": false,
+  "note": "Decoded-pixel identity and PSNR/SSIM are objective difference metrics for fixed-seed videos. They are NOT perceptual-quality judgments. Human viewing is required before approving quality.",
+  "pairs": [
+    {
+      "comparison": "Archived-E",
+      "decoded_pixels_identical": false,
+      "psnr_db": 26.352298,
+      "reference": "R0",
+      "ssim": 0.888115
+    },
+    {
+      "comparison": "No-sync-E",
+      "decoded_pixels_identical": false,
+      "psnr_db": 26.551775,
+      "reference": "R0",
+      "ssim": 0.891763
+    },
+    {
+      "comparison": "No-sync-E",
+      "decoded_pixels_identical": false,
+      "psnr_db": 30.095536,
+      "reference": "Archived-E",
+      "ssim": 0.939273
+    },
+    {
+      "comparison": "Audit-E",
+      "decoded_pixels_identical": true,
+      "psnr_db": "infinite",
+      "reference": "No-sync-E",
+      "ssim": 1.0
+    }
+  ],
+  "perceptual_quality_validated": false,
+  "run_id": "43369208361",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43369208361",
+  "source_sha": "28919c1578281957a2fce2609886c77b5c0f5fde",
+  "status": "PASS",
+  "utc": "2026-11-13T05:01:11.382458+00:00",
+  "video_source": "four already-generated fixed-seed 1024x576 49-frame 8-step runs",
+  "videos": {
+    "Archived-E": {
+      "decoded_framemd5_sha256": "a4ea635c2e9c66ac3c88e2efba1523c612dc3453fa81b7ad35d7ac5b3dd5559f",
+      "frame_count": 49,
+      "generation_seconds": 112.8,
+      "mp4_bytes": 3080470,
+      "path": "/cache/ltx25/videos/e_quality_1024/2026-11-13-00h43m21s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "source_sha_prefix": "4adc57c0d17f"
+    },
+    "Audit-E": {
+      "decoded_framemd5_sha256": "2a4a65fd1a13cf8d21fd842edaf8f6223099cc9b23d93f60529587ad29652687",
+      "frame_count": 49,
+      "generation_seconds": 98.5,
+      "mp4_bytes": 3056874,
+      "path": "/cache/ltx25/videos/e_real_activation_audit_1024/2026-11-13-04h56m29s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "source_sha_prefix": "e8e1398a09c6"
+    },
+    "No-sync-E": {
+      "decoded_framemd5_sha256": "2a4a65fd1a13cf8d21fd842edaf8f6223099cc9b23d93f60529587ad29652687",
+      "frame_count": 49,
+      "generation_seconds": 98.3,
+      "mp4_bytes": 3056874,
+      "path": "/cache/ltx25/videos/e_quality_1024/2026-11-13-04h43m44s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "source_sha_prefix": "a566cf56eae8"
+    },
+    "R0": {
+      "decoded_framemd5_sha256": "b9748e684686bd48286d10152671b85016eb2485e94a0285e12c6d3d76763621",
+      "frame_count": 49,
+      "generation_seconds": 157.9,
+      "mp4_bytes": 3118857,
+      "path": "/cache/ltx25/videos/r0_quality_1024/2026-11-13-00h31m46s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "source_sha_prefix": "9d80ef2bccde"
+    }
+  },
+  "workflow_status_at_publication": "success"
+}

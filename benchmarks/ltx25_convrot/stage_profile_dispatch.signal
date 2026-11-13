@@ -1,3 +1,2 @@
 2026-11-13
-Explicitly dispatch sparse same-stream CUDA event profile on real 1024x576 LTX-2.5 generation.
-This is an instrumented diagnostic; never report its wall time as an uninstrumented speed benchmark.
+Retry sparse real-model stage profiling. Skip actual generation if V100 still has another compute owner; preserve GPU isolation.

@@ -1,0 +1,60 @@
+{
+  "algo2_median_seconds": 92.95,
+  "algo2_percent_wall_reduction": 1.8479,
+  "algo2_seconds_saved": 1.75,
+  "all_settings_matched": true,
+  "audio_compared": false,
+  "candidate": "radix4+vector8+algo2_m64",
+  "default": "radix4+vector8+default_tensor_op",
+  "default_median_seconds": 94.7,
+  "frames_pixel_identical": true,
+  "production_eligible": false,
+  "rows": [
+    {
+      "algo2_calls": 0,
+      "frames": 49,
+      "generation_seconds": 97.0,
+      "native_fallback": 0,
+      "range_fallback_rows": 4600,
+      "used": 16368,
+      "variant": "default",
+      "video": "/cache/ltx25/videos/e_default_1024/2026-11-13-23h35m35s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4"
+    },
+    {
+      "algo2_calls": 1008,
+      "frames": 49,
+      "generation_seconds": 93.0,
+      "native_fallback": 0,
+      "range_fallback_rows": 4600,
+      "used": 16368,
+      "variant": "algo2",
+      "video": "/cache/ltx25/videos/e_algo2_1024/2026-11-13-23h37m23s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4"
+    },
+    {
+      "algo2_calls": 1008,
+      "frames": 49,
+      "generation_seconds": 92.9,
+      "native_fallback": 0,
+      "range_fallback_rows": 4600,
+      "used": 16368,
+      "variant": "algo2",
+      "video": "/cache/ltx25/videos/e_algo2_1024/2026-11-13-23h39m09s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4"
+    },
+    {
+      "algo2_calls": 0,
+      "frames": 49,
+      "generation_seconds": 92.4,
+      "native_fallback": 0,
+      "range_fallback_rows": 4600,
+      "used": 16368,
+      "variant": "default",
+      "video": "/cache/ltx25/videos/e_default_1024/2026-11-13-23h40m56s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4"
+    }
+  ],
+  "run_id": "43527938342",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43527938342",
+  "source_sha": "ada82e759d8a66fb84c7bf461ff2d385b555a5d8",
+  "status": "PASS",
+  "test": "V100 49-frame 1024x576 full Candidate E GEMM Algo2 A-B-B-A",
+  "utc": "2026-11-13T23:41:01.088552+00:00"
+}

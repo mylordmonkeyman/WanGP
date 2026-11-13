@@ -15,6 +15,7 @@ on:
       - benchmarks/ltx25_convrot/cast4_dispatch.signal
       - benchmarks/ltx25_convrot/combo_dispatch.signal
       - benchmarks/ltx25_convrot/default_auto_dispatch.signal
+      - benchmarks/ltx25_convrot/hadamard_video_dispatch.signal
       - benchmarks/ltx25_convrot/debug_explicit_dispatch.signal
   workflow_dispatch:
     inputs:
@@ -32,6 +33,7 @@ on:
           - e_cast4_1024
           - e_combo_1024
           - e_default_1024
+          - e_hadamard_1024
           - e_debug_fp32rot_samecfg_1024
 
 permissions:
@@ -65,7 +67,7 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
             changed="$(git diff-tree --no-commit-id --name-only -r HEAD |
-              grep -E '^benchmarks/ltx25_convrot/(quality_(r0|e)|real_activation_audit|stage_profile|workspace|cast4|combo|default_auto|debug_explicit)_dispatch[.]signal$' || true)"
+              grep -E '^benchmarks/ltx25_convrot/(quality_(r0|e)|real_activation_audit|stage_profile|workspace|cast4|combo|default_auto|debug_explicit|hadamard_video)_dispatch[.]signal$' || true)"
             case "$changed" in
               benchmarks/ltx25_convrot/quality_r0_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=r0_quality_1024" >> "$GITHUB_ENV"
@@ -90,6 +92,9 @@ jobs:
                 ;;
               benchmarks/ltx25_convrot/default_auto_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=e_default_1024" >> "$GITHUB_ENV"
+                ;;
+              benchmarks/ltx25_convrot/hadamard_video_dispatch.signal)
+                echo "LTX25_BENCH_VARIANT=e_hadamard_1024" >> "$GITHUB_ENV"
                 ;;
               benchmarks/ltx25_convrot/debug_explicit_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=e_debug_fp32rot_samecfg_1024" >> "$GITHUB_ENV"
@@ -133,7 +138,7 @@ jobs:
             r0_quality_1024)
               echo "WAN2GP_LTX25_CUBLAS_E_MODE=" >> "$GITHUB_ENV"
               ;;
-            e_quality_1024|e_real_activation_audit_1024|e_profile_1024|e_workspace_1024|e_cast4_1024|e_combo_1024|e_debug_fp32rot_samecfg_1024)
+            e_quality_1024|e_real_activation_audit_1024|e_profile_1024|e_workspace_1024|e_cast4_1024|e_combo_1024|e_debug_fp32rot_samecfg_1024|e_hadamard_1024)
               echo "WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot" >> "$GITHUB_ENV"
               ;;
             e_default_1024)
@@ -192,6 +197,15 @@ jobs:
             /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/candidate_cast4_preflight.py
 
+      - name: Preflight FP32 radix4 Hadamard against full torch-rotation adapter
+        if: ${{ env.LTX25_BENCH_VARIANT == 'e_hadamard_1024' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          WAN2GP_LTX25_HADAMARD=radix4 \
+            /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/candidate_hadamard_preflight.py
+
       - name: Generate one 49-frame 1024x576 video offline from baked weights
         shell: bash
         run: |
@@ -200,7 +214,7 @@ jobs:
             benchmarks/ltx25_convrot/wgp_baseline.py
 
       - name: Require experimental video to match validated no-sync E decoded frames
-        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' || env.LTX25_BENCH_VARIANT == 'e_cast4_1024' || env.LTX25_BENCH_VARIANT == 'e_combo_1024' || env.LTX25_BENCH_VARIANT == 'e_default_1024' || env.LTX25_BENCH_VARIANT == 'e_debug_fp32rot_samecfg_1024' }}
+        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' || env.LTX25_BENCH_VARIANT == 'e_cast4_1024' || env.LTX25_BENCH_VARIANT == 'e_combo_1024' || env.LTX25_BENCH_VARIANT == 'e_default_1024' || env.LTX25_BENCH_VARIANT == 'e_debug_fp32rot_samecfg_1024' || env.LTX25_BENCH_VARIANT == 'e_hadamard_1024' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -233,6 +247,7 @@ jobs:
                     "e_cast4_1024": "quality_cast4",
                     "e_combo_1024": "quality_combo",
                     "e_default_1024": "quality_default",
+                    "e_hadamard_1024": "quality_hadamard",
                     "e_debug_fp32rot_samecfg_1024": "quality_default_explicit"}[variant]
           sha = os.environ["GITHUB_SHA"][:12]
           path = Path("/cache/ltx25/results") / f"runtime_{suffix}_{sha}.json"
@@ -253,6 +268,15 @@ jobs:
               assert gate.get("total_frames") == 49
               # Exact mismatch is an observed diagnostic, not an infrastructure
               # failure. Do not claim promotion when mismatched.
+          if variant == "e_hadamard_1024":
+              counters = r.get("candidate_counters") or {}
+              gate = r.get("hadamard_video_gate") or {}
+              print("HADAMARD_QUALITY_GATE", counters.get("rotation_mode"), gate)
+              assert counters.get("rotation_mode") == "radix4"
+              assert counters.get("used") == 16368, "H256 changed number of eligible calls"
+              assert r.get("workspace_stats", {}).get("persistent_weight_copies") == 0
+              assert gate.get("total_frames") == 49, "Incorrect decoded frame count"
+              assert gate.get("decoded_pixels_identical") is True, "H256 video differs from validated E"
           if variant == "e_default_1024":
               counters = r.get("candidate_counters") or {}
               stats = r.get("workspace_stats") or {}

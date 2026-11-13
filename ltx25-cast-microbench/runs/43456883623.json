@@ -1,0 +1,227 @@
+{
+  "device": "Tesla V100-PCIE-32GB",
+  "input": "synthetic checkpoint-shaped int8 tensor (no checkpoint loaded)",
+  "kind": "INT8-to-FP16 isolated SM70 conversion microbenchmark",
+  "model_generation": false,
+  "note": "Isolated synthetic matrix conversion, not an LTX generation speedup or a production kernel.",
+  "production_eligible": false,
+  "run_id": "43456883623",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43456883623",
+  "shape_results": [
+    {
+      "cuda_scalar_preallocated": {
+        "median_ms": 0.03478,
+        "min_ms": 0.03274,
+        "p90_ms": 0.03891,
+        "trials": 50
+      },
+      "cuda_vector4_preallocated": {
+        "median_ms": 0.03429,
+        "min_ms": 0.03274,
+        "p90_ms": 0.03584,
+        "trials": 50
+      },
+      "exact_int8_to_fp16": true,
+      "fp16_bytes": 8388608,
+      "int8_bytes": 4194304,
+      "shape": [
+        2048,
+        2048
+      ],
+      "torch_copy_preallocated": {
+        "median_ms": 0.03994,
+        "min_ms": 0.03584,
+        "p90_ms": 0.04403,
+        "trials": 50
+      },
+      "torch_to_alloc": {
+        "median_ms": 0.0553,
+        "min_ms": 0.05222,
+        "p90_ms": 0.06042,
+        "trials": 50
+      },
+      "vector4_vs_torch_copy_speedup": 1.1648,
+      "vector4_vs_torch_to_speedup": 1.6127
+    },
+    {
+      "cuda_scalar_preallocated": {
+        "median_ms": 0.11878,
+        "min_ms": 0.11875,
+        "p90_ms": 0.11981,
+        "trials": 50
+      },
+      "cuda_vector4_preallocated": {
+        "median_ms": 0.1024,
+        "min_ms": 0.09933,
+        "p90_ms": 0.10445,
+        "trials": 50
+      },
+      "exact_int8_to_fp16": true,
+      "fp16_bytes": 33554432,
+      "int8_bytes": 16777216,
+      "shape": [
+        4096,
+        4096
+      ],
+      "torch_copy_preallocated": {
+        "median_ms": 0.13104,
+        "min_ms": 0.12797,
+        "p90_ms": 0.1321,
+        "trials": 50
+      },
+      "torch_to_alloc": {
+        "median_ms": 0.13104,
+        "min_ms": 0.12797,
+        "p90_ms": 0.1321,
+        "trials": 50
+      },
+      "vector4_vs_torch_copy_speedup": 1.2797,
+      "vector4_vs_torch_to_speedup": 1.2797
+    },
+    {
+      "cuda_scalar_preallocated": {
+        "median_ms": 0.06243,
+        "min_ms": 0.06141,
+        "p90_ms": 0.06246,
+        "trials": 50
+      },
+      "cuda_vector4_preallocated": {
+        "median_ms": 0.05325,
+        "min_ms": 0.0512,
+        "p90_ms": 0.05427,
+        "trials": 50
+      },
+      "exact_int8_to_fp16": true,
+      "fp16_bytes": 16777216,
+      "int8_bytes": 8388608,
+      "shape": [
+        2048,
+        4096
+      ],
+      "torch_copy_preallocated": {
+        "median_ms": 0.06861,
+        "min_ms": 0.06653,
+        "p90_ms": 0.06963,
+        "trials": 50
+      },
+      "torch_to_alloc": {
+        "median_ms": 0.06858,
+        "min_ms": 0.06755,
+        "p90_ms": 0.06963,
+        "trials": 50
+      },
+      "vector4_vs_torch_copy_speedup": 1.2885,
+      "vector4_vs_torch_to_speedup": 1.2879
+    },
+    {
+      "cuda_scalar_preallocated": {
+        "median_ms": 0.46285,
+        "min_ms": 0.46179,
+        "p90_ms": 0.46288,
+        "trials": 50
+      },
+      "cuda_vector4_preallocated": {
+        "median_ms": 0.39629,
+        "min_ms": 0.39014,
+        "p90_ms": 0.39936,
+        "trials": 50
+      },
+      "exact_int8_to_fp16": true,
+      "fp16_bytes": 134217728,
+      "int8_bytes": 67108864,
+      "shape": [
+        16384,
+        4096
+      ],
+      "torch_copy_preallocated": {
+        "median_ms": 0.50381,
+        "min_ms": 0.49971,
+        "p90_ms": 0.50586,
+        "trials": 50
+      },
+      "torch_to_alloc": {
+        "median_ms": 0.50278,
+        "min_ms": 0.49664,
+        "p90_ms": 0.50586,
+        "trials": 50
+      },
+      "vector4_vs_torch_copy_speedup": 1.2713,
+      "vector4_vs_torch_to_speedup": 1.2687
+    },
+    {
+      "cuda_scalar_preallocated": {
+        "median_ms": 0.41984,
+        "min_ms": 0.41984,
+        "p90_ms": 0.42086,
+        "trials": 50
+      },
+      "cuda_vector4_preallocated": {
+        "median_ms": 0.39731,
+        "min_ms": 0.39219,
+        "p90_ms": 0.40038,
+        "trials": 50
+      },
+      "exact_int8_to_fp16": true,
+      "fp16_bytes": 134217728,
+      "int8_bytes": 67108864,
+      "shape": [
+        4096,
+        16384
+      ],
+      "torch_copy_preallocated": {
+        "median_ms": 0.48128,
+        "min_ms": 0.47616,
+        "p90_ms": 0.48333,
+        "trials": 50
+      },
+      "torch_to_alloc": {
+        "median_ms": 0.48128,
+        "min_ms": 0.47718,
+        "p90_ms": 0.48435,
+        "trials": 50
+      },
+      "vector4_vs_torch_copy_speedup": 1.2113,
+      "vector4_vs_torch_to_speedup": 1.2113
+    },
+    {
+      "cuda_scalar_preallocated": {
+        "median_ms": 0.10854,
+        "min_ms": 0.10752,
+        "p90_ms": 0.10854,
+        "trials": 50
+      },
+      "cuda_vector4_preallocated": {
+        "median_ms": 0.1024,
+        "min_ms": 0.09933,
+        "p90_ms": 0.10342,
+        "trials": 50
+      },
+      "exact_int8_to_fp16": true,
+      "fp16_bytes": 33554432,
+      "int8_bytes": 16777216,
+      "shape": [
+        8192,
+        2048
+      ],
+      "torch_copy_preallocated": {
+        "median_ms": 0.12493,
+        "min_ms": 0.12186,
+        "p90_ms": 0.12595,
+        "trials": 50
+      },
+      "torch_to_alloc": {
+        "median_ms": 0.12442,
+        "min_ms": 0.12083,
+        "p90_ms": 0.12698,
+        "trials": 50
+      },
+      "vector4_vs_torch_copy_speedup": 1.22,
+      "vector4_vs_torch_to_speedup": 1.215
+    }
+  ],
+  "source_sha": "fe17acf3f9dc8e10e957bb3642b0b0f207681d39",
+  "status": "PASS",
+  "trials_per_variant": 50,
+  "utc": "2026-11-13T15:54:09.727848+00:00",
+  "workflow_status": "success"
+}

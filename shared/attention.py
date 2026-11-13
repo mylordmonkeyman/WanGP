@@ -475,6 +475,27 @@ def pay_attention(
     # assume if k_lens is non null, each k is padded up to lk (one k out of two will need to be discarded or ignored)
     if attention_mask is not None and causal:
         raise ValueError("pay_attention received both attention_mask and causal=True; build a combined mask once and pass causal=False.")
+    # Per-LTX-call experimental SM70 routes, independent of global WanGP modes.
+    # Unknown/unsupported shapes return None and stay on the existing SDPA path.
+    if force_attention in ("ltx25_v100_1cat", "ltx25_v100_zhinianqin"):
+        from shared.ltx25_v100_attention import try_attention
+        q_v100, k_v100, v_v100 = qkv_list
+        accelerated = try_attention(
+            q_v100, k_v100, v_v100,
+            force_attention=force_attention,
+            attention_mask=attention_mask,
+            dropout_p=dropout_p,
+            softmax_scale=softmax_scale,
+            causal=causal,
+            window_size=window_size,
+            q_lens=q_lens,
+            k_lens=k_lens,
+        )
+        if accelerated is not None:
+            qkv_list.clear()
+            return accelerated
+        force_attention = "sdpa"
+
     if attention_mask != None:
         requested_attn = offload.shared_state["_attention"] if force_attention == None else force_attention
         if requested_attn in ("veda", "vsa"):

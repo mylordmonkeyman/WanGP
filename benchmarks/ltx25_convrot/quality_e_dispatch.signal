@@ -1,2 +1,2 @@
 2026-11-12 22:xx America/Chicago
-retry Candidate E with asynchronous GPU range guard, FP32 row correction, and preflight
+rerun Candidate E with magnitude/cancellation FP32 guard + no per-call CPU scalar sync

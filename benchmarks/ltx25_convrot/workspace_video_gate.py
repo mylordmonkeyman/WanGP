@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Strict decoded-frame comparison against the validated no-sync Candidate E.
 
-Runs only after an explicit e_workspace_1024 test generates a video. All 49
+Runs only after an explicit e_workspace_1024 or e_cast4_1024 test generates a video. All 49
 frames are decoded as yuv420p by the same ffmpeg command. A difference is
 recorded as a failed gate, never silently classified as visually equivalent.
 
@@ -43,7 +43,15 @@ def hashes(ffmpeg, video):
 
 def main():
     sha = os.environ["GITHUB_SHA"][:12]
-    current = BASE / f"runtime_quality_workspace_{sha}.json"
+    variant = os.environ.get("LTX25_BENCH_VARIANT", "e_workspace_1024")
+    variants = {
+        "e_workspace_1024": ("quality_workspace", "workspace_video_gate"),
+        "e_cast4_1024": ("quality_cast4", "cast4_video_gate"),
+    }
+    if variant not in variants:
+        raise ValueError(f"Unsupported decoded video gate variant {variant!r}")
+    suffix, gate_key = variants[variant]
+    current = BASE / f"runtime_{suffix}_{sha}.json"
     video, report = video_from(current)
     gate = {"status": "ERROR", "reference_report": str(REFERENCE_REPORT),
             "comparison": "49 decoded yuv420p frames, exact equality",
@@ -62,12 +70,13 @@ def main():
                     decoded_pixels_identical=not mismatches)
     except Exception as exc:
         gate.update(status="ERROR", error=f"{type(exc).__name__}: {exc}"[:500])
-    report["workspace_video_gate"] = gate
+    report[gate_key] = gate
     if gate["status"] != "PASS":
-        report["status"] = "WORKSPACE_VIDEO_MISMATCH"
-        report["blocker"] = "Decoded workspace video differs from validated no-sync Candidate E"
+        report["status"] = "DECODED_VIDEO_MISMATCH"
+        report["blocker"] = "Decoded experimental video differs from validated no-sync Candidate E"
     current.write_text(json.dumps(report, indent=2) + "\n")
-    print("LTX25_WORKSPACE_VIDEO_GATE " + json.dumps(gate, sort_keys=True), flush=True)
+    print("LTX25_DECODED_VIDEO_GATE " + json.dumps({
+        "variant": variant, **gate}, sort_keys=True), flush=True)
     if gate["status"] != "PASS":
         raise SystemExit(1)
 

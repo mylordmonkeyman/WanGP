@@ -1,0 +1,59 @@
+name: LTX-2.5 CPU-only H256 video frame-metrics diagnostic
+
+on:
+  push:
+    branches:
+      - perf/ltx25-convrot-sm70
+    paths:
+      - benchmarks/ltx25_convrot/hadamard_video_metrics_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  metrics:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact diagnostic source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Analyze 49 decoded frames with ffmpeg on CPU only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 benchmarks/ltx25_convrot/hadamard_video_metrics.py
+      - name: Publish independent metrics, no video or private metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,sys
+          from pathlib import Path
+          sys.path.insert(0,'benchmarks/ltx25_convrot')
+          from publish_phase0_status import put
+          data=json.loads(Path('/cache/ltx25/results/hadamard_video_metrics.json').read_text())
+          data['run_url']='https://github.com/mylordmonkeyman/WanGP/actions/runs/'+os.environ['GITHUB_RUN_ID']
+          put('ltx25-hadamard-video-metrics/latest.json',data)
+          put('ltx25-hadamard-video-metrics/runs/'+os.environ['GITHUB_RUN_ID']+'.json',data)
+          PY
+      - name: Assert diagnostic completeness (never accept quality)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/cache/ltx25/results/hadamard_video_metrics.json'))
+          assert d['status']=='PASS' and d['frame_count']==49
+          assert d['psnr_db']['frames']==49 and d['ssim']['frames']==49
+          assert d['has_visual_human_review'] is False
+          assert d['model_quality_validated'] is False
+          PY

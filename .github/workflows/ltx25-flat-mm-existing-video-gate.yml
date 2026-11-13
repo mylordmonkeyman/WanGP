@@ -1,0 +1,61 @@
+name: LTX-2.5 CPU-only existing flat-mm video equality gate
+
+on:
+  push:
+    branches:
+      - perf/ltx25-convrot-sm70
+    paths:
+      - benchmarks/ltx25_convrot/flat_mm_existing_gate.signal
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 15
+    env:
+      VERIFIED_SOURCE_SHA: f46d245732f22fbe066303d5ab08e5cb15852e1c
+      VERIFIED_VARIANT: e_flat_mm_1024
+    steps:
+      - name: Checkout source containing strict known-good decoded-frame gate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify existing 49-frame MP4 without generating or loading a model
+        shell: bash
+        run: |
+          set -euo pipefail
+          env GITHUB_SHA="$VERIFIED_SOURCE_SHA" LTX25_BENCH_VARIANT="$VERIFIED_VARIANT" \
+            python3 benchmarks/ltx25_convrot/workspace_video_gate.py
+      - name: Publish verified original source result
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          env GITHUB_SHA="$VERIFIED_SOURCE_SHA" LTX25_BENCH_VARIANT="$VERIFIED_VARIANT" \
+            python3 benchmarks/ltx25_convrot/publish_quality_status.py
+      - name: Assert complete original variant and strict decoded identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          env GITHUB_SHA="$VERIFIED_SOURCE_SHA" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('/cache/ltx25/results')/('runtime_quality_flat_mm_'+os.environ['GITHUB_SHA'][:12]+'.json')
+          assert p.is_file(), p
+          d=json.loads(p.read_text())
+          assert d['status']=='PASS', d.get('blocker')
+          gate=d['flat_mm_video_gate']
+          assert gate['decoded_pixels_identical'] is True and gate['total_frames']==49
+          assert d['candidate_counters']['used']==16368
+          assert d['candidate_counters']['range_fallback']==4434
+          PY

@@ -1,1 +1,1 @@
-2026-11-13: controlled 49-frame exact-reference four-run cast4/cast8/cast8/cast4 alternating wall-time. No source default change; isolated runner + immutable model checkpoints.
+2026-11-13: repeat vector4-vector8-vector8-vector4 49-frame with explicit workspace counters collected for both cast variants; strict exact-frame gates; no production-default changes.

@@ -9,7 +9,8 @@ from pathlib import Path
 from publish_phase0_status import put
 
 OUT = Path("/cache/ltx25/results")
-VARIANTS = {"r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e"}
+VARIANTS = {"r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e",
+            "e_real_activation_audit_1024": "quality_real_audit"}
 
 
 def main():
@@ -40,6 +41,7 @@ def main():
         "num_inference_steps": r.get("num_inference_steps"),
         "candidate_e_enabled": r.get("candidate_e_enabled"),
         "candidate_counters": counters,
+        "real_activation_audit": r.get("real_activation_audit"),
         "production_eligible": False if variant.startswith("e_") else None,
         "baked_checkpoint_root": "/opt/ltx25/checkpoints",
         "checkpoint_fetched_in_job": False,
@@ -54,6 +56,12 @@ def main():
         "gpu_preflight": r.get("gpu_preflight"),
         "videos": r.get("videos", []),
         "note": (
+            "INSTRUMENTED REAL MODEL ACTIVATIONS: R0/R1/Candidate E comparisons "
+            "synchronize and add expensive FP32 work; the recorded generation time "
+            "MUST NOT be compared to normal runtime performance. "
+            "Only sampled activation rows are checked; visual review and broader "
+            "per-shape sampling remain required."
+            if variant == "e_real_activation_audit_1024" else
             "Matched 1024x576, 49-frame, 8-step text-to-video quality comparison. "
             "Visual review required; do not infer end-to-end speedup from synthetic layer tests."
         ),
@@ -65,6 +73,8 @@ def main():
         "variant": variant, "run_id": run_id,
         "status": doc["status"], "elapsed_seconds": doc["generation"]["elapsed_seconds"],
         "candidate_used": counters.get("used", 0),
+        "real_activation_status": (r.get("real_activation_audit") or {}).get("status"),
+        "real_activation_samples": (r.get("real_activation_audit") or {}).get("total_samples"),
         "videos": doc["videos"],
     })[:5000], flush=True)
 

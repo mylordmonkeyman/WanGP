@@ -10,7 +10,7 @@ changes to an existing server checkout or affect other Git branches.
 | Setting | Value with no environment override | Override |
 |---|---|---|
 | `WAN2GP_LTX25_CUBLAS_E_MODE` | `fp32rot` (set at WanGP startup) | `off` disables the adapter entirely; explicit `fp32rot` is strict; `auto` is normalized to the validated `fp32rot` selector |
-| `WAN2GP_LTX25_E_CAST` | `vector4` | `vector8` opts into exact packed-eight conversion (pilot); `torch` restores PyTorch INT8-to-FP16 conversion within Candidate E |
+| `WAN2GP_LTX25_E_CAST` | `vector8` (promoted November 13, 2026) | `vector4` restores the former exact packed-four conversion; `torch` restores PyTorch INT8-to-FP16 conversion within Candidate E |
 | `WAN2GP_LTX25_HADAMARD` | `radix4` | `torch` restores the historical FP32 H256 rotation; `flat_mm` is a separately tested torch.mm alternative |
 | `WAN2GP_LTX25_E_WORKSPACE` | `1` | `0` disables the reusable activation/output workspace |
 | `LTX25_E_WORKSPACE_MAX_MIB` | `96` | Clamp persistent workspace limit up to 256 MiB |
@@ -246,3 +246,47 @@ The integrated vector8 preflight additionally passed on SM70 with **both**
 `WAN2GP_LTX25_HADAMARD=radix4`, including exact full-adapter BF16/FP16
 comparisons against the corresponding PyTorch-cast path:
 https://github.com/mylordmonkeyman/WanGP/actions/runs/43512964498 .
+
+### Vector8 promotion on 241-frame I2V with LoRA (2026-11-13)
+
+The user supplied a controlled two-trial-per-variant I2V benchmark at 1024x1024,
+241 frames, 8 steps, same seed/LoRA, profile 0 and SDPA. Both arms used the
+already promoted `radix4` Hadamard; the sole intended difference was the
+temporary INT8-to-FP16 cast width. Recorded wall times:
+
+| Trial | vector4 | vector8 |
+|---|---:|---:|
+| 1 | 565.513 s | 561.885 s |
+| 2 | 565.038 s | 563.329 s |
+
+Vector8 saved 2.669 s per video on average (0.472%). Its decoded 241-frame
+YUV420P output was pixel-identical to Vector4: FFmpeg SSIM Y/U/V/All = 1,
+PSNR average = infinity. The same source INT8 values become exactly the
+same FP16 bits in either cast, so this result is numerically plausible;
+it does not prove every prompt, GPU, or FFmpeg configuration is identical.
+Audio was not assessed by the cited metrics. The sample is small, but the
+measured improvement and exact conversion justify the explicitly requested
+promotion on this experimental V100 branch.
+
+Commit `591eaa1d2582e043e567e636eb2d1146b181a9bc` changes the source
+default to `vector8`; override `WAN2GP_LTX25_E_CAST=vector4` reverts it.
+The prior opt-in pilot section above is retained as historical context.
+
+### Next Candidate E GEMM experiment: shape-gated Algo2
+
+An earlier isolated V100 cuBLAS sweep found, for (N,K,M)=(16384,4096,64),
+a median 0.28621 ms with TensorOp Algo2 versus 0.35277 ms with the default
+TensorOp selector, with bit-exact isolated FP32 outputs. An earlier 49-frame
+video with `vector4` and `torch` rotation passed decoded equality and
+recorded 1008 selected Algo2 calls, but its 95.8-second run was not a
+controlled full-generation comparison to the new default.
+
+The new `ltx25-gemm-algo2-abba.yml` workflow compares four full 49-frame
+generations in default/Algo2/Algo2/default order, fixing `radix4`,
+`vector8`, the same configuration directory and all other generation
+settings. Synthetic BF16/FP16 full-adapter numerical exactness must pass,
+all 49 decoded frames from all four runs must match, and dispatch counters
+must confirm exactly where Algo2 ran. Results are stored under
+`ltx25-gemm-algo2-abba/` on `perf/ltx25-run-results`. The Algo2
+selector remains opt-in (`WAN2GP_LTX25_GEMM_TUNE=algo2_m64`) pending
+the matched benchmark and an engineering-benefit decision.

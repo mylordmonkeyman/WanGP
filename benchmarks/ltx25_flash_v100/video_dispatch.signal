@@ -14,3 +14,5 @@ retry-video-unescape-active-override-3344672-20261113T1220Z
 
 Dispatch: diagnose-video-eligibility-002ef35-20261113T1325Z
 Reason: run 43423937472 generated all videos but logged zero candidate calls; capture one metadata-only eligibility snapshot per video attention module to identify masking/dtype/shape gate.
+
+authorize-realshape-bf16-315tokens-20261113T1517Z; no video generation; test numerical accuracy, GPU latency, VRAM and conversion overhead.

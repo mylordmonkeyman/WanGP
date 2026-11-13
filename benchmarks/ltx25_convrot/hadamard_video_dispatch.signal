@@ -1,0 +1,2 @@
+2026-11-13
+Opt-in radix4 Hadamard H256 on validated SM70 ConvRot default. Run BF16/FP16 complete-linear preflight, fixed-seed full 1024x576 49-frame video, and exact decoded-frame comparison. Do not change production defaults unless passing.

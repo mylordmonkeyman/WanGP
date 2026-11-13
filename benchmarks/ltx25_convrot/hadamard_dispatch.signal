@@ -1,0 +1,2 @@
+2026-11-13
+Isolated V100 FP32 256-point Hadamard radix4 H4-Kronecker kernel; compare 50-event medians, BF16/FP16 activation precision and torch.matmul. No production integration, no parallel GPU load.

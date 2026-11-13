@@ -172,7 +172,13 @@ def main():
                 row["psnr_db"] = metric(ffmpeg, videos[first], videos[second], "psnr")
             report["pairs"].append(row)
             print("LTX25_VIDEO_PAIR " + json.dumps(row, sort_keys=True), flush=True)
-        report["contact_sheet"] = contact_sheet(ffmpeg, videos)
+        try:
+            report["contact_sheet"] = contact_sheet(ffmpeg, videos)
+        except Exception as exc:
+            report["contact_sheet"] = {
+                "status": "NOT_AVAILABLE",
+                "error": f"{type(exc).__name__}: {exc}"[:600],
+            }
         report["status"] = "PASS"
     except Exception as exc:
         report["status"] = "ERROR"

@@ -10,7 +10,9 @@ CUDA extensions. No CUDA code is vendored. Neither dependency is downloaded,
 built, installed, or imported during WanGP startup. The defaults and existing
 non-LTX attention paths are unchanged.
 
-Only LTX's normal **self-attention** path can select the experimental backend.
+Only genuine LTX-2.5 transformer instances, tagged at model initialization,
+can select an experimental backend through LTX's normal **self-attention** path.
+Other LTX versions remain on their existing attention dispatch.
 The initial gate is deliberately strict:
 
 - NVIDIA sm_70, FP16 Q/K/V, inference (no autograd);
@@ -84,7 +86,8 @@ UNVERIFIED against the user's installed WanGP container.
 
 - shared/ltx25_v100_attention.py — lazy load, shape/dtype gate, both adapters.
 - shared/attention.py — early per-call experimental route, fallback to SDPA.
-- models/ltx2/ltx_core/model/transformer/attention.py — LTX self-attention opts in;
+- models/ltx2/ltx2.py — mark only actual LTX-2.5 transformer attention modules.
+- models/ltx2/ltx_core/model/transformer/attention.py — marked LTX self-attention opts in;
   preserve existing attention_kit fast path and explicit attention overrides.
 - shared/cli_args.py — launch flags.
 - wgp.py — propagate launch flags.

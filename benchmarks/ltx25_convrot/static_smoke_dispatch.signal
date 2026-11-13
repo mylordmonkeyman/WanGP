@@ -1,2 +1,2 @@
 2026-11-13
-Test promoted no-env SM70 defaults, automatic native-extension build/caching and fail-safe R0, while preserving previous staged benchmarks.
+Static syntax and startup default regression for validated explicit fp32rot mode. Confirm source mode normalization, vector4 cast, bounded scratch and R0 opt-out.

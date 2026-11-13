@@ -247,7 +247,7 @@ class Attention(torch.nn.Module):
             gate_logits = None if self.to_gate_logits is None else self.to_gate_logits(x_list[0])
             callback = lambda query, key, group: self._norm_rope_(query, key, pe, k_pe, group)
             options = dict(split_heads=split_heads, norm_spans_heads=True, norm_stats=self._head_mean_squares,
-                           attention_mask=mask, force_attention=ltx25_v100_attention_override())
+                           attention_mask=mask, force_attention=ltx25_v100_attention_override() if context_list is None else None)
             if context_list is None:
                 out = attention_kit.qkv_attention(x_list, self.to_q, self.to_k, self.to_v, self.heads, self.dim_head, callback, **options)
             else:
@@ -284,7 +284,7 @@ class Attention(torch.nn.Module):
         v = v.view(v.shape[0], -1, self.heads, self.dim_head)
         force_attention, attention_version = self._resolve_attention_override()
         # Preserve explicit LTX attention choices; only DEFAULT opts into this pilot.
-        if force_attention is None:
+        if force_attention is None and not cross_attn:
             force_attention = ltx25_v100_attention_override()
 
         if cross_attn and NAG is not None:

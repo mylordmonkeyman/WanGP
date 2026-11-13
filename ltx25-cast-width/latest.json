@@ -1,0 +1,783 @@
+{
+  "device": "Tesla V100-PCIE-32GB",
+  "kind": "SM70 isolated exact INT8-to-FP16 packed-width sweep",
+  "production_eligible": false,
+  "run_id": "43509629041",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43509629041",
+  "shapes": [
+    {
+      "baseline_vector4_ms": 0.033792,
+      "best_speedup": 1.29205,
+      "best_variant": "packed8_128",
+      "elements": 4194304,
+      "k": 2048,
+      "n": 2048,
+      "variants": [
+        {
+          "baseline_rounds_ms": [
+            0.034816,
+            0.033792
+          ],
+          "baseline_vector4_ms": 0.034304,
+          "byte_traffic_mib": 12.0,
+          "candidate_ms": 0.0266,
+          "candidate_rounds_ms": [
+            0.026608,
+            0.026592
+          ],
+          "effective_bandwidth_gib_s": 440.555,
+          "exact_fp16_output": true,
+          "name": "packed8_256",
+          "speedup": 1.28962,
+          "variant": 1
+        },
+        {
+          "baseline_rounds_ms": [
+            0.033792,
+            0.034304
+          ],
+          "baseline_vector4_ms": 0.034048,
+          "byte_traffic_mib": 12.0,
+          "candidate_ms": 0.03584,
+          "candidate_rounds_ms": [
+            0.03584,
+            0.03584
+          ],
+          "effective_bandwidth_gib_s": 326.974,
+          "exact_fp16_output": true,
+          "name": "packed16_256",
+          "speedup": 0.95,
+          "variant": 2
+        },
+        {
+          "baseline_rounds_ms": [
+            0.034304,
+            0.033792
+          ],
+          "baseline_vector4_ms": 0.034048,
+          "byte_traffic_mib": 12.0,
+          "candidate_ms": 0.026352,
+          "candidate_rounds_ms": [
+            0.026112,
+            0.026592
+          ],
+          "effective_bandwidth_gib_s": 444.701,
+          "exact_fp16_output": true,
+          "name": "packed8_128",
+          "speedup": 1.29205,
+          "variant": 3
+        },
+        {
+          "baseline_rounds_ms": [
+            0.033792,
+            0.033792
+          ],
+          "baseline_vector4_ms": 0.033792,
+          "byte_traffic_mib": 12.0,
+          "candidate_ms": 0.035064,
+          "candidate_rounds_ms": [
+            0.035312,
+            0.034816
+          ],
+          "effective_bandwidth_gib_s": 334.21,
+          "exact_fp16_output": true,
+          "name": "packed16_128",
+          "speedup": 0.96372,
+          "variant": 4
+        },
+        {
+          "baseline_rounds_ms": [
+            0.033792,
+            0.033808
+          ],
+          "baseline_vector4_ms": 0.0338,
+          "byte_traffic_mib": 12.0,
+          "candidate_ms": 0.0266,
+          "candidate_rounds_ms": [
+            0.026592,
+            0.026608
+          ],
+          "effective_bandwidth_gib_s": 440.555,
+          "exact_fp16_output": true,
+          "name": "packed8_512",
+          "speedup": 1.27068,
+          "variant": 5
+        },
+        {
+          "baseline_rounds_ms": [
+            0.033808,
+            0.033792
+          ],
+          "baseline_vector4_ms": 0.0338,
+          "byte_traffic_mib": 12.0,
+          "candidate_ms": 0.035584,
+          "candidate_rounds_ms": [
+            0.035328,
+            0.03584
+          ],
+          "effective_bandwidth_gib_s": 329.326,
+          "exact_fp16_output": true,
+          "name": "packed16_512",
+          "speedup": 0.94987,
+          "variant": 6
+        },
+        {
+          "baseline_rounds_ms": [
+            0.033792,
+            0.033792
+          ],
+          "baseline_vector4_ms": 0.033792,
+          "byte_traffic_mib": 12.0,
+          "candidate_ms": 0.026872,
+          "candidate_rounds_ms": [
+            0.02712,
+            0.026624
+          ],
+          "effective_bandwidth_gib_s": 436.095,
+          "exact_fp16_output": true,
+          "name": "packed8_256_grid640",
+          "speedup": 1.25752,
+          "variant": 7
+        },
+        {
+          "baseline_rounds_ms": [
+            0.033792,
+            0.033792
+          ],
+          "baseline_vector4_ms": 0.033792,
+          "byte_traffic_mib": 12.0,
+          "candidate_ms": 0.034824,
+          "candidate_rounds_ms": [
+            0.034832,
+            0.034816
+          ],
+          "effective_bandwidth_gib_s": 336.514,
+          "exact_fp16_output": true,
+          "name": "packed16_256_grid640",
+          "speedup": 0.97037,
+          "variant": 8
+        }
+      ]
+    },
+    {
+      "baseline_vector4_ms": 0.053248,
+      "best_speedup": 1.43408,
+      "best_variant": "packed8_512",
+      "elements": 8388608,
+      "k": 4096,
+      "n": 2048,
+      "variants": [
+        {
+          "baseline_rounds_ms": [
+            0.053248,
+            0.053264
+          ],
+          "baseline_vector4_ms": 0.053256,
+          "byte_traffic_mib": 24.0,
+          "candidate_ms": 0.037376,
+          "candidate_rounds_ms": [
+            0.037888,
+            0.036864
+          ],
+          "effective_bandwidth_gib_s": 627.074,
+          "exact_fp16_output": true,
+          "name": "packed8_256",
+          "speedup": 1.42487,
+          "variant": 1
+        },
+        {
+          "baseline_rounds_ms": [
+            0.053264,
+            0.053248
+          ],
+          "baseline_vector4_ms": 0.053256,
+          "byte_traffic_mib": 24.0,
+          "candidate_ms": 0.057344,
+          "candidate_rounds_ms": [
+            0.057344,
+            0.057344
+          ],
+          "effective_bandwidth_gib_s": 408.718,
+          "exact_fp16_output": true,
+          "name": "packed16_256",
+          "speedup": 0.92871,
+          "variant": 2
+        },
+        {
+          "baseline_rounds_ms": [
+            0.053248,
+            0.053248
+          ],
+          "baseline_vector4_ms": 0.053248,
+          "byte_traffic_mib": 24.0,
+          "candidate_ms": 0.037888,
+          "candidate_rounds_ms": [
+            0.037888,
+            0.037888
+          ],
+          "effective_bandwidth_gib_s": 618.6,
+          "exact_fp16_output": true,
+          "name": "packed8_128",
+          "speedup": 1.40541,
+          "variant": 3
+        },
+        {
+          "baseline_rounds_ms": [
+            0.053248,
+            0.053264
+          ],
+          "baseline_vector4_ms": 0.053256,
+          "byte_traffic_mib": 24.0,
+          "candidate_ms": 0.057344,
+          "candidate_rounds_ms": [
+            0.057344,
+            0.057344
+          ],
+          "effective_bandwidth_gib_s": 408.718,
+          "exact_fp16_output": true,
+          "name": "packed16_128",
+          "speedup": 0.92871,
+          "variant": 4
+        },
+        {
+          "baseline_rounds_ms": [
+            0.053264,
+            0.053248
+          ],
+          "baseline_vector4_ms": 0.053256,
+          "byte_traffic_mib": 24.0,
+          "candidate_ms": 0.037136,
+          "candidate_rounds_ms": [
+            0.036896,
+            0.037376
+          ],
+          "effective_bandwidth_gib_s": 631.126,
+          "exact_fp16_output": true,
+          "name": "packed8_512",
+          "speedup": 1.43408,
+          "variant": 5
+        },
+        {
+          "baseline_rounds_ms": [
+            0.053248,
+            0.053248
+          ],
+          "baseline_vector4_ms": 0.053248,
+          "byte_traffic_mib": 24.0,
+          "candidate_ms": 0.059392,
+          "candidate_rounds_ms": [
+            0.059392,
+            0.059392
+          ],
+          "effective_bandwidth_gib_s": 394.624,
+          "exact_fp16_output": true,
+          "name": "packed16_512",
+          "speedup": 0.89655,
+          "variant": 6
+        },
+        {
+          "baseline_rounds_ms": [
+            0.053248,
+            0.053248
+          ],
+          "baseline_vector4_ms": 0.053248,
+          "byte_traffic_mib": 24.0,
+          "candidate_ms": 0.03944,
+          "candidate_rounds_ms": [
+            0.038944,
+            0.039936
+          ],
+          "effective_bandwidth_gib_s": 594.257,
+          "exact_fp16_output": true,
+          "name": "packed8_256_grid640",
+          "speedup": 1.3501,
+          "variant": 7
+        },
+        {
+          "baseline_rounds_ms": [
+            0.053248,
+            0.053248
+          ],
+          "baseline_vector4_ms": 0.053248,
+          "byte_traffic_mib": 24.0,
+          "candidate_ms": 0.063488,
+          "candidate_rounds_ms": [
+            0.063488,
+            0.063488
+          ],
+          "effective_bandwidth_gib_s": 369.164,
+          "exact_fp16_output": true,
+          "name": "packed16_256_grid640",
+          "speedup": 0.83871,
+          "variant": 8
+        }
+      ]
+    },
+    {
+      "baseline_vector4_ms": 0.1024,
+      "best_speedup": 1.4707,
+      "best_variant": "packed8_128",
+      "elements": 16777216,
+      "k": 4096,
+      "n": 4096,
+      "variants": [
+        {
+          "baseline_rounds_ms": [
+            0.1024,
+            0.1024
+          ],
+          "baseline_vector4_ms": 0.1024,
+          "byte_traffic_mib": 48.0,
+          "candidate_ms": 0.069632,
+          "candidate_rounds_ms": [
+            0.069632,
+            0.069632
+          ],
+          "effective_bandwidth_gib_s": 673.182,
+          "exact_fp16_output": true,
+          "name": "packed8_256",
+          "speedup": 1.47059,
+          "variant": 1
+        },
+        {
+          "baseline_rounds_ms": [
+            0.1024,
+            0.102416
+          ],
+          "baseline_vector4_ms": 0.102408,
+          "byte_traffic_mib": 48.0,
+          "candidate_ms": 0.110592,
+          "candidate_rounds_ms": [
+            0.110592,
+            0.110592
+          ],
+          "effective_bandwidth_gib_s": 423.855,
+          "exact_fp16_output": true,
+          "name": "packed16_256",
+          "speedup": 0.926,
+          "variant": 2
+        },
+        {
+          "baseline_rounds_ms": [
+            0.102416,
+            0.1024
+          ],
+          "baseline_vector4_ms": 0.102408,
+          "byte_traffic_mib": 48.0,
+          "candidate_ms": 0.069632,
+          "candidate_rounds_ms": [
+            0.069632,
+            0.069632
+          ],
+          "effective_bandwidth_gib_s": 673.182,
+          "exact_fp16_output": true,
+          "name": "packed8_128",
+          "speedup": 1.4707,
+          "variant": 3
+        },
+        {
+          "baseline_rounds_ms": [
+            0.1024,
+            0.1024
+          ],
+          "baseline_vector4_ms": 0.1024,
+          "byte_traffic_mib": 48.0,
+          "candidate_ms": 0.110592,
+          "candidate_rounds_ms": [
+            0.110592,
+            0.110592
+          ],
+          "effective_bandwidth_gib_s": 423.855,
+          "exact_fp16_output": true,
+          "name": "packed16_128",
+          "speedup": 0.92593,
+          "variant": 4
+        },
+        {
+          "baseline_rounds_ms": [
+            0.1024,
+            0.1024
+          ],
+          "baseline_vector4_ms": 0.1024,
+          "byte_traffic_mib": 48.0,
+          "candidate_ms": 0.069632,
+          "candidate_rounds_ms": [
+            0.069632,
+            0.069632
+          ],
+          "effective_bandwidth_gib_s": 673.182,
+          "exact_fp16_output": true,
+          "name": "packed8_512",
+          "speedup": 1.47059,
+          "variant": 5
+        },
+        {
+          "baseline_rounds_ms": [
+            0.1024,
+            0.1024
+          ],
+          "baseline_vector4_ms": 0.1024,
+          "byte_traffic_mib": 48.0,
+          "candidate_ms": 0.113408,
+          "candidate_rounds_ms": [
+            0.113152,
+            0.113664
+          ],
+          "effective_bandwidth_gib_s": 413.331,
+          "exact_fp16_output": true,
+          "name": "packed16_512",
+          "speedup": 0.90293,
+          "variant": 6
+        },
+        {
+          "baseline_rounds_ms": [
+            0.1024,
+            0.1024
+          ],
+          "baseline_vector4_ms": 0.1024,
+          "byte_traffic_mib": 48.0,
+          "candidate_ms": 0.072728,
+          "candidate_rounds_ms": [
+            0.07272,
+            0.072736
+          ],
+          "effective_bandwidth_gib_s": 644.525,
+          "exact_fp16_output": true,
+          "name": "packed8_256_grid640",
+          "speedup": 1.40799,
+          "variant": 7
+        },
+        {
+          "baseline_rounds_ms": [
+            0.1024,
+            0.1024
+          ],
+          "baseline_vector4_ms": 0.1024,
+          "byte_traffic_mib": 48.0,
+          "candidate_ms": 0.129024,
+          "candidate_rounds_ms": [
+            0.129024,
+            0.129024
+          ],
+          "effective_bandwidth_gib_s": 363.305,
+          "exact_fp16_output": true,
+          "name": "packed16_256_grid640",
+          "speedup": 0.79365,
+          "variant": 8
+        }
+      ]
+    },
+    {
+      "baseline_vector4_ms": 0.397328,
+      "best_speedup": 1.50883,
+      "best_variant": "packed8_256",
+      "elements": 67108864,
+      "k": 16384,
+      "n": 4096,
+      "variants": [
+        {
+          "baseline_rounds_ms": [
+            0.397312,
+            0.398384
+          ],
+          "baseline_vector4_ms": 0.397848,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.26368,
+          "candidate_rounds_ms": [
+            0.264192,
+            0.263168
+          ],
+          "effective_bandwidth_gib_s": 711.089,
+          "exact_fp16_output": true,
+          "name": "packed8_256",
+          "speedup": 1.50883,
+          "variant": 1
+        },
+        {
+          "baseline_rounds_ms": [
+            0.398384,
+            0.397312
+          ],
+          "baseline_vector4_ms": 0.397848,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.429568,
+          "candidate_rounds_ms": [
+            0.43008,
+            0.429056
+          ],
+          "effective_bandwidth_gib_s": 436.485,
+          "exact_fp16_output": true,
+          "name": "packed16_256",
+          "speedup": 0.92616,
+          "variant": 2
+        },
+        {
+          "baseline_rounds_ms": [
+            0.397312,
+            0.397312
+          ],
+          "baseline_vector4_ms": 0.397312,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.264192,
+          "candidate_rounds_ms": [
+            0.264192,
+            0.264192
+          ],
+          "effective_bandwidth_gib_s": 709.711,
+          "exact_fp16_output": true,
+          "name": "packed8_128",
+          "speedup": 1.50388,
+          "variant": 3
+        },
+        {
+          "baseline_rounds_ms": [
+            0.397312,
+            0.398336
+          ],
+          "baseline_vector4_ms": 0.397824,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.428032,
+          "candidate_rounds_ms": [
+            0.428032,
+            0.428032
+          ],
+          "effective_bandwidth_gib_s": 438.051,
+          "exact_fp16_output": true,
+          "name": "packed16_128",
+          "speedup": 0.92943,
+          "variant": 4
+        },
+        {
+          "baseline_rounds_ms": [
+            0.398336,
+            0.397312
+          ],
+          "baseline_vector4_ms": 0.397824,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.263936,
+          "candidate_rounds_ms": [
+            0.26368,
+            0.264192
+          ],
+          "effective_bandwidth_gib_s": 710.399,
+          "exact_fp16_output": true,
+          "name": "packed8_512",
+          "speedup": 1.50727,
+          "variant": 5
+        },
+        {
+          "baseline_rounds_ms": [
+            0.397312,
+            0.397328
+          ],
+          "baseline_vector4_ms": 0.39732,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.43904,
+          "candidate_rounds_ms": [
+            0.439296,
+            0.438784
+          ],
+          "effective_bandwidth_gib_s": 427.068,
+          "exact_fp16_output": true,
+          "name": "packed16_512",
+          "speedup": 0.90497,
+          "variant": 6
+        },
+        {
+          "baseline_rounds_ms": [
+            0.397328,
+            0.39632
+          ],
+          "baseline_vector4_ms": 0.396824,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.277504,
+          "candidate_rounds_ms": [
+            0.277504,
+            0.277504
+          ],
+          "effective_bandwidth_gib_s": 675.666,
+          "exact_fp16_output": true,
+          "name": "packed8_256_grid640",
+          "speedup": 1.42998,
+          "variant": 7
+        },
+        {
+          "baseline_rounds_ms": [
+            0.39632,
+            0.397328
+          ],
+          "baseline_vector4_ms": 0.396824,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.520984,
+          "candidate_rounds_ms": [
+            0.520752,
+            0.521216
+          ],
+          "effective_bandwidth_gib_s": 359.896,
+          "exact_fp16_output": true,
+          "name": "packed16_256_grid640",
+          "speedup": 0.76168,
+          "variant": 8
+        }
+      ]
+    },
+    {
+      "baseline_vector4_ms": 0.397312,
+      "best_speedup": 1.51167,
+      "best_variant": "packed8_512",
+      "elements": 67108864,
+      "k": 4096,
+      "n": 16384,
+      "variants": [
+        {
+          "baseline_rounds_ms": [
+            0.397312,
+            0.397344
+          ],
+          "baseline_vector4_ms": 0.397328,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.263936,
+          "candidate_rounds_ms": [
+            0.26368,
+            0.264192
+          ],
+          "effective_bandwidth_gib_s": 710.399,
+          "exact_fp16_output": true,
+          "name": "packed8_256",
+          "speedup": 1.5054,
+          "variant": 1
+        },
+        {
+          "baseline_rounds_ms": [
+            0.397344,
+            0.398336
+          ],
+          "baseline_vector4_ms": 0.39784,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.4296,
+          "candidate_rounds_ms": [
+            0.42912,
+            0.43008
+          ],
+          "effective_bandwidth_gib_s": 436.453,
+          "exact_fp16_output": true,
+          "name": "packed16_256",
+          "speedup": 0.92607,
+          "variant": 2
+        },
+        {
+          "baseline_rounds_ms": [
+            0.398336,
+            0.397312
+          ],
+          "baseline_vector4_ms": 0.397824,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.264192,
+          "candidate_rounds_ms": [
+            0.264192,
+            0.264192
+          ],
+          "effective_bandwidth_gib_s": 709.711,
+          "exact_fp16_output": true,
+          "name": "packed8_128",
+          "speedup": 1.50581,
+          "variant": 3
+        },
+        {
+          "baseline_rounds_ms": [
+            0.397312,
+            0.398336
+          ],
+          "baseline_vector4_ms": 0.397824,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.428032,
+          "candidate_rounds_ms": [
+            0.428032,
+            0.428032
+          ],
+          "effective_bandwidth_gib_s": 438.051,
+          "exact_fp16_output": true,
+          "name": "packed16_128",
+          "speedup": 0.92943,
+          "variant": 4
+        },
+        {
+          "baseline_rounds_ms": [
+            0.398336,
+            0.397312
+          ],
+          "baseline_vector4_ms": 0.397824,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.263168,
+          "candidate_rounds_ms": [
+            0.263168,
+            0.263168
+          ],
+          "effective_bandwidth_gib_s": 712.473,
+          "exact_fp16_output": true,
+          "name": "packed8_512",
+          "speedup": 1.51167,
+          "variant": 5
+        },
+        {
+          "baseline_rounds_ms": [
+            0.397312,
+            0.398336
+          ],
+          "baseline_vector4_ms": 0.397824,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.439296,
+          "candidate_rounds_ms": [
+            0.439296,
+            0.439296
+          ],
+          "effective_bandwidth_gib_s": 426.819,
+          "exact_fp16_output": true,
+          "name": "packed16_512",
+          "speedup": 0.90559,
+          "variant": 6
+        },
+        {
+          "baseline_rounds_ms": [
+            0.398336,
+            0.397312
+          ],
+          "baseline_vector4_ms": 0.397824,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.276992,
+          "candidate_rounds_ms": [
+            0.277504,
+            0.27648
+          ],
+          "effective_bandwidth_gib_s": 676.915,
+          "exact_fp16_output": true,
+          "name": "packed8_256_grid640",
+          "speedup": 1.43623,
+          "variant": 7
+        },
+        {
+          "baseline_rounds_ms": [
+            0.397312,
+            0.397312
+          ],
+          "baseline_vector4_ms": 0.397312,
+          "byte_traffic_mib": 192.0,
+          "candidate_ms": 0.52224,
+          "candidate_rounds_ms": [
+            0.523264,
+            0.521216
+          ],
+          "effective_bandwidth_gib_s": 359.03,
+          "exact_fp16_output": true,
+          "name": "packed16_256_grid640",
+          "speedup": 0.76078,
+          "variant": 8
+        }
+      ]
+    }
+  ],
+  "source_sha": "504e1d554f2caeafa3e7fc69fc70c730ab57eabb",
+  "status": "PASS",
+  "synthetic_only": true,
+  "utc": "2026-11-13T21:19:29.163654+00:00"
+}

@@ -13,6 +13,7 @@ on:
       - benchmarks/ltx25_convrot/stage_profile_dispatch.signal
       - benchmarks/ltx25_convrot/workspace_dispatch.signal
       - benchmarks/ltx25_convrot/cast4_dispatch.signal
+      - benchmarks/ltx25_convrot/combo_dispatch.signal
   workflow_dispatch:
     inputs:
       variant:
@@ -27,6 +28,7 @@ on:
           - e_profile_1024
           - e_workspace_1024
           - e_cast4_1024
+          - e_combo_1024
 
 permissions:
   contents: write
@@ -59,7 +61,7 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
             changed="$(git diff-tree --no-commit-id --name-only -r HEAD |
-              grep -E '^benchmarks/ltx25_convrot/(quality_(r0|e)|real_activation_audit|stage_profile|workspace|cast4)_dispatch[.]signal$' || true)"
+              grep -E '^benchmarks/ltx25_convrot/(quality_(r0|e)|real_activation_audit|stage_profile|workspace|cast4|combo)_dispatch[.]signal$' || true)"
             case "$changed" in
               benchmarks/ltx25_convrot/quality_r0_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=r0_quality_1024" >> "$GITHUB_ENV"
@@ -78,6 +80,9 @@ jobs:
                 ;;
               benchmarks/ltx25_convrot/cast4_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=e_cast4_1024" >> "$GITHUB_ENV"
+                ;;
+              benchmarks/ltx25_convrot/combo_dispatch.signal)
+                echo "LTX25_BENCH_VARIANT=e_combo_1024" >> "$GITHUB_ENV"
                 ;;
               *)
                 echo "Expected exactly one quality dispatch signal, got: $changed" >&2
@@ -118,7 +123,7 @@ jobs:
             r0_quality_1024)
               echo "WAN2GP_LTX25_CUBLAS_E_MODE=" >> "$GITHUB_ENV"
               ;;
-            e_quality_1024|e_real_activation_audit_1024|e_profile_1024|e_workspace_1024|e_cast4_1024)
+            e_quality_1024|e_real_activation_audit_1024|e_profile_1024|e_workspace_1024|e_cast4_1024|e_combo_1024)
               echo "WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot" >> "$GITHUB_ENV"
               ;;
             *)
@@ -146,7 +151,7 @@ jobs:
             benchmarks/ltx25_convrot/candidate_adapter_preflight.py
 
       - name: Preflight opt-in bounded workspace and stream safety
-        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' }}
+        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' || env.LTX25_BENCH_VARIANT == 'e_combo_1024' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -154,7 +159,7 @@ jobs:
             benchmarks/ltx25_convrot/candidate_workspace_preflight.py
 
       - name: Preflight vector4 exact FP16 cast for BF16 and FP16 inputs
-        if: ${{ env.LTX25_BENCH_VARIANT == 'e_cast4_1024' }}
+        if: ${{ env.LTX25_BENCH_VARIANT == 'e_cast4_1024' || env.LTX25_BENCH_VARIANT == 'e_combo_1024' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -170,7 +175,7 @@ jobs:
             benchmarks/ltx25_convrot/wgp_baseline.py
 
       - name: Require experimental video to match validated no-sync E decoded frames
-        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' || env.LTX25_BENCH_VARIANT == 'e_cast4_1024' }}
+        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' || env.LTX25_BENCH_VARIANT == 'e_cast4_1024' || env.LTX25_BENCH_VARIANT == 'e_combo_1024' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -200,7 +205,8 @@ jobs:
                     "e_real_activation_audit_1024": "quality_real_audit",
                     "e_profile_1024": "quality_stage_profile",
                     "e_workspace_1024": "quality_workspace",
-                    "e_cast4_1024": "quality_cast4"}[variant]
+                    "e_cast4_1024": "quality_cast4",
+                    "e_combo_1024": "quality_combo"}[variant]
           sha = os.environ["GITHUB_SHA"][:12]
           path = Path("/cache/ltx25/results") / f"runtime_{suffix}_{sha}.json"
           assert path.is_file(), f"Result report missing: {path}"
@@ -211,6 +217,16 @@ jobs:
           assert len(r.get("videos", [])) == 1, "Expected one new quality video"
           if variant != "r0_quality_1024":
               assert r.get("candidate_counters", {}).get("used", 0) > 0, "No Candidate E calls"
+          if variant == "e_combo_1024":
+              stats = r.get("workspace_stats") or {}
+              assert stats.get("acquired", 0) > 0, "Combination never reused scratch"
+              assert stats.get("max_persistent_bytes", 0) <= 96 * (1 << 20)
+              assert stats.get("persistent_weight_copies") == 0
+              assert r.get("candidate_counters", {}).get("cast_mode") == "vector4"
+              gate = r.get("combo_video_gate") or {}
+              print("COMBO_VIDEO_GATE", gate)
+              assert gate.get("decoded_pixels_identical") is True, "Combination changed decoded frames"
+              assert gate.get("total_frames") == 49
           if variant == "e_cast4_1024":
               assert r.get("candidate_counters", {}).get("cast_mode") == "vector4", "Vector4 cast did not execute"
               gate = r.get("cast4_video_gate") or {}

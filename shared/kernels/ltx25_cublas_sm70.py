@@ -28,7 +28,6 @@ import hashlib
 import shutil
 import subprocess
 import tempfile
-import fcntl
 from pathlib import Path
 
 import torch
@@ -83,6 +82,9 @@ def _native_library():
     if not source.is_file():
         raise FileNotFoundError(f"Bundled SM70 source missing: {source}")
     key = hashlib.sha256(source.read_bytes() + str(torch.version.cuda).encode()).hexdigest()[:20]
+    # Linux-specific lock is imported lazily, so importing WanGP on Windows
+    # never fails. Unsupported compilation hosts simply use the original R0.
+    import fcntl
     cache = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "wan2gp" / "sm70-convrot"
     cache.mkdir(parents=True, exist_ok=True)
     target = cache / f"libltx25_sm70_{key}.so"
@@ -208,7 +210,7 @@ def maybe_linear(x, weight, bias, group):
         _fn()
         if CAST_MODE == "vector4":
             _cast4_fn()
-    except (OSError, RuntimeError, AttributeError) as exc:
+    except (OSError, RuntimeError, AttributeError, ImportError) as exc:
         if MODE != "auto":
             raise
         _NATIVE_UNAVAILABLE = True

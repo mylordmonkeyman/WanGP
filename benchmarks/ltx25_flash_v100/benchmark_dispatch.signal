@@ -1,0 +1,3 @@
+Authorized unattended 3-way V100 benchmark run on 2026-11-13.
+1Cat vs zhinianqin vs SDPA in WanGP pay_attention with isolated dependency build.
+Prior compile smoke run 43371330815 passed. Run with default parameters. No model weights, no video yet.

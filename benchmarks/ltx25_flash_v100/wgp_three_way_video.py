@@ -71,6 +71,7 @@ def run(cmd, timeout, log_path):
     env["WAN2GP_INT8_CONVROT_DTYPE_DEBUG"] = "1"
     env["GRADIO_ANALYTICS_ENABLED"] = "False"
     env["OMP_NUM_THREADS"] = "8"
+    env["WANGP_LTX25_V100_TRACE"] = "1" if ATTN_BACKEND != "off" else "0"
     try:
         with log_path.open("w", encoding="utf-8") as fd:
             proc = subprocess.run(cmd, cwd=str(ROOT), env=env, stdout=fd,
@@ -130,6 +131,7 @@ def main():
         "sha": sha, "utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "kind": "Matched LTX-2.5 3-way attention comparison",
         "attention_backend": ATTN_BACKEND,
+        "trace_enabled": ATTN_BACKEND != "off",
         "variant": VARIANT,
         "model_type": SETTINGS["model_type"],
         "seed": SETTINGS["seed"], "frames": SETTINGS["video_length"],
@@ -204,6 +206,17 @@ def main():
             {"path": str(p), "filename": p.name, "size_bytes": p.stat().st_size}
             for p in sorted(files, key=lambda x: x.stat().st_mtime, reverse=True)[:6]
         ]
+        if report["videos"]:
+            video = report["videos"][0]
+            try:
+                probe = subprocess.run([
+                    "ffprobe", "-v", "error", "-of", "json",
+                    "-show_entries", "format=duration,size:stream=codec_name,width,height,nb_frames,avg_frame_rate",
+                    video["path"],
+                ], capture_output=True, text=True, check=True, timeout=30)
+                video["ffprobe"] = json.loads(probe.stdout)
+            except Exception as exc:
+                video["ffprobe_error"] = f"{type(exc).__name__}: {exc}"
         report["status"] = "PASS" if result["returncode"] == 0 and report["videos"] else "GENERATION_BLOCKED"
         # Check the entire generation log, not its truncated tail, to prove
         # selected kernels actually executed during this video generation.
@@ -211,10 +224,22 @@ def main():
             log_data = Path(result["log_path"]).read_text(errors="replace")
             marker = f"[WanGP][LTX25] Using V100 attention backend {ATTN_BACKEND}"
             report["candidate_banner_found"] = marker in log_data
-            if report["status"] == "PASS" and marker not in log_data:
+            stats_prefix = "LTX25_V100_ATTENTION_STATS "
+            for line in reversed(log_data.splitlines()):
+                if stats_prefix in line:
+                    try:
+                        report["attention_shape_stats"] = json.loads(line.split(stats_prefix, 1)[1])
+                    except (json.JSONDecodeError, IndexError):
+                        report["attention_shape_stats"] = {"unparsed": line[-500:]}
+                    break
+            stats = report.get("attention_shape_stats", {})
+            used = sum(int(value) for key, value in stats.items()
+                       if key.startswith(ATTN_BACKEND + ":used:") and isinstance(value, int))
+            report["candidate_calls"] = used
+            if report["status"] == "PASS" and (marker not in log_data or used <= 0):
                 report["status"] = "NO_ATTENTION_CANDIDATE_CALLS"
-                report["blocker"] = (f"Video generated but {ATTN_BACKEND} kernel did not "
-                                     "execute for an eligible LTX-2.5 attention call")
+                report["blocker"] = (f"Video generated but no verified {ATTN_BACKEND} kernel "
+                                     "calls occurred on LTX-2.5 attention")
         else:
             report["candidate_banner_found"] = False
     except Exception as err:

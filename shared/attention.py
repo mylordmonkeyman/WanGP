@@ -12,6 +12,7 @@ from mmgp import cuda_graphs, offload
 import torch.nn.functional as F
 import warnings
 from importlib.metadata import version
+from shared.ltx25_v100_profile import scope as ltx25_trace_scope
 
 _is_mps = sys.platform == 'darwin' and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
 
@@ -265,7 +266,9 @@ def sdpa_wrapper(
     if attention_mask != None:
         attention_mask = attention_mask.transpose(1,2)
     with sdpa_kernel(SDPBackend.MATH) if _sdpa_requires_math(q, attention_mask) else nullcontext():
-        o = F.scaled_dot_product_attention(q, k, v, attn_mask=attention_mask, is_causal=causal, scale=softmax_scale, dropout_p=dropout_p).transpose(1,2)
+        with ltx25_trace_scope("ltx25.attention.sdpa_fused"):
+            o = F.scaled_dot_product_attention(q, k, v, attn_mask=attention_mask, is_causal=causal, scale=softmax_scale, dropout_p=dropout_p)
+        o = o.transpose(1,2)
     del q, k ,v
     qkv_list.clear()
 
@@ -531,9 +534,10 @@ def pay_attention(
     # SageAttention on every batch item with all its tokens: its kernels without its device sync (CUDA graphs can record them)
     sage_rows = attn == "sage" and q_lens == None and k_lens == None and not causal and _sage_rows_head_dim(q, softmax_scale)
     if q.dtype == torch.bfloat16 and not bfloat16_supported and not sage_rows:  # sage1_core converts what its kernels need
-        q = q.to(torch.float16)
-        k = k.to(torch.float16)
-        v = v.to(torch.float16)
+        with ltx25_trace_scope("ltx25.attention.cast_bf16_qkv_to_fp16"):
+            q = q.to(torch.float16)
+            k = k.to(torch.float16)
+            v = v.to(torch.float16)
     final_padding = 0
     b, lq, lk = q.size(0), q.size(1), k.size(1)
 
@@ -703,7 +707,8 @@ def pay_attention(
             x = memory_efficient_attention(q, k, v, attn_bias= attn_mask )
         else:
             assert False
-    x = x.type(out_dtype)
+    with ltx25_trace_scope("ltx25.attention.cast_output_to_bf16"):
+        x = x.type(out_dtype)
     if final_padding > 0:
         x = torch.cat([x, torch.empty( (x.shape[0], final_padding, *x.shape[-2:]), dtype= x.dtype, device=x.device  ) ], 1)
 

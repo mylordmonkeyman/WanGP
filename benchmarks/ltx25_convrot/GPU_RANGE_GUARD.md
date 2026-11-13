@@ -380,7 +380,7 @@ and combined repeats; representative peak VRAM/thermal control; broader
 real activations, prompts/seeds and LoRA/MMGP compatibility. Neither
 experimental variant is production-eligible or auto-selected.
 
-### Fresh same-session A–B–B–A generation timing screen
+### Fresh same-session B–A–B–A generation timing screen
 
 All four runs used the same 1024×576, 49-frame, eight-step, fixed-seed
 generation, single V100, MMGP profile 0, SDPA, and the same experiment
@@ -391,15 +391,14 @@ bounded reusable activation/accumulator scratch. Each generation succeeded.
 
 | Run order | Variant | Time (s) | Run |
 |---|---|---:|---|
-| A1 | Default E: torch cast/no reusable pool | 96.6 | [43459483961](https://github.com/mylordmonkeyman/WanGP/actions/runs/43459483961) |
 | B1 | Vector4 + workspace | 95.6 | [43458837188](https://github.com/mylordmonkeyman/WanGP/actions/runs/43458837188) |
+| A1 | Default E: torch cast/no reusable pool | 96.6 | [43459483961](https://github.com/mylordmonkeyman/WanGP/actions/runs/43459483961) |
 | B2 | Vector4 + workspace | 96.3 | [43460002568](https://github.com/mylordmonkeyman/WanGP/actions/runs/43460002568) |
 | A2 | Default E: torch cast/no reusable pool | 97.5 | [43460664510](https://github.com/mylordmonkeyman/WanGP/actions/runs/43460664510) |
 
-Chronological note: the executed order was **B1 → A1 → B2 → A2**,
-not A1 → B1 → B2 → A2. The labels A1/B1/A2/B2 refer to control and
-candidate trial identity, and the table is grouped by variant for
-readability despite the row order.
+The actual chronological order was **B1 → A1 → B2 → A2**.
+A is the unmodified Candidate E PyTorch-cast control, and B is the
+combined experimental variant.
 
 Two-run arithmetic mean: A = **97.05 s**, B = **95.95 s**;
 mean observed difference **1.10 s (~1.13%)**. The B run durations

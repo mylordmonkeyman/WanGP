@@ -14,6 +14,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import time
@@ -201,6 +202,18 @@ def main():
         before = {p.resolve() for p in VIDEOS.rglob("*.mp4")}
         result = run(cmd(False), timeout=3600, log_path=OUT / f"attention_{VARIANT}_{sha[:12]}.log")
         report["generation"] = result
+        full_generation_log = Path(result["log_path"]).read_text(errors="replace")
+        # WanGP prints a separate queue duration; subprocess elapsed also
+        # includes Python startup, checkpoint load and other CLI overhead.
+        match = re.search(r"Queue completed: \\d+/\\d+ tasks in ([^\\n\\r]+)", full_generation_log)
+        if match:
+            duration = match.group(1)
+            pieces = re.findall(r"(\\d+(?:\\.\\d+)?)\\s*([hms])", duration)
+            if pieces:
+                report["queue_completed_seconds"] = round(sum(
+                    float(value) * {"h": 3600, "m": 60, "s": 1}[unit]
+                    for value, unit in pieces
+                ), 3)
         files = [p for p in VIDEOS.rglob("*.mp4") if p.resolve() not in before]
         report["videos"] = [
             {"path": str(p), "filename": p.name, "size_bytes": p.stat().st_size}
@@ -221,7 +234,7 @@ def main():
         # Check the entire generation log, not its truncated tail, to prove
         # selected kernels actually executed during this video generation.
         if ATTN_BACKEND != "off":
-            log_data = Path(result["log_path"]).read_text(errors="replace")
+            log_data = full_generation_log
             marker = f"[WanGP][LTX25] Using V100 attention backend {ATTN_BACKEND}"
             report["candidate_banner_found"] = marker in log_data
             stats_prefix = "LTX25_V100_ATTENTION_STATS "

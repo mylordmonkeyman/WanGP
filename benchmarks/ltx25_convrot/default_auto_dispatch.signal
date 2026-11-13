@@ -1,2 +1,2 @@
 2026-11-13
-Repeat passing no-env fp32rot default with stricter fixed-reference gates: 16,368 candidate calls, 4,434 device fallback rows, 16,360 scratch leases, exact 49 decoded frames. Preserve idle GPU checks and local native cache.
+Post-research regression: assert no-env SM70 default is unchanged after opt-in Hadamard and cuBLAS Algo2 source additions. Strict 16368 linears/4434 fallback/16360 leases and exact 49 decoded frames, with GPU owner guard.

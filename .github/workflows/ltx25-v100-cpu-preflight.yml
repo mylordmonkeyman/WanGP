@@ -36,6 +36,8 @@ jobs:
         run: |
           set -euo pipefail
           python -m compileall -q benchmarks/ltx25_flash_v100
+          python -m py_compile shared/ltx25_v100_profile.py
+          python -m unittest discover -s benchmarks/ltx25_flash_v100 -p test_real_profile.py
           python -m py_compile shared/ltx25_v100_attention.py shared/attention.py \
             models/ltx2/ltx2.py models/ltx2/ltx_core/model/transformer/attention.py
           for one in benchmarks/ltx25_flash_v100/*.sh; do bash -n "$one"; done

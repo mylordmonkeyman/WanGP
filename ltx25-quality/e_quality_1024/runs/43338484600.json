@@ -1,0 +1,30 @@
+{
+  "baked_checkpoint_root": "/opt/ltx25/checkpoints",
+  "blocker": "",
+  "candidate_counters": {},
+  "candidate_e_enabled": null,
+  "checkpoint_fetched_in_job": false,
+  "checkpoint_sha256_in_job": false,
+  "error": "",
+  "frames": null,
+  "generation": {
+    "elapsed_seconds": null,
+    "log_tail": "",
+    "returncode": null
+  },
+  "gpu_preflight": null,
+  "model_type": null,
+  "note": "Matched 1024x576, 49-frame, 8-step text-to-video quality comparison. Visual review required; do not infer end-to-end speedup from synthetic layer tests.",
+  "num_inference_steps": null,
+  "production_eligible": false,
+  "resolution": null,
+  "run_id": "43338484600",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43338484600",
+  "runtime_bootstrap_status": null,
+  "seed": null,
+  "source_sha": "83e2031aa40f55728ec71fb222e3f13d988d1079",
+  "status": "not_run",
+  "variant": "e_quality_1024",
+  "videos": [],
+  "workflow_status": "failure"
+}

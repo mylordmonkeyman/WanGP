@@ -11,6 +11,7 @@ on:
       - benchmarks/ltx25_convrot/quality_e_dispatch.signal
       - benchmarks/ltx25_convrot/real_activation_audit_dispatch.signal
       - benchmarks/ltx25_convrot/stage_profile_dispatch.signal
+      - benchmarks/ltx25_convrot/workspace_dispatch.signal
   workflow_dispatch:
     inputs:
       variant:
@@ -23,6 +24,7 @@ on:
           - e_quality_1024
           - e_real_activation_audit_1024
           - e_profile_1024
+          - e_workspace_1024
 
 permissions:
   contents: write
@@ -55,7 +57,7 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
             changed="$(git diff-tree --no-commit-id --name-only -r HEAD |
-              grep -E '^benchmarks/ltx25_convrot/(quality_(r0|e)|real_activation_audit|stage_profile)_dispatch[.]signal$' || true)"
+              grep -E '^benchmarks/ltx25_convrot/(quality_(r0|e)|real_activation_audit|stage_profile|workspace)_dispatch[.]signal$' || true)"
             case "$changed" in
               benchmarks/ltx25_convrot/quality_r0_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=r0_quality_1024" >> "$GITHUB_ENV"
@@ -68,6 +70,9 @@ jobs:
                 ;;
               benchmarks/ltx25_convrot/stage_profile_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=e_profile_1024" >> "$GITHUB_ENV"
+                ;;
+              benchmarks/ltx25_convrot/workspace_dispatch.signal)
+                echo "LTX25_BENCH_VARIANT=e_workspace_1024" >> "$GITHUB_ENV"
                 ;;
               *)
                 echo "Expected exactly one quality dispatch signal, got: $changed" >&2
@@ -96,7 +101,7 @@ jobs:
             r0_quality_1024)
               echo "WAN2GP_LTX25_CUBLAS_E_MODE=" >> "$GITHUB_ENV"
               ;;
-            e_quality_1024|e_real_activation_audit_1024|e_profile_1024)
+            e_quality_1024|e_real_activation_audit_1024|e_profile_1024|e_workspace_1024)
               echo "WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot" >> "$GITHUB_ENV"
               ;;
             *)
@@ -122,6 +127,14 @@ jobs:
           set -euo pipefail
           /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/candidate_adapter_preflight.py
+
+      - name: Preflight opt-in bounded workspace and stream safety
+        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/candidate_workspace_preflight.py
 
       - name: Generate one 49-frame 1024x576 video offline from baked weights
         shell: bash
@@ -151,7 +164,8 @@ jobs:
           variant = os.environ["LTX25_BENCH_VARIANT"]
           suffix = {"r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e",
                     "e_real_activation_audit_1024": "quality_real_audit",
-                    "e_profile_1024": "quality_stage_profile"}[variant]
+                    "e_profile_1024": "quality_stage_profile",
+                    "e_workspace_1024": "quality_workspace"}[variant]
           sha = os.environ["GITHUB_SHA"][:12]
           path = Path("/cache/ltx25/results") / f"runtime_{suffix}_{sha}.json"
           assert path.is_file(), f"Result report missing: {path}"
@@ -162,6 +176,12 @@ jobs:
           assert len(r.get("videos", [])) == 1, "Expected one new quality video"
           if variant != "r0_quality_1024":
               assert r.get("candidate_counters", {}).get("used", 0) > 0, "No Candidate E calls"
+          if variant == "e_workspace_1024":
+              stats = r.get("workspace_stats") or {}
+              print("WORKSPACE_GATE", stats)
+              assert stats.get("acquired", 0) > 0, "No bounded scratch reuse"
+              assert stats.get("max_persistent_bytes", 0) <= 96 * (1 << 20), "Scratch cap exceeded"
+              assert stats.get("persistent_weight_copies") == 0, "FP16 weight cached persistently"
           if variant == "e_profile_1024":
               profile = r.get("stage_profile") or {}
               print("STAGE_PROFILE_GATE", profile.get("status"),

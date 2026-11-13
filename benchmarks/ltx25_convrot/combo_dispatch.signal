@@ -1,0 +1,2 @@
+2026-11-13
+After CPU syntax smoke and independent V100 workspace and cast4 passes, run the opt-in combined workspace+vector4 experiment. Require both CUDA preflights, full 49-frame generation, and exact decoded pixel equivalence to validated E.

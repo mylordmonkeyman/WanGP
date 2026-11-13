@@ -1,7 +1,45 @@
 {
-  "reason": "Benchmark aborted, inspect workflow logs",
-  "run_id": "43510991752",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43510991752",
-  "source_sha": "7f7fdbc951f6a131bdbe64ad8eb2e817660ec971",
-  "status": "NOT_RUN"
+  "all_videos_decoded_pixel_identical_to_torch_reference": true,
+  "cast4_median_seconds": 99.15,
+  "cast8_median_seconds": 97.6,
+  "cast8_seconds_saved": 1.55,
+  "cast8_speedup": 1.01588,
+  "kind": "controlled 49-frame V100 ConvRot cast A-B-B-A",
+  "production_eligible": false,
+  "rows": [
+    {
+      "candidate_used": 16368,
+      "correct_49_frames": true,
+      "generation_seconds": 99.3,
+      "native_fallback": 0,
+      "variant": "vector4"
+    },
+    {
+      "candidate_used": 16368,
+      "correct_49_frames": true,
+      "generation_seconds": 97.4,
+      "native_fallback": 0,
+      "variant": "vector8"
+    },
+    {
+      "candidate_used": 16368,
+      "correct_49_frames": true,
+      "generation_seconds": 97.8,
+      "native_fallback": 0,
+      "variant": "vector8"
+    },
+    {
+      "candidate_used": 16368,
+      "correct_49_frames": true,
+      "generation_seconds": 99.0,
+      "native_fallback": 0,
+      "variant": "vector4"
+    }
+  ],
+  "run_id": "43511331937",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43511331937",
+  "same_prompt_seed_steps_resolution": true,
+  "source_sha": "303854fb21531881bf6a301b2d2b220d01981c73",
+  "status": "PASS",
+  "synthetic_only": false
 }

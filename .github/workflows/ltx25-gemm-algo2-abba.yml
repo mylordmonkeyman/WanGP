@@ -33,6 +33,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Syntax-check benchmark and integration tests before GPU work
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            benchmarks/ltx25_convrot/gemm_algo2_abba.py \
+            benchmarks/ltx25_convrot/wgp_baseline.py \
+            benchmarks/ltx25_convrot/candidate_algo2_preflight.py \
+            benchmarks/ltx25_convrot/default_auto_preflight.py
+
       - name: Check V100 ownership and verify offline checkpoint environment
         shell: bash
         run: |

@@ -1,2 +1,2 @@
 2026-11-13
-Investigate exact-frame failure in first automatic default run: repeat no-env SM70 path using same already-initialized config and compiled extension cache, require 49-frame equivalence and track QLinear counts.
+Run strict no-opt-in V100 default after switching startup default from divergent 'auto' alias to proven 'fp32rot' selector. Auto-build native CUDA extension, default vector4+workspace, require 16,368 optimized linear calls and exact 49-frame reference equivalence.

@@ -355,7 +355,7 @@ def main():
             if counters.get("cast_mode") != "vector8" or counters.get("used") != 16368:
                 report["status"] = "CAST8_NOT_SELECTED"
                 report["blocker"] = "Exact vector8 pilot did not run the expected eligible ConvRot calls"
-        if IS_WORKSPACE or IS_DEFAULT or IS_DEBUG_EXPLICIT or IS_HADAMARD or IS_FLAT_MM or IS_ALGO2 or IS_CAST8:
+        if IS_WORKSPACE or IS_DEFAULT or IS_DEBUG_EXPLICIT or IS_HADAMARD or IS_FLAT_MM or IS_ALGO2 or IS_CAST4 or IS_CAST8:
             import re
             # The workspace prints a bounded JSON summary at interpreter exit.
             ws_matches = re.findall(r"\[LTX25_WORKSPACE\] (\{[^\n]+\})",

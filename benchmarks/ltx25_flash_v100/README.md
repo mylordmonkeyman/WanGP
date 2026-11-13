@@ -7,7 +7,8 @@ Snapshot parent: 4adc57c0d17f960d91415564db68fa6ab9360537
 
 This is an **opt-in** Python adapter for two independently installed, external
 CUDA extensions. No CUDA code is vendored. Neither dependency is downloaded,
-built, installed, or imported during WanGP startup. The defaults and existing
+built, or installed by this branch. The experimental adapter lazily imports the
+selected package only on its first eligible call. The defaults and existing
 non-LTX attention paths are unchanged.
 
 Only genuine LTX-2.5 transformer instances, tagged at model initialization,
@@ -21,14 +22,17 @@ The initial gate is deliberately strict:
 - query sequence at least 1024 tokens by default (configurable);
 - **not** inside CUDA graph capture.
 
-Everything else uses WanGP's existing SDPA fallback, including masked video or
-audio attention and all LTX text/audio/video cross-attention. For an eligible
+Ineligible attention is rejected as early as possible, before LTX's projection
+and attention_kit staging, so normal global attention behavior is preserved.
+Remaining ineligible calls fall back to SDPA. This includes masked video/audio
+attention and all LTX text/audio/video cross-attention. For an eligible
 operation, a missing selected package or a CUDA kernel exception is an **error**,
 not a silently hidden fallback. The first eligible dispatch prints a backend
 banner so benchmark logs distinguish it from SDPA.
 
-The normal LTX attention_kit projection/head-group path is preserved, including
-its current memory allocation behavior. Beware that the backends may require
+The normal LTX attention_kit projection/head-group path is preserved. Its
+original staged Sage/SDPA behavior is retained for calls screened out before
+Q/K/V projection; eligible V100 calls may have a different VRAM profile. Beware that the backends may require
 new Q/K/V layout copies inside their public Python wrappers.
 
 ## Runtime selection

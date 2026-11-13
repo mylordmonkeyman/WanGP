@@ -40,6 +40,8 @@ jobs:
             benchmarks/ltx25_convrot/cast_microbench.py \
             benchmarks/ltx25_convrot/hadamard_microbench.py \
             benchmarks/ltx25_convrot/candidate_hadamard_preflight.py \
+            benchmarks/ltx25_convrot/candidate_flat_mm_preflight.py \
+            benchmarks/ltx25_convrot/hadamard_video_metrics.py \
             benchmarks/ltx25_convrot/publish_hadamard_microbench.py \
             benchmarks/ltx25_convrot/publish_cast_microbench.py \
             benchmarks/ltx25_convrot/wgp_baseline.py \

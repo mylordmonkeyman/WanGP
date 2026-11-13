@@ -1,26 +1,79 @@
 {
   "baked_checkpoint_root": "/opt/ltx25/checkpoints",
-  "blocker": "Other GPU workload detected; baseline generation skipped",
-  "candidate_counters": {},
+  "blocker": "",
+  "candidate_counters": {
+    "fallback": 7056,
+    "mode": "fp32rot",
+    "production_eligible": false,
+    "range_fallback": 4434,
+    "range_fallback_units": "rows (device-side FP32 dot)",
+    "row_range_policy": "power_of_two_nonzero_fp16_else_fp32_dot",
+    "sizes": {
+      "15360x3840": {
+        "calls": 96,
+        "eligible_calls": 0
+      },
+      "16384x4096": {
+        "calls": 4712,
+        "eligible_calls": 4712
+      },
+      "2048x2048": {
+        "calls": 6368,
+        "eligible_calls": 1088
+      },
+      "2048x4096": {
+        "calls": 1584,
+        "eligible_calls": 1584
+      },
+      "2048x8192": {
+        "calls": 536,
+        "eligible_calls": 8
+      },
+      "3840x15360": {
+        "calls": 48,
+        "eligible_calls": 0
+      },
+      "3840x4096": {
+        "calls": 40,
+        "eligible_calls": 0
+      },
+      "3840x8192": {
+        "calls": 8,
+        "eligible_calls": 0
+      },
+      "4096x16384": {
+        "calls": 4712,
+        "eligible_calls": 4712
+      },
+      "4096x2048": {
+        "calls": 528,
+        "eligible_calls": 0
+      },
+      "4096x4096": {
+        "calls": 4256,
+        "eligible_calls": 4256
+      },
+      "8192x2048": {
+        "calls": 536,
+        "eligible_calls": 8
+      }
+    },
+    "used": 16368
+  },
   "candidate_e_enabled": true,
   "checkpoint_fetched_in_job": false,
   "checkpoint_sha256_in_job": false,
   "error": "",
   "frames": 49,
   "generation": {
-    "elapsed_seconds": null,
-    "log_tail": "",
-    "returncode": null
+    "elapsed_seconds": 101.4,
+    "log_tail": "Phase | 48.3s / 1m 06s\n  [1/3] Denoising Second Phase | 49.3s / 1m 06s\n  [2/3] Denoising Second Phase | 49.6s / 58.0s \n 67%|\u2588\u2588\u2588\u2588\u2588\u2588\u258b   | 2/3 [00:16<00:07,  7.88s/it]\n                                             \nAutomatic VRAM preload of 'transformer': 64 of its 64 blocks to keep in VRAM (549 MB of activations measured)\n\n 67%|\u2588\u2588\u2588\u2588\u2588\u2588\u258b   | 2/3 [00:16<00:07,  7.88s/it]\n  [2/3] Denoising Second Phase | 50.6s / 58.0s\n  [2/3] Denoising Second Phase | 51.7s / 58.0s\n  [2/3] Denoising Second Phase | 52.8s / 58.0s\n  [2/3] Denoising Second Phase | 53.8s / 58.0s\n  [2/3] Denoising Second Phase | 54.8s / 58.0s\n100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:22<00:00,  6.81s/it]\n  [3/3] VAE Decoding | 55.2s / 55.2s          \n100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:22<00:00,  7.42s/it]\n\n  [0/7] VAE Decoding | 55.7s        \n  [1/7] VAE Decoding | 56.5s / 1m 01s\n[Kernels] Streamed Conv3D: pytorch (fast).\n[Kernels] PixelNorm + SiLU: pytorch (fast).\n\n  [1/7] VAE Decoding | 1m 06s / 1m 06s\n  [7/7] VAE Decoding | 1m 06s / 1m 06s\n  [0/1] Audio VAE Decoding            \n  [0/1] Saving File 2026-11-13-1... slowly crosses the blue harbor.mp4\n  [0/1] Saving File 2026-11-13-1... slowly crosses the blue harbor.mp4\nVideo file saved to Path: /cache/ltx25/videos/e_profile_1024/2026-11-13-15h47m18s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4\n\n\n  Task 1 completed\n\n==================================================\nQueue completed: 1/1 tasks in 1m 26s\n[LTX25_STAGE_PROFILE] {\"by_shape\": {\"16384x4096\": {\"eligible_calls\": 4712, \"sample_count\": 6, \"warm_gpu_median_ms\": {\"alloc\": 0.002, \"epilogue\": 0.0732, \"gemm\": 0.5596, \"output\": 0.0189, \"prepare\": 0.0113, \"rotation\": 0.0461, \"weight_cast\": 0.4767}}, \"2048x2048\": {\"eligible_calls\": 1088, \"sample_count\": 5, \"warm_gpu_median_ms\": {\"alloc\": 0.0072, \"epilogue\": 0.0287, \"gemm\": 0.1331, \"output\": 0.0174, \"prepare\": 0.0276, \"rotation\": 0.1249, \"weight_cast\": 0.0368}}, \"2048x4096\": {\"eligible_calls\": 1584, \"sample_count\": 5, \"warm_gpu_median_ms\": {\"alloc\": 0.0072, \"epilogue\": 0.0266, \"gemm\": 0.2345, \"output\": 0.0174, \"prepare\": 0.0594, \"rotation\": 0.2324, \"weight_cast\": 0.0686}}, \"2048x8192\": {\"eligible_calls\": 8, \"sample_count\": 1, \"warm_gpu_median_ms\": {\"alloc\": 0.0072, \"epilogue\": 0.0287, \"gemm\": 0.4547, \"output\": 0.0174, \"prepare\": 0.1198, \"rotation\": 0.4321, \"weight_cast\": 0.1229}}, \"4096x16384\": {\"eligible_calls\": 4712, \"sample_count\": 6, \"warm_gpu_median_ms\": {\"alloc\": 0.002, \"epilogue\": 0.0164, \"gemm\": 0.5852, \"output\": 0.0061, \"prepare\": 0.043, \"rotation\": 0.1341, \"weight_cast\": 0.4767}}, \"4096x4096\": {\"eligible_calls\": 4256, \"sample_count\": 6, \"warm_gpu_median_ms\": {\"alloc\": 0.0143, \"epilogue\": 0.0655, \"gemm\": 0.4649, \"output\": 0.042, \"prepare\": 0.0712, \"rotation\": 0.2494, \"weight_cast\": 0.1321}}, \"8192x2048\": {\"eligible_calls\": 8, \"sample_count\": 1, \"warm_gpu_median_ms\": {\"alloc\": 0.0389, \"epilogue\": 0.1065, \"gemm\": 0.4413, \"output\": 0.0666, \"prepare\": 0.0276, \"rotation\": 0.2262, \"weight_cast\": 0.1464}}}, \"eligible_calls\": {\"16384x4096\": 4712, \"2048x2048\": 1088, \"2048x4096\": 1584, \"2048x8192\": 8, \"4096x16384\": 4712, \"4096x4096\": 4256, \"8192x2048\": 8}, \"execution_errors\": 0, \"instrumented_generation\": true, \"kind\": \"Live LTX-2.5 1024x576 sparse same-stream Candidate E CUDA event profiler\", \"production_eligible\": false, \"real_model_activations\": true, \"sample_count\": 37, \"sampled_only\": true, \"source_sha\": \"6e8815cb7c8502a0e90987610abb7e40b358d0e5\", \"sparse_call_indices\": [1, 2, 16, 64, 256, 1024, 4096], \"status\": \"PASS\", \"utc\": \"2026-11-13T15:47:20.067075+00:00\", \"valid_for_uninstrumented_walltime_claims\": false}\n[LTX25_CUBLAS_E] {\"fallback\": 7056, \"mode\": \"fp32rot\", \"production_eligible\": false, \"range_fallback\": 4434, \"range_fallback_units\": \"rows (device-side FP32 dot)\", \"row_range_policy\": \"power_of_two_nonzero_fp16_else_fp32_dot\", \"sizes\": {\"15360x3840\": {\"calls\": 96, \"eligible_calls\": 0}, \"16384x4096\": {\"calls\": 4712, \"eligible_calls\": 4712}, \"2048x2048\": {\"calls\": 6368, \"eligible_calls\": 1088}, \"2048x4096\": {\"calls\": 1584, \"eligible_calls\": 1584}, \"2048x8192\": {\"calls\": 536, \"eligible_calls\": 8}, \"3840x15360\": {\"calls\": 48, \"eligible_calls\": 0}, \"3840x4096\": {\"calls\": 40, \"eligible_calls\": 0}, \"3840x8192\": {\"calls\": 8, \"eligible_calls\": 0}, \"4096x16384\": {\"calls\": 4712, \"eligible_calls\": 4712}, \"4096x2048\": {\"calls\": 528, \"eligible_calls\": 0}, \"4096x4096\": {\"calls\": 4256, \"eligible_calls\": 4256}, \"8192x2048\": {\"calls\": 536, \"eligible_calls\": 8}}, \"used\": 16368}\n",
+    "returncode": 0
   },
   "gpu_preflight": {
-    "busy": true,
-    "entries": [
-      {
-        "gpu_entry": "124951, 342 MiB",
-        "process_name": "unknown"
-      }
-    ],
-    "reason": "other GPU compute processes"
+    "busy": false,
+    "entries": [],
+    "reason": ""
   },
   "model_type": "ltx2_25_22B_distilled",
   "note": "INSTRUMENTED STAGE PROFILING: sparse CUDA events and host tracing affect generation timing. Do NOT treat walltime as a performance result. Compare only reported stage costs, then rerun a matched uninstrumented full-video benchmark.",
@@ -28,15 +81,1183 @@
   "production_eligible": false,
   "real_activation_audit": null,
   "resolution": "1024x576",
-  "run_id": "43454440544",
-  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43454440544",
+  "run_id": "43455709423",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43455709423",
   "runtime_bootstrap_status": "PASS",
   "seed": 20261112,
-  "source_sha": "d085595ddee2dda3ebeb06bbfb5c099b416afbbe",
-  "stage_profile": null,
-  "status": "GPU_BUSY",
+  "source_sha": "6e8815cb7c8502a0e90987610abb7e40b358d0e5",
+  "stage_profile": {
+    "by_shape": {
+      "16384x4096": {
+        "eligible_calls": 4712,
+        "sample_count": 6,
+        "warm_gpu_median_ms": {
+          "alloc": 0.002,
+          "epilogue": 0.0732,
+          "gemm": 0.5596,
+          "output": 0.0189,
+          "prepare": 0.0113,
+          "rotation": 0.0461,
+          "weight_cast": 0.4767
+        }
+      },
+      "2048x2048": {
+        "eligible_calls": 1088,
+        "sample_count": 5,
+        "warm_gpu_median_ms": {
+          "alloc": 0.0072,
+          "epilogue": 0.0287,
+          "gemm": 0.1331,
+          "output": 0.0174,
+          "prepare": 0.0276,
+          "rotation": 0.1249,
+          "weight_cast": 0.0368
+        }
+      },
+      "2048x4096": {
+        "eligible_calls": 1584,
+        "sample_count": 5,
+        "warm_gpu_median_ms": {
+          "alloc": 0.0072,
+          "epilogue": 0.0266,
+          "gemm": 0.2345,
+          "output": 0.0174,
+          "prepare": 0.0594,
+          "rotation": 0.2324,
+          "weight_cast": 0.0686
+        }
+      },
+      "2048x8192": {
+        "eligible_calls": 8,
+        "sample_count": 1,
+        "warm_gpu_median_ms": {
+          "alloc": 0.0072,
+          "epilogue": 0.0287,
+          "gemm": 0.4547,
+          "output": 0.0174,
+          "prepare": 0.1198,
+          "rotation": 0.4321,
+          "weight_cast": 0.1229
+        }
+      },
+      "4096x16384": {
+        "eligible_calls": 4712,
+        "sample_count": 6,
+        "warm_gpu_median_ms": {
+          "alloc": 0.002,
+          "epilogue": 0.0164,
+          "gemm": 0.5852,
+          "output": 0.0061,
+          "prepare": 0.043,
+          "rotation": 0.1341,
+          "weight_cast": 0.4767
+        }
+      },
+      "4096x4096": {
+        "eligible_calls": 4256,
+        "sample_count": 6,
+        "warm_gpu_median_ms": {
+          "alloc": 0.0143,
+          "epilogue": 0.0655,
+          "gemm": 0.4649,
+          "output": 0.042,
+          "prepare": 0.0712,
+          "rotation": 0.2494,
+          "weight_cast": 0.1321
+        }
+      },
+      "8192x2048": {
+        "eligible_calls": 8,
+        "sample_count": 1,
+        "warm_gpu_median_ms": {
+          "alloc": 0.0389,
+          "epilogue": 0.1065,
+          "gemm": 0.4413,
+          "output": 0.0666,
+          "prepare": 0.0276,
+          "rotation": 0.2262,
+          "weight_cast": 0.1464
+        }
+      }
+    },
+    "eligible_calls": {
+      "16384x4096": 4712,
+      "2048x2048": 1088,
+      "2048x4096": 1584,
+      "2048x8192": 8,
+      "4096x16384": 4712,
+      "4096x4096": 4256,
+      "8192x2048": 8
+    },
+    "execution_errors": 0,
+    "instrumented_generation": true,
+    "kind": "Live LTX-2.5 1024x576 sparse same-stream Candidate E CUDA event profiler",
+    "production_eligible": false,
+    "real_model_activations": true,
+    "sample_count": 37,
+    "sampled_only": true,
+    "samples": [
+      {
+        "K": 4096,
+        "M": 1024,
+        "N": 4096,
+        "call_index": 1,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.13414399325847626,
+          "epilogue": 0.06143999844789505,
+          "gemm": 32.59801483154297,
+          "output": 0.25600001215934753,
+          "prepare": 1.499135971069336,
+          "rotation": 7.138304233551025,
+          "weight_cast": 0.3911679983139038
+        },
+        "host_enqueue_us": {
+          "alloc": 254.218,
+          "epilogue": 625.198,
+          "gemm": 32212.793,
+          "output": 99.89,
+          "prepare": 1560.278,
+          "rotation": 7037.4,
+          "weight_cast": 285.216
+        },
+        "shape": "4096x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 42.07820703834295
+      },
+      {
+        "K": 4096,
+        "M": 1024,
+        "N": 4096,
+        "call_index": 2,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.021503999829292297,
+          "epilogue": 0.058368001133203506,
+          "gemm": 0.4566720128059387,
+          "output": 0.035840000957250595,
+          "prepare": 0.060447998344898224,
+          "rotation": 0.40038400888442993,
+          "weight_cast": 0.16486400365829468
+        },
+        "host_enqueue_us": {
+          "alloc": 147.966,
+          "epilogue": 30.26,
+          "gemm": 51.836,
+          "output": 67.31,
+          "prepare": 61.304,
+          "rotation": 273.329,
+          "weight_cast": 59.124
+        },
+        "shape": "4096x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.198080025613308
+      },
+      {
+        "K": 4096,
+        "M": 1024,
+        "N": 16384,
+        "call_index": 1,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.5447679758071899,
+          "epilogue": 0.21196800470352173,
+          "gemm": 1.5575040578842163,
+          "output": 0.12595200538635254,
+          "prepare": 0.05939200147986412,
+          "rotation": 0.3461120128631592,
+          "weight_cast": 1.070080041885376
+        },
+        "host_enqueue_us": {
+          "alloc": 670.641,
+          "epilogue": 54.112,
+          "gemm": 104.018,
+          "output": 78.254,
+          "prepare": 64.558,
+          "rotation": 227.746,
+          "weight_cast": 617.328
+        },
+        "shape": "16384x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 3.91577610000968
+      },
+      {
+        "K": 16384,
+        "M": 1024,
+        "N": 4096,
+        "call_index": 1,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.0071680000983178616,
+          "epilogue": 0.058368001133203506,
+          "gemm": 1.5124479532241821,
+          "output": 0.035840000957250595,
+          "prepare": 0.22937600314617157,
+          "rotation": 0.8161280155181885,
+          "weight_cast": 0.47411200404167175
+        },
+        "host_enqueue_us": {
+          "alloc": 168.429,
+          "epilogue": 67.613,
+          "gemm": 170.074,
+          "output": 119.082,
+          "prepare": 140.834,
+          "rotation": 319.418,
+          "weight_cast": 334.434
+        },
+        "shape": "4096x16384",
+        "status": "PASS",
+        "total_gpu_event_ms": 3.133439978118986
+      },
+      {
+        "K": 4096,
+        "M": 1024,
+        "N": 16384,
+        "call_index": 2,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.0071680000983178616,
+          "epilogue": 0.21299199759960175,
+          "gemm": 1.5584640502929688,
+          "output": 0.12595200538635254,
+          "prepare": 0.0594559982419014,
+          "rotation": 0.22118400037288666,
+          "weight_cast": 0.477183997631073
+        },
+        "host_enqueue_us": {
+          "alloc": 101.965,
+          "epilogue": 27.187,
+          "gemm": 50.701,
+          "output": 65.096,
+          "prepare": 55.666,
+          "rotation": 221.76,
+          "weight_cast": 49.491
+        },
+        "shape": "16384x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 2.662400049623102
+      },
+      {
+        "K": 16384,
+        "M": 1024,
+        "N": 4096,
+        "call_index": 2,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.0071680000983178616,
+          "epilogue": 0.058368001133203506,
+          "gemm": 1.5155199766159058,
+          "output": 0.035840000957250595,
+          "prepare": 0.2303999960422516,
+          "rotation": 0.814079999923706,
+          "weight_cast": 0.477183997631073
+        },
+        "host_enqueue_us": {
+          "alloc": 148.551,
+          "epilogue": 115.615,
+          "gemm": 103.93,
+          "output": 119.434,
+          "prepare": 137.144,
+          "rotation": 278.248,
+          "weight_cast": 96.811
+        },
+        "shape": "4096x16384",
+        "status": "PASS",
+        "total_gpu_event_ms": 3.1385599724017084
+      },
+      {
+        "K": 4096,
+        "M": 1024,
+        "N": 4096,
+        "call_index": 16,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.007135999854654074,
+          "epilogue": 0.058368001133203506,
+          "gemm": 0.45772799849510193,
+          "output": 0.03686400130391121,
+          "prepare": 0.06451199948787689,
+          "rotation": 0.2519359886646271,
+          "weight_cast": 0.12492799758911133
+        },
+        "host_enqueue_us": {
+          "alloc": 199.123,
+          "epilogue": 52.698,
+          "gemm": 74.503,
+          "output": 91.998,
+          "prepare": 103.648,
+          "rotation": 267.735,
+          "weight_cast": 82.99
+        },
+        "shape": "4096x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.001471986528486
+      },
+      {
+        "K": 2048,
+        "M": 1024,
+        "N": 2048,
+        "call_index": 1,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.04915200173854828,
+          "epilogue": 0.028672000393271446,
+          "gemm": 0.7096319794654846,
+          "output": 0.01740800030529499,
+          "prepare": 0.05939200147986412,
+          "rotation": 0.52019202709198,
+          "weight_cast": 0.06758400052785873
+        },
+        "host_enqueue_us": {
+          "alloc": 95.036,
+          "epilogue": 30.213,
+          "gemm": 611.718,
+          "output": 65.033,
+          "prepare": 59.686,
+          "rotation": 473.308,
+          "weight_cast": 57.386
+        },
+        "shape": "2048x2048",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.4520320110023022
+      },
+      {
+        "K": 2048,
+        "M": 1024,
+        "N": 2048,
+        "call_index": 2,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.029759999364614487,
+          "epilogue": 0.028672000393271446,
+          "gemm": 0.1382399946451187,
+          "output": 0.01740800030529499,
+          "prepare": 0.050175998359918594,
+          "rotation": 0.26316800713539124,
+          "weight_cast": 0.06137600168585777
+        },
+        "host_enqueue_us": {
+          "alloc": 85.699,
+          "epilogue": 22.119,
+          "gemm": 38.975,
+          "output": 54.064,
+          "prepare": 46.31,
+          "rotation": 207.583,
+          "weight_cast": 52.234
+        },
+        "shape": "2048x2048",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.5888000018894672
+      },
+      {
+        "K": 2048,
+        "M": 1024,
+        "N": 8192,
+        "call_index": 1,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.02457600086927414,
+          "epilogue": 0.10751999914646149,
+          "gemm": 0.4423680007457733,
+          "output": 0.06656000018119812,
+          "prepare": 0.026623999699950218,
+          "rotation": 0.2252800017595291,
+          "weight_cast": 0.29183998703956604
+        },
+        "host_enqueue_us": {
+          "alloc": 84.323,
+          "epilogue": 25.398,
+          "gemm": 109.795,
+          "output": 223.349,
+          "prepare": 44.797,
+          "rotation": 165.948,
+          "weight_cast": 185.893
+        },
+        "shape": "8192x2048",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.1847679894417524
+      },
+      {
+        "K": 8192,
+        "M": 1024,
+        "N": 2048,
+        "call_index": 1,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.0071680000983178616,
+          "epilogue": 0.029759999364614487,
+          "gemm": 0.4556800127029419,
+          "output": 0.017343999817967415,
+          "prepare": 0.11264000087976456,
+          "rotation": 0.43110400438308716,
+          "weight_cast": 0.12390399724245071
+        },
+        "host_enqueue_us": {
+          "alloc": 154.876,
+          "epilogue": 63.02,
+          "gemm": 113.79,
+          "output": 96.508,
+          "prepare": 113.092,
+          "rotation": 241.945,
+          "weight_cast": 83.564
+        },
+        "shape": "2048x8192",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.177600014489144
+      },
+      {
+        "K": 2048,
+        "M": 1024,
+        "N": 8192,
+        "call_index": 2,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.03891199827194214,
+          "epilogue": 0.10649599879980087,
+          "gemm": 0.4413439929485321,
+          "output": 0.06656000018119812,
+          "prepare": 0.027648000046610832,
+          "rotation": 0.22620800137519836,
+          "weight_cast": 0.14643199741840363
+        },
+        "host_enqueue_us": {
+          "alloc": 81.467,
+          "epilogue": 20.078,
+          "gemm": 37.388,
+          "output": 50.607,
+          "prepare": 42.086,
+          "rotation": 182.567,
+          "weight_cast": 37.278
+        },
+        "shape": "8192x2048",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.053599989041686
+      },
+      {
+        "K": 8192,
+        "M": 1024,
+        "N": 2048,
+        "call_index": 2,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.0071680000983178616,
+          "epilogue": 0.028672000393271446,
+          "gemm": 0.4546560049057007,
+          "output": 0.01740800030529499,
+          "prepare": 0.11980800330638885,
+          "rotation": 0.43212801218032837,
+          "weight_cast": 0.1228799968957901
+        },
+        "host_enqueue_us": {
+          "alloc": 111.264,
+          "epilogue": 53.359,
+          "gemm": 89.794,
+          "output": 87.393,
+          "prepare": 110.999,
+          "rotation": 223.371,
+          "weight_cast": 244.028
+        },
+        "shape": "2048x8192",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.1827200180850923
+      },
+      {
+        "K": 2048,
+        "M": 1024,
+        "N": 2048,
+        "call_index": 16,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.006207999773323536,
+          "epilogue": 0.030719999223947525,
+          "gemm": 0.13312000036239624,
+          "output": 0.01740800030529499,
+          "prepare": 0.027648000046610832,
+          "rotation": 0.12492799758911133,
+          "weight_cast": 0.03680000081658363
+        },
+        "host_enqueue_us": {
+          "alloc": 113.123,
+          "epilogue": 41.826,
+          "gemm": 58.602,
+          "output": 72.997,
+          "prepare": 81.875,
+          "rotation": 215.891,
+          "weight_cast": 61.707
+        },
+        "shape": "2048x2048",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.3768319981172681
+      },
+      {
+        "K": 4096,
+        "M": 1008,
+        "N": 2048,
+        "call_index": 1,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.0071680000983178616,
+          "epilogue": 0.026623999699950218,
+          "gemm": 0.23244799673557281,
+          "output": 0.018432000651955605,
+          "prepare": 0.060416001826524734,
+          "rotation": 0.2303999960422516,
+          "weight_cast": 0.06860800087451935
+        },
+        "host_enqueue_us": {
+          "alloc": 147.923,
+          "epilogue": 44.188,
+          "gemm": 150.343,
+          "output": 99.382,
+          "prepare": 82.708,
+          "rotation": 338.209,
+          "weight_cast": 68.85
+        },
+        "shape": "2048x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.6440959959290922
+      },
+      {
+        "K": 4096,
+        "M": 1008,
+        "N": 2048,
+        "call_index": 2,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.006144000217318535,
+          "epilogue": 0.026623999699950218,
+          "gemm": 0.2252800017595291,
+          "output": 0.016416000202298164,
+          "prepare": 0.058368001133203506,
+          "rotation": 0.22220799326896667,
+          "weight_cast": 0.06451199948787689
+        },
+        "host_enqueue_us": {
+          "alloc": 156.981,
+          "epilogue": 39.1,
+          "gemm": 71.008,
+          "output": 96.3,
+          "prepare": 81.17,
+          "rotation": 330.327,
+          "weight_cast": 87.725
+        },
+        "shape": "2048x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.6195519957691431
+      },
+      {
+        "K": 4096,
+        "M": 144,
+        "N": 16384,
+        "call_index": 16,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.002047999994829297,
+          "epilogue": 0.07475200295448303,
+          "gemm": 0.562175989151001,
+          "output": 0.01945599913597107,
+          "prepare": 0.011264000087976456,
+          "rotation": 0.048128001391887665,
+          "weight_cast": 0.4761599898338318
+        },
+        "host_enqueue_us": {
+          "alloc": 132.833,
+          "epilogue": 35.247,
+          "gemm": 100.847,
+          "output": 78.049,
+          "prepare": 95.87,
+          "rotation": 301.221,
+          "weight_cast": 65.687
+        },
+        "shape": "16384x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.1939839825499803
+      },
+      {
+        "K": 16384,
+        "M": 144,
+        "N": 4096,
+        "call_index": 16,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.002047999994829297,
+          "epilogue": 0.016383999958634377,
+          "gemm": 0.6225919723510742,
+          "output": 0.006144000217318535,
+          "prepare": 0.043007999658584595,
+          "rotation": 0.13414399325847626,
+          "weight_cast": 0.4761599898338318
+        },
+        "host_enqueue_us": {
+          "alloc": 75.987,
+          "epilogue": 33.236,
+          "gemm": 73.542,
+          "output": 81.218,
+          "prepare": 65.702,
+          "rotation": 311.415,
+          "weight_cast": 60.796
+        },
+        "shape": "4096x16384",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.300479955272749
+      },
+      {
+        "K": 4096,
+        "M": 1008,
+        "N": 4096,
+        "call_index": 64,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.025599999353289604,
+          "epilogue": 0.0727040022611618,
+          "gemm": 0.4710400104522705,
+          "output": 0.04710400104522705,
+          "prepare": 0.08499199897050858,
+          "rotation": 0.24371199309825897,
+          "weight_cast": 0.1382399946451187
+        },
+        "host_enqueue_us": {
+          "alloc": 96.602,
+          "epilogue": 26.096,
+          "gemm": 47.452,
+          "output": 61.548,
+          "prepare": 53.255,
+          "rotation": 226.806,
+          "weight_cast": 47.552
+        },
+        "shape": "4096x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.0833919998258352
+      },
+      {
+        "K": 4096,
+        "M": 1008,
+        "N": 2048,
+        "call_index": 16,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.020479999482631683,
+          "epilogue": 0.04403200000524521,
+          "gemm": 0.24985599517822266,
+          "output": 0.03379200026392937,
+          "prepare": 0.07475200295448303,
+          "rotation": 0.24371199309825897,
+          "weight_cast": 0.08191999793052673
+        },
+        "host_enqueue_us": {
+          "alloc": 95.385,
+          "epilogue": 25.957,
+          "gemm": 61.807,
+          "output": 60.381,
+          "prepare": 61.254,
+          "rotation": 208.743,
+          "weight_cast": 44.818
+        },
+        "shape": "2048x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.7485439889132977
+      },
+      {
+        "K": 4096,
+        "M": 144,
+        "N": 16384,
+        "call_index": 64,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.002047999994829297,
+          "epilogue": 0.07276800274848938,
+          "gemm": 0.5570560097694397,
+          "output": 0.019392000511288643,
+          "prepare": 0.011264000087976456,
+          "rotation": 0.04403200000524521,
+          "weight_cast": 0.4792320132255554
+        },
+        "host_enqueue_us": {
+          "alloc": 72.807,
+          "epilogue": 23.665,
+          "gemm": 70.018,
+          "output": 52.822,
+          "prepare": 41.668,
+          "rotation": 175.392,
+          "weight_cast": 41.186
+        },
+        "shape": "16384x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.185792026342824
+      },
+      {
+        "K": 16384,
+        "M": 144,
+        "N": 4096,
+        "call_index": 64,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.002047999994829297,
+          "epilogue": 0.016383999958634377,
+          "gemm": 0.5877760052680969,
+          "output": 0.006144000217318535,
+          "prepare": 0.04198399931192398,
+          "rotation": 0.13414399325847626,
+          "weight_cast": 0.4792320132255554
+        },
+        "host_enqueue_us": {
+          "alloc": 43.63,
+          "epilogue": 20.737,
+          "gemm": 44.14,
+          "output": 57.117,
+          "prepare": 39.526,
+          "rotation": 178.586,
+          "weight_cast": 37.897
+        },
+        "shape": "4096x16384",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.2677120112348348
+      },
+      {
+        "K": 2048,
+        "M": 1024,
+        "N": 2048,
+        "call_index": 64,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.09216000139713287,
+          "epilogue": 0.028672000393271446,
+          "gemm": 0.1525759994983673,
+          "output": 0.018432000651955605,
+          "prepare": 0.07475200295448303,
+          "rotation": 0.3317759931087494,
+          "weight_cast": 0.08191999793052673
+        },
+        "host_enqueue_us": {
+          "alloc": 127.068,
+          "epilogue": 35.621,
+          "gemm": 58.051,
+          "output": 119.01,
+          "prepare": 80.191,
+          "rotation": 293.466,
+          "weight_cast": 68.607
+        },
+        "shape": "2048x2048",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.7802879959344864
+      },
+      {
+        "K": 4096,
+        "M": 1008,
+        "N": 2048,
+        "call_index": 64,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.014336000196635723,
+          "epilogue": 0.09523200243711472,
+          "gemm": 0.24473600089550018,
+          "output": 0.07884799689054489,
+          "prepare": 0.058368001133203506,
+          "rotation": 0.3819519877433777,
+          "weight_cast": 0.10342399775981903
+        },
+        "host_enqueue_us": {
+          "alloc": 122.954,
+          "epilogue": 297.074,
+          "gemm": 73.812,
+          "output": 84.785,
+          "prepare": 70.361,
+          "rotation": 280.176,
+          "weight_cast": 54.61
+        },
+        "shape": "2048x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.9768959870561957
+      },
+      {
+        "K": 4096,
+        "M": 1008,
+        "N": 4096,
+        "call_index": 256,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.025599999353289604,
+          "epilogue": 0.08601599931716919,
+          "gemm": 0.48025599122047424,
+          "output": 0.055296000093221664,
+          "prepare": 0.07782399654388428,
+          "rotation": 0.2467840015888214,
+          "weight_cast": 0.14028799533843994
+        },
+        "host_enqueue_us": {
+          "alloc": 127.787,
+          "epilogue": 22.348,
+          "gemm": 40.346,
+          "output": 67.928,
+          "prepare": 66.832,
+          "rotation": 316.36,
+          "weight_cast": 63.387
+        },
+        "shape": "4096x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.1120639834553003
+      },
+      {
+        "K": 4096,
+        "M": 144,
+        "N": 16384,
+        "call_index": 256,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.0019839999731630087,
+          "epilogue": 0.07168000191450119,
+          "gemm": 0.5550079941749573,
+          "output": 0.018432000651955605,
+          "prepare": 0.010239999741315842,
+          "rotation": 0.042047999799251556,
+          "weight_cast": 0.47411200404167175
+        },
+        "host_enqueue_us": {
+          "alloc": 102.818,
+          "epilogue": 35.808,
+          "gemm": 74.281,
+          "output": 116.773,
+          "prepare": 68.835,
+          "rotation": 318.81,
+          "weight_cast": 65.221
+        },
+        "shape": "16384x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.1735040002968162
+      },
+      {
+        "K": 16384,
+        "M": 144,
+        "N": 4096,
+        "call_index": 256,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.002047999994829297,
+          "epilogue": 0.015359999611973763,
+          "gemm": 0.5826560258865356,
+          "output": 0.0071680000983178616,
+          "prepare": 0.043007999658584595,
+          "rotation": 0.13209599256515503,
+          "weight_cast": 0.47513601183891296
+        },
+        "host_enqueue_us": {
+          "alloc": 80.115,
+          "epilogue": 42.815,
+          "gemm": 85.891,
+          "output": 86.988,
+          "prepare": 68.796,
+          "rotation": 304.618,
+          "weight_cast": 62.964
+        },
+        "shape": "4096x16384",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.2574720296543092
+      },
+      {
+        "K": 4096,
+        "M": 1008,
+        "N": 2048,
+        "call_index": 256,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.0071680000983178616,
+          "epilogue": 0.026623999699950218,
+          "gemm": 0.23449599742889404,
+          "output": 0.01740800030529499,
+          "prepare": 0.060416001826524734,
+          "rotation": 0.2314240038394928,
+          "weight_cast": 0.06860800087451935
+        },
+        "host_enqueue_us": {
+          "alloc": 84.773,
+          "epilogue": 24.666,
+          "gemm": 62.674,
+          "output": 56.204,
+          "prepare": 56.016,
+          "rotation": 184.02,
+          "weight_cast": 86.912
+        },
+        "shape": "2048x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.646144004072994
+      },
+      {
+        "K": 2048,
+        "M": 1024,
+        "N": 2048,
+        "call_index": 256,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.0071680000983178616,
+          "epilogue": 0.028672000393271446,
+          "gemm": 0.12697599828243256,
+          "output": 0.01740800030529499,
+          "prepare": 0.025599999353289604,
+          "rotation": 0.12390399724245071,
+          "weight_cast": 0.03481600061058998
+        },
+        "host_enqueue_us": {
+          "alloc": 70.841,
+          "epilogue": 23.662,
+          "gemm": 39.19,
+          "output": 48.613,
+          "prepare": 38.656,
+          "rotation": 154.653,
+          "weight_cast": 33.165
+        },
+        "shape": "2048x2048",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.36454399628564715
+      },
+      {
+        "K": 4096,
+        "M": 1008,
+        "N": 4096,
+        "call_index": 1024,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.0071680000983178616,
+          "epilogue": 0.05734400078654289,
+          "gemm": 0.45875200629234314,
+          "output": 0.035840000957250595,
+          "prepare": 0.06451199948787689,
+          "rotation": 0.23244799673557281,
+          "weight_cast": 0.12595200538635254
+        },
+        "host_enqueue_us": {
+          "alloc": 71.135,
+          "epilogue": 201.047,
+          "gemm": 47.671,
+          "output": 1419.504,
+          "prepare": 282.463,
+          "rotation": 159.205,
+          "weight_cast": 33.683
+        },
+        "shape": "4096x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.9820160097442567
+      },
+      {
+        "K": 4096,
+        "M": 144,
+        "N": 16384,
+        "call_index": 1024,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.002047999994829297,
+          "epilogue": 0.07372800260782242,
+          "gemm": 0.5806080102920532,
+          "output": 0.018432000651955605,
+          "prepare": 0.011264000087976456,
+          "rotation": 0.050175998359918594,
+          "weight_cast": 0.4792320132255554
+        },
+        "host_enqueue_us": {
+          "alloc": 49.003,
+          "epilogue": 19.826,
+          "gemm": 43.274,
+          "output": 48.929,
+          "prepare": 39.982,
+          "rotation": 161.061,
+          "weight_cast": 41.569
+        },
+        "shape": "16384x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.215488025220111
+      },
+      {
+        "K": 16384,
+        "M": 144,
+        "N": 4096,
+        "call_index": 1024,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.002047999994829297,
+          "epilogue": 0.016383999958634377,
+          "gemm": 0.5447679758071899,
+          "output": 0.006144000217318535,
+          "prepare": 0.04505600035190582,
+          "rotation": 0.13516800105571747,
+          "weight_cast": 0.48025599122047424
+        },
+        "host_enqueue_us": {
+          "alloc": 91.88,
+          "epilogue": 19.383,
+          "gemm": 43.012,
+          "output": 50.537,
+          "prepare": 39.043,
+          "rotation": 182.924,
+          "weight_cast": 39.797
+        },
+        "shape": "4096x16384",
+        "status": "PASS",
+        "total_gpu_event_ms": 1.2298239686060697
+      },
+      {
+        "K": 4096,
+        "M": 1008,
+        "N": 2048,
+        "call_index": 1024,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.006144000217318535,
+          "epilogue": 0.025599999353289604,
+          "gemm": 0.23244799673557281,
+          "output": 0.016383999958634377,
+          "prepare": 0.05939200147986412,
+          "rotation": 0.23244799673557281,
+          "weight_cast": 0.06758400052785873
+        },
+        "host_enqueue_us": {
+          "alloc": 77.637,
+          "epilogue": 36.296,
+          "gemm": 73.643,
+          "output": 48.508,
+          "prepare": 41.961,
+          "rotation": 195.601,
+          "weight_cast": 36.299
+        },
+        "shape": "2048x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.639999995008111
+      },
+      {
+        "K": 4096,
+        "M": 64,
+        "N": 16384,
+        "call_index": 4096,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.002047999994829297,
+          "epilogue": 0.05632000043988228,
+          "gemm": 0.34508800506591797,
+          "output": 0.006175999995321035,
+          "prepare": 0.009216000325977802,
+          "rotation": 0.03993599861860275,
+          "weight_cast": 0.47411200404167175
+        },
+        "host_enqueue_us": {
+          "alloc": 234.775,
+          "epilogue": 828.154,
+          "gemm": 122.696,
+          "output": 133.413,
+          "prepare": 168.874,
+          "rotation": 159.373,
+          "weight_cast": 837.902
+        },
+        "shape": "16384x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.9328960084822029
+      },
+      {
+        "K": 16384,
+        "M": 64,
+        "N": 4096,
+        "call_index": 4096,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.002047999994829297,
+          "epilogue": 0.014336000196635723,
+          "gemm": 0.37171199917793274,
+          "output": 0.005119999870657921,
+          "prepare": 0.023552000522613525,
+          "rotation": 0.06860800087451935,
+          "weight_cast": 0.47513601183891296
+        },
+        "host_enqueue_us": {
+          "alloc": 263.156,
+          "epilogue": 488.314,
+          "gemm": 44.515,
+          "output": 48.412,
+          "prepare": 68.651,
+          "rotation": 169.353,
+          "weight_cast": 351.444
+        },
+        "shape": "4096x16384",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.9605120124761015
+      },
+      {
+        "K": 2048,
+        "M": 1024,
+        "N": 2048,
+        "call_index": 1024,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.006144000217318535,
+          "epilogue": 0.02969600073993206,
+          "gemm": 0.12595200538635254,
+          "output": 0.01740800030529499,
+          "prepare": 0.026623999699950218,
+          "rotation": 0.12390399724245071,
+          "weight_cast": 0.035840000957250595
+        },
+        "host_enqueue_us": {
+          "alloc": 68.506,
+          "epilogue": 26.862,
+          "gemm": 37.388,
+          "output": 51.448,
+          "prepare": 43.704,
+          "rotation": 155.925,
+          "weight_cast": 33.389
+        },
+        "shape": "2048x2048",
+        "status": "PASS",
+        "total_gpu_event_ms": 0.36556800454854965
+      },
+      {
+        "K": 4096,
+        "M": 4032,
+        "N": 4096,
+        "call_index": 4096,
+        "dtype": "torch.bfloat16",
+        "gpu_stage_ms": {
+          "alloc": 0.006144000217318535,
+          "epilogue": 0.19763199985027313,
+          "gemm": 1.558527946472168,
+          "output": 0.12492799758911133,
+          "prepare": 0.2252800017595291,
+          "rotation": 0.796671986579895,
+          "weight_cast": 0.12595200538635254
+        },
+        "host_enqueue_us": {
+          "alloc": 110.266,
+          "epilogue": 28.515,
+          "gemm": 48.785,
+          "output": 55.283,
+          "prepare": 58.225,
+          "rotation": 172.932,
+          "weight_cast": 45.506
+        },
+        "shape": "4096x4096",
+        "status": "PASS",
+        "total_gpu_event_ms": 3.0351359378546476
+      }
+    ],
+    "source_sha": "6e8815cb7c8502a0e90987610abb7e40b358d0e5",
+    "sparse_call_indices": [
+      1,
+      2,
+      16,
+      64,
+      256,
+      1024,
+      4096
+    ],
+    "status": "PASS",
+    "utc": "2026-11-13T15:47:20.067075+00:00",
+    "valid_for_uninstrumented_walltime_claims": false
+  },
+  "status": "PASS",
   "variant": "e_profile_1024",
-  "videos": [],
-  "workflow_status": "failure",
-  "workspace_stats": null
+  "videos": [
+    {
+      "filename": "2026-11-13-15h47m18s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "path": "/cache/ltx25/videos/e_profile_1024/2026-11-13-15h47m18s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "size_bytes": 3056874
+    }
+  ],
+  "workflow_status": "success",
+  "workspace_stats": null,
+  "workspace_video_gate": null
 }

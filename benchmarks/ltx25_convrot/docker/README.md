@@ -49,8 +49,8 @@ Use **`deploy_noncompose_runner.py`**, not the old Compose-specific
 default** and checks that GitHub Actions has no queued/running jobs,
 that this runner is idle, and that the exact expected V100 UUID, bridge
 network, user, entrypoint, restart policy, CPU/NUMA cpuset restrictions,
-original `/dev/shm` size, dropped Linux capabilities, and three host bind
-mounts match the inspected configuration. It carries the existing runner
+original `/dev/shm` size, process resource limits (`--ulimit`), dropped
+Linux capabilities, and three host bind mounts match the inspected configuration. It carries the existing runner
 environment through a temporary permission-restricted env file
 without printing credential values, and deletes that file afterward.
 The old container is stopped and renamed with a rollback suffix;

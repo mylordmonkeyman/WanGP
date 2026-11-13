@@ -240,3 +240,9 @@ establish identical speedups on 241-frame I2V with LoRA/MMGP memory
 offload. **Vector8 remains opt-in** pending an explicit default decision.
 The normal production defaults remain radix4 rotation + vector4 weight
 conversion.
+
+The integrated vector8 preflight additionally passed on SM70 with **both**
+`WAN2GP_LTX25_HADAMARD=torch` and the promoted
+`WAN2GP_LTX25_HADAMARD=radix4`, including exact full-adapter BF16/FP16
+comparisons against the corresponding PyTorch-cast path:
+https://github.com/mylordmonkeyman/WanGP/actions/runs/43512964498 .

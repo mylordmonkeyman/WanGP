@@ -1,0 +1,133 @@
+name: LTX-2.5 V100 matched 3-backend video test
+
+# No ordinary source push can dispatch GPU work. Manual workflow_dispatch or
+# explicit push of the single signal file only.
+on:
+  workflow_dispatch:
+    inputs:
+      extensions_run_id:
+        description: "Successful three-way build run containing compiled SM70 extensions"
+        required: true
+        default: "43384835108"
+        type: string
+  push:
+    branches: [perf/ltx25-v100-flash-attn-dual]
+    paths: [benchmarks/ltx25_flash_v100/video_dispatch.signal]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ltx25-v100-attn-video-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  compare-video:
+    if: github.ref == 'refs/heads/perf/ltx25-v100-flash-attn-dual'
+    name: Independent 49-frame T2V tests with matched seed/settings
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 240
+    env:
+      LTX25_CHECKPOINT_ROOT: /opt/ltx25/checkpoints
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      GRADIO_ANALYTICS_ENABLED: 'False'
+      WAN2GP_LTX25_CUBLAS_E_MODE: ''
+    steps:
+      - name: Checkout exact committed test
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify baked model, interpreter ABI, Python syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          /opt/venvs/ltx25-cu128/bin/python -m py_compile \
+            shared/ltx25_v100_attention.py \
+            benchmarks/ltx25_flash_v100/wgp_three_way_video.py \
+            benchmarks/ltx25_flash_v100/summarize_video.py
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/runtime_validate_baked.py
+
+      - name: Download tested compiled extensions
+        uses: actions/download-artifact@v4
+        with:
+          name: ltx25-v100-sm70-cu128-extensions-${{ inputs.extensions_run_id || '43384835108' }}
+          run-id: ${{ inputs.extensions_run_id || '43384835108' }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/ltx25-video-artifact
+
+      - name: Extract and verify both extension packages (no build/pip)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="$RUNNER_TEMP/ltx25-video-artifact/compiled-v100-attention-sm70-cu128.tar.gz"
+          DEST="$RUNNER_TEMP/ltx25-video-extensions"
+          test -s "$ARCHIVE"
+          mkdir -p "$DEST"
+          tar -xzf "$ARCHIVE" -C "$DEST"
+          grep -Fq 'PyTorch 2.10.0+cu128' "$DEST/ABI.txt"
+          grep -Fq 'NVIDIA sm70' "$DEST/ABI.txt"
+          test -f "$DEST/1cat/flash_attn_v100/__init__.py"
+          test -f "$DEST/zhinianqin/vllm_flash_attn/__init__.py"
+          find "$DEST/1cat" -name 'flash_attn_v100_cuda*.so' | grep -q .
+          find "$DEST/zhinianqin" -name '*_vllm_fa2_C*.so' | grep -q .
+          echo "PYTHONPATH=$DEST/1cat:$DEST/zhinianqin:$PWD${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+
+      - name: Generate three variants, count real attention calls, compare
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/ltx25-v100-video-reports"
+          mkdir -p "$OUT"
+          PYTHON=/opt/venvs/ltx25-cu128/bin/python
+          result=0
+          for variant in attn_sdpa_576 attn_1cat_576 attn_zhinianqin_576; do
+            export LTX25_ATTENTION_VIDEO_VARIANT="$variant"
+            set +e
+            "$PYTHON" benchmarks/ltx25_flash_v100/wgp_three_way_video.py \
+              2>&1 | tee "$OUT/$variant-driver.log"
+            code="${PIPESTATUS[0]}"
+            set -e
+            echo "$code" > "$OUT/$variant-exit.txt"
+            if [[ "$code" != 0 ]]; then result=1; fi
+          done
+          set +e
+          "$PYTHON" benchmarks/ltx25_flash_v100/summarize_video.py \
+            --sha "$GITHUB_SHA" --output-dir "$OUT" 2>&1 | tee "$OUT/summary-console.log"
+          report_code="${PIPESTATUS[0]}"
+          set -e
+          if [[ -f "$OUT/video_summary.md" ]]; then
+            cat "$OUT/video_summary.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          prefix="${GITHUB_SHA:0:12}"
+          for variant in attn_sdpa_576 attn_1cat_576 attn_zhinianqin_576; do
+            log="/cache/ltx25/results/attention_${variant}_${prefix}.log"
+            if [[ -f "$log" ]]; then cp "$log" "$OUT/${variant}-generation.log"; fi
+          done
+          test "$result" -eq 0 && test "$report_code" -eq 0
+
+      - name: Upload matched test reports and CLI logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ltx25-v100-attention-video-report-${{ github.run_id }}
+          path: ${{ runner.temp }}/ltx25-v100-video-reports/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload generated videos (no model files)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ltx25-v100-attention-videos-${{ github.run_id }}
+          path: |
+            /cache/ltx25/videos/attn_sdpa_576/*.mp4
+            /cache/ltx25/videos/attn_1cat_576/*.mp4
+            /cache/ltx25/videos/attn_zhinianqin_576/*.mp4
+          retention-days: 7
+          if-no-files-found: warn

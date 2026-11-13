@@ -11,6 +11,7 @@ changes to an existing server checkout or affect other Git branches.
 |---|---|---|
 | `WAN2GP_LTX25_CUBLAS_E_MODE` | `fp32rot` (set at WanGP startup) | `off` disables the adapter entirely; explicit `fp32rot` is strict; `auto` is normalized to the validated `fp32rot` selector |
 | `WAN2GP_LTX25_E_CAST` | `vector4` | `torch` restores PyTorch INT8-to-FP16 conversion within Candidate E |
+| `WAN2GP_LTX25_HADAMARD` | `radix4` | `torch` restores the historical FP32 H256 rotation; `flat_mm` is a separately tested torch.mm alternative |
 | `WAN2GP_LTX25_E_WORKSPACE` | `1` | `0` disables the reusable activation/output workspace |
 | `LTX25_E_WORKSPACE_MAX_MIB` | `96` | Clamp persistent workspace limit up to 256 MiB |
 | `LTX25_CUBLAS_E_LIB` | Unset | Path to a precompiled compatible SM70 cuBLAS extension |
@@ -23,6 +24,10 @@ on-device weights/activations, non-compiled execution, available VRAM cap, and
 preexisting dispatcher, including CPU, fusion, unsupported layer shapes,
 CUDA graphs, and other GPUs. No global float16 cast is performed: the
 preexisting BF16 computation remains in place outside eligible linears.
+The promoted radix-4 FP32 rotation uses the same H4-Kronecker transform as
+the previous torch FP32 implementation, but changes accumulation order and
+therefore is **not pixel-exact**. The previous rotation is available via
+`WAN2GP_LTX25_HADAMARD=torch` without disabling the acceleration adapter.
 
 ## Automatic native library
 
@@ -74,7 +79,14 @@ cause of the earlier differing `auto` execution graph is not yet proven.
 
 ## Reverting
 
-Before launching WanGP, set:
+To revert only the Hadamard change while preserving the validated V100 ConvRot
+cuBLAS, vector4 cast, and bounded scratch optimizations:
+
+```bash
+export WAN2GP_LTX25_HADAMARD=torch
+```
+
+For full ConvRot rollback, before launching WanGP, set:
 
 ```bash
 export WAN2GP_LTX25_CUBLAS_E_MODE=off
@@ -143,3 +155,30 @@ It completed in **95.9 s**, with exactly **16,368** optimized linears,
 default result. The strict-reference snapshot is
 `archive/ltx25-convrot-sm70-default-strict-validated-20261113`
 at commit `ae6051e99e173bd81375065ebf30f135b0f87881`.
+
+### Radix-4 promotion: user-reviewed video, numerical caveat
+
+On November 13, 2026, the user visually reviewed the earlier radix-4 T2V
+experiment and their own longer I2V comparison, reporting the outputs looked
+essentially identical. The user specifically requested default promotion and
+did **not** want near-miss quality decisions made from PSNR or exact-frame
+mismatch without visual inspection.
+
+The user-provided I2V comparison had 241 frames and reported approximately
+36.73 dB mean per-frame PSNR (lowest 30.66 dB); original run wall times were
+697 s for the historical torch H256 and 567 s for radix-4, i.e. 130 s (18.7%)
+less time. These are wall-clock measurements, **not isolated GPU-inference
+benchmarks**: model loading, downloads, CUDA warmup and run order might affect
+the result. The older synthetic full-adapter BF16/FP16 preflight passed and the
+early 49-frame T2V test produced nonidentical decoded pixels. This is not
+universal quality equivalence and does not establish that every seed, LoRA,
+resolution or model supports the same speedup.
+
+The default is now `WAN2GP_LTX25_HADAMARD=radix4` for eligible SM70
+Candidate E linears; `torch` is an explicit rollback. The test workflow keeps
+**strict decoded-pixel equality** for historical torch-based comparisons but
+treats the radix-4 decoded mismatch count as a diagnostic. For radix-4, the
+generation test must still pass numerical preflights, create a complete
+decodable video, use the expected optimized linears, and respect bounded
+workspace/no-persistent-weight-copy constraints. Pixel mismatch must not be
+misrepresented as either exact equality or an automatic quality regression.

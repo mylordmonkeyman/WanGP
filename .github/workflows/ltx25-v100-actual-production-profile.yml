@@ -1,0 +1,118 @@
+name: LTX-2.5 V100 actual WanGP attention and ConvRot profile
+
+# Only explicit dispatch or a deliberately edited signal on THIS branch.
+# No ordinary source pushes, no global dtype change, no checkpoint writes.
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/ltx25-v100-flash-attn-dual]
+    paths: [benchmarks/ltx25_flash_v100/production_profile_dispatch.signal]
+
+permissions:
+  contents: read
+
+# Coordinate with other real-model full-video tests on this V100 runner.
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  trace:
+    if: github.ref == 'refs/heads/perf/ltx25-v100-flash-attn-dual'
+    name: Trace one warmed BF16 ConvRot transformer forward; verify actual FP16 SDPA
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 160
+    env:
+      LTX25_CHECKPOINT_ROOT: /opt/ltx25/checkpoints
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      WAN2GP_LTX25_CUBLAS_E_MODE: ''
+      WAN2GP_LTX25_PROFILE: '1'
+      WAN2GP_LTX25_PROFILE_CALL: '2'
+      LTX25_ATTENTION_VIDEO_VARIANT: attn_sdpa_576
+      GRADIO_ANALYTICS_ENABLED: 'False'
+    steps:
+      - name: Checkout exact experimental branch and source SHA
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Confirm unchanged BF16 checkpoint model and installed SM70 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = perf/ltx25-v100-flash-attn-dual
+          test "$WAN2GP_LTX25_CUBLAS_E_MODE" = ""
+          /opt/venvs/ltx25-cu128/bin/python -m py_compile \
+            shared/ltx25_v100_profile.py shared/attention.py \
+            shared/qtypes/int8_convrot.py \
+            models/ltx2/ltx_core/model/transformer/model.py \
+            models/ltx2/ltx_core/model/transformer/attention.py \
+            benchmarks/ltx25_flash_v100/wgp_three_way_video.py
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/runtime_validate_baked.py
+
+      - name: Profile one warmed transformer forward during genuine 49-frame baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          export LTX25_PROFILE_DIR="$RUNNER_TEMP/ltx25-real-profile-8e0d"
+          mkdir -p "$LTX25_PROFILE_DIR"
+          echo "LTX25_PROFILE_DIR=$LTX25_PROFILE_DIR" >> "$GITHUB_ENV"
+          nvidia-smi --query-gpu=name,uuid,temperature.gpu,clocks.sm,clocks.mem,power.draw \
+            --format=csv 2>&1 | tee "$LTX25_PROFILE_DIR/gpu-preflight.txt"
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_flash_v100/wgp_three_way_video.py \
+            2>&1 | tee "$LTX25_PROFILE_DIR/video-driver.log"
+          LOG="/cache/ltx25/results/attention_attn_sdpa_576_${GITHUB_SHA:0:12}.log"
+          if [[ -f "$LOG" ]]; then cp "$LOG" "$LTX25_PROFILE_DIR/wangp-generation.log"; fi
+
+      - name: Assert actual converter and CUDA kernel attribution
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/ltx25-real-profile-8e0d"
+          /opt/venvs/ltx25-cu128/bin/python - "$OUT" <<'PY'
+          import json, pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          reportfile = path / "actual-forward-summary.json"
+          assert reportfile.is_file(), f"Actual model forward never profiled: {reportfile}"
+          report = json.loads(reportfile.read_text())
+          assert report["status"] == "PASS", report.get("save_error") or report.get("exception")
+          assert report["trace_created"], "Missing complete Kineto Chrome trace"
+          names = {x["name"]: x for x in report["named_scopes"]}
+          required = ("ltx25.transformer.one_forward", "ltx25.attention.full_module",
+                      "ltx25.attention.cast_bf16_qkv_to_fp16",
+                      "ltx25.attention.sdpa_fused")
+          for n in required:
+              assert n in names and names[n]["count"] > 0, f"Not recorded: {n}"
+          ops = [r["name"] for r in report["top_ops_by_cuda_us"]]
+          fused = any("_efficient_attention" in x for x in ops)
+          assert fused, f"No efficient attention operator observed: {ops[:25]}"
+          print("VERIFIED_REAL_MODEL_ATTENTION", json.dumps({
+              "source_sha": report["source_sha"],
+              "forward_index": report["profiled_forward_index"],
+              "named_scopes": [names[n] for n in required],
+              "fused_operator_detected": fused,
+              "trace_bytes": report["trace_bytes"],
+          }))
+          PY
+          {
+            echo "## Real LTX-2.5 BF16 ConvRot single-forward trace"
+            echo
+            echo "CUDA trace is instrumented and synchronized once at trial end."
+            echo "Nested profiler scopes overlap and do not establish Amdahl attribution."
+            echo "No attention backend, model dtype or checkpoint weight was changed."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload profiler report and one-forward Chrome trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ltx25-v100-actual-wangp-profile-${{ github.run_id }}
+          path: ${{ runner.temp }}/ltx25-real-profile-8e0d/
+          retention-days: 14
+          if-no-files-found: warn

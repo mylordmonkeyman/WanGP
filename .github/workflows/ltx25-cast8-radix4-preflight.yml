@@ -1,0 +1,58 @@
+name: LTX-2.5 V100 vector8 cast compatibility with radix4 default
+
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths:
+      - benchmarks/ltx25_convrot/cast8_radix4_preflight_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  compat:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 15
+    env:
+      LTX25_CUBLAS_E_LIB: /tmp/ltx25_cast8_radix4_compat.so
+      WAN2GP_LTX25_CUBLAS_E_MODE: fp32rot
+      WAN2GP_LTX25_E_CAST: vector8
+    steps:
+      - name: Checkout exact SM70 experimental branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Refuse GPU contention
+        run: |
+          set -euo pipefail
+          active="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader |
+            grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$active" ]]; then echo "$active"; exit 1; fi
+      - name: Compile production-source SM70 extension
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_cublas_e.cu \
+            -lcublas -o "$LTX25_CUBLAS_E_LIB"
+      - name: Verify exact vector8 against PyTorch weight cast with historical torch H256
+        run: |
+          set -euo pipefail
+          WAN2GP_LTX25_HADAMARD=torch \
+            /opt/venvs/ltx25-cu128/bin/python \
+              benchmarks/ltx25_convrot/candidate_cast8_preflight.py
+      - name: Verify exact vector8 against PyTorch weight cast with default radix4 H256
+        run: |
+          set -euo pipefail
+          WAN2GP_LTX25_HADAMARD=radix4 \
+            /opt/venvs/ltx25-cu128/bin/python \
+              benchmarks/ltx25_convrot/candidate_cast8_preflight.py
+      - name: Confirm default cast remains vector4 in production module
+        run: |
+          set -euo pipefail
+          grep -Fq 'CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector4")' \
+            shared/kernels/ltx25_cublas_sm70.py

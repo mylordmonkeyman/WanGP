@@ -262,8 +262,9 @@ jobs:
               assert counters.get("mode") == "fp32rot" and counters.get("auto_selected") is True
               assert counters.get("cast_mode") == "vector4"
               assert counters.get("auto_native_fallback") == 0, "Auto extension unavailable"
-              assert counters.get("used", 0) > 0, "Auto backend never used"
-              assert stats.get("acquired", 0) > 0, "Default scratch not used"
+              assert counters.get("used") == 16368, "Default dispatch changed eligible call count"
+              assert counters.get("range_fallback") == 4434, "Device FP32 fallback count changed"
+              assert stats.get("acquired") == 16360, "Default scratch lease count changed"
               assert stats.get("persistent_weight_copies") == 0
               assert gate.get("decoded_pixels_identical") is True and gate.get("total_frames") == 49
           if variant == "e_combo_1024":

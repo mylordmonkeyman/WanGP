@@ -18,6 +18,7 @@ VARIANTS = {"r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e",
             "e_default_1024": "quality_default",
             "e_hadamard_1024": "quality_hadamard",
             "e_flat_mm_1024": "quality_flat_mm",
+            "e_algo2_1024": "quality_algo2",
             "e_debug_fp32rot_samecfg_1024": "quality_default_explicit"}
 
 
@@ -58,6 +59,7 @@ def main():
         "default_video_gate": r.get("default_video_gate"),
         "hadamard_video_gate": r.get("hadamard_video_gate"),
         "flat_mm_video_gate": r.get("flat_mm_video_gate"),
+        "algo2_video_gate": r.get("algo2_video_gate"),
         "debug_explicit_video_gate": r.get("debug_explicit_video_gate"),
         "production_eligible": False if variant.startswith("e_") else None,
         "baked_checkpoint_root": "/opt/ltx25/checkpoints",
@@ -112,6 +114,11 @@ def main():
             "Full Candidate E exact numerical and decoded-video regression "
             "required; no default change unless repeatable speed improvement."
             if variant == "e_flat_mm_1024" else
+            "Experimental shape-only cublasGemmEx TensorOp Algo2 on V100 "
+            "for N16384 K4096 M64. Other sizes keep CUBLAS_GEMM_DEFAULT_TENSOR_OP. "
+            "Requires strict complete-linear and 49-frame equality; "
+            "no source default change until validated."
+            if variant == "e_algo2_1024" else
             "DIAGNOSTIC ONLY: shared default-mode configuration, explicit fp32rot "
             "selection, default vector4 and scratch settings. Compare 49 frames "
             "and call counts to identify auto-mode rollout mismatch."

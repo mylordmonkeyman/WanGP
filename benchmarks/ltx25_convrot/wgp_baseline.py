@@ -87,7 +87,7 @@ def run(cmd, timeout, log_path):
     # Keep all legacy exact-reference comparisons on their historically
     # validated torch H256, now that radix4 is the no-override default.
     # The promoted default and experimental Hadamard variants exercise radix4.
-    if IS_CANDIDATE and not (IS_DEFAULT or IS_HADAMARD or IS_FLAT_MM or IS_ALGO2):
+    if IS_CANDIDATE and not (IS_DEFAULT or IS_HADAMARD or IS_FLAT_MM or IS_ALGO2 or IS_STAGE_PROFILE):
         env["WAN2GP_LTX25_HADAMARD"] = "torch"
     if IS_HADAMARD:
         env["WAN2GP_LTX25_HADAMARD"] = "radix4"

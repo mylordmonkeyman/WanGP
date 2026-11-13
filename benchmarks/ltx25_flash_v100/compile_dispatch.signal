@@ -1,0 +1,4 @@
+Authorized SM70 compile probe: 2026-11-12
+Branch: perf/ltx25-v100-flash-attn-dual
+Sources: 1CatAI/1Cat-vLLM@c65714de843b2e743b0e234727eb1c1ccdb29f20; zhinianqin/flash-attention-v100@c2eda5e6115b98c3ba4bfd181570668742eece22
+Goal: compile, import, test D64/D128 fp16. No model download; no video generation.

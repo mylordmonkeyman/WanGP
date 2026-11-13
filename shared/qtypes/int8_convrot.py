@@ -472,11 +472,16 @@ class QLinearInt8ConvRot(QModuleMixin, torch.nn.Linear):
         fusion = getattr(self, '_wangp_linear_fusion', None)
         if fusion is not None:
             return int8_backend.linear_fused(input, qweight, self.bias, self._convrot_group_size, *fusion)
-        # Explicitly opt-in research only: default runs remain byte-for-byte
-        # on the original WanGP dispatch. The adapter shape/range-gates each
-        # candidate call and falls back to native R0 without caching weights.
-        if (os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").lower() == "fp32rot"
-                and self.weight_qtype == _QINT8_CONVROT_QTYPE):
+        # Default on V100 (SM70) for only the previously validated INT8
+        # ConvRot matrix families. The adapter performs shape, device, dtype,
+        # stream and GPU range checks, and falls back to native WanGP R0 when
+        # native code is unavailable or the operation is ineligible.
+        # WAN2GP_LTX25_CUBLAS_E_MODE=off restores the original dispatch.
+        if (os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "auto").strip().lower()
+                in ("auto", "fp32rot")
+                and self.weight_qtype == _QINT8_CONVROT_QTYPE
+                and input.is_cuda
+                and not _is_fake_tensor(input)):
             from shared.kernels import ltx25_cublas_sm70
             trial = ltx25_cublas_sm70.maybe_linear(input, qweight, self.bias, self._convrot_group_size)
             if trial is not None:

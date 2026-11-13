@@ -1,7 +1,144 @@
 {
-  "reason": "Benchmark not executed; inspect CUDA compile and GPU-busy logs",
+  "gpu": "Tesla V100-PCIE-32GB",
+  "kind": "isolated SM70 tiled INT8->WMMA fused GEMM vs exact vector4+cuBLAS pipeline",
+  "no_model_or_video_test": true,
+  "production_eligible": false,
   "run_id": "43507091799",
   "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43507091799",
+  "shapes": [
+    {
+      "baseline_cast_only_ms": 0.3968,
+      "baseline_cast_plus_cublas_ms": 0.76775,
+      "baseline_gemm_only_ms": 0.35176,
+      "baseline_rounds_ms": [
+        0.77518,
+        0.76032
+      ],
+      "baseline_temp_fp16_weight_mib": 128.0,
+      "fp32_exact_fraction": 1.0,
+      "fp32_finite": true,
+      "fp32_max_normalized_error": 0.0,
+      "fp32_p99_normalized_error": 0.0,
+      "fp32_relative_rms_error": 0.0,
+      "fused_int8_wmma_ms": 1.9858,
+      "fused_rounds_ms": [
+        1.98963,
+        1.98197
+      ],
+      "k": 4096,
+      "m": 64,
+      "n": 16384,
+      "numeric_pass": true,
+      "persistent_fp16_weights_in_fused_path": false,
+      "speedup_fused_vs_baseline": 0.3866
+    },
+    {
+      "baseline_cast_only_ms": 0.39734,
+      "baseline_cast_plus_cublas_ms": 0.76724,
+      "baseline_gemm_only_ms": 0.37069,
+      "baseline_rounds_ms": [
+        0.76854,
+        0.76595
+      ],
+      "baseline_temp_fp16_weight_mib": 128.0,
+      "fp32_exact_fraction": 0.01525115966796875,
+      "fp32_finite": true,
+      "fp32_max_normalized_error": 0.010990142822265625,
+      "fp32_p99_normalized_error": 6.413608934963122e-05,
+      "fp32_relative_rms_error": 2.4537648641853593e-06,
+      "fused_int8_wmma_ms": 2.39463,
+      "fused_rounds_ms": [
+        2.40794,
+        2.38131
+      ],
+      "k": 16384,
+      "m": 64,
+      "n": 4096,
+      "numeric_pass": true,
+      "persistent_fp16_weights_in_fused_path": false,
+      "speedup_fused_vs_baseline": 0.3204
+    },
+    {
+      "baseline_cast_only_ms": 0.10291,
+      "baseline_cast_plus_cublas_ms": 0.21326,
+      "baseline_gemm_only_ms": 0.11264,
+      "baseline_rounds_ms": [
+        0.21405,
+        0.21248
+      ],
+      "baseline_temp_fp16_weight_mib": 32.0,
+      "fp32_exact_fraction": 0.05996513366699219,
+      "fp32_finite": true,
+      "fp32_max_normalized_error": 0.002197265625,
+      "fp32_p99_normalized_error": 2.1626297893817537e-05,
+      "fp32_relative_rms_error": 7.844813580959453e-07,
+      "fused_int8_wmma_ms": 0.73216,
+      "fused_rounds_ms": [
+        0.73216,
+        0.73216
+      ],
+      "k": 4096,
+      "m": 128,
+      "n": 4096,
+      "numeric_pass": true,
+      "persistent_fp16_weights_in_fused_path": false,
+      "speedup_fused_vs_baseline": 0.2913
+    },
+    {
+      "baseline_cast_only_ms": 0.05325,
+      "baseline_cast_plus_cublas_ms": 0.11674,
+      "baseline_gemm_only_ms": 0.06451,
+      "baseline_rounds_ms": [
+        0.11674,
+        0.11674
+      ],
+      "baseline_temp_fp16_weight_mib": 16.0,
+      "fp32_exact_fraction": 0.039775848388671875,
+      "fp32_finite": true,
+      "fp32_max_normalized_error": 0.00189208984375,
+      "fp32_p99_normalized_error": 2.5330758944619447e-05,
+      "fp32_relative_rms_error": 9.509005280960992e-07,
+      "fused_int8_wmma_ms": 0.50381,
+      "fused_rounds_ms": [
+        0.50381,
+        0.50381
+      ],
+      "k": 4096,
+      "m": 128,
+      "n": 2048,
+      "numeric_pass": true,
+      "persistent_fp16_weights_in_fused_path": false,
+      "speedup_fused_vs_baseline": 0.2317
+    },
+    {
+      "baseline_cast_only_ms": 0.39731,
+      "baseline_cast_plus_cublas_ms": 1.96761,
+      "baseline_gemm_only_ms": 1.69523,
+      "baseline_rounds_ms": [
+        1.9671,
+        1.96813
+      ],
+      "baseline_temp_fp16_weight_mib": 128.0,
+      "fp32_exact_fraction": 1.0,
+      "fp32_finite": true,
+      "fp32_max_normalized_error": 0.0,
+      "fp32_p99_normalized_error": 0.0,
+      "fp32_relative_rms_error": 0.0,
+      "fused_int8_wmma_ms": 20.24551,
+      "fused_rounds_ms": [
+        20.27315,
+        20.21786
+      ],
+      "k": 4096,
+      "m": 1024,
+      "n": 16384,
+      "numeric_pass": true,
+      "persistent_fp16_weights_in_fused_path": false,
+      "speedup_fused_vs_baseline": 0.0972
+    }
+  ],
   "source_sha": "5defbf3aec1fb6c03e412820945ed7e2c3c867c2",
-  "status": "NOT_RUN"
+  "status": "PASS",
+  "synthetic_only": true,
+  "utc": "2026-11-13T21:14:35.624456+00:00"
 }

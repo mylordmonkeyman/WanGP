@@ -13,6 +13,7 @@ on:
       - benchmarks/ltx25_convrot/stage_profile_dispatch.signal
       - benchmarks/ltx25_convrot/workspace_dispatch.signal
       - benchmarks/ltx25_convrot/cast4_dispatch.signal
+      - benchmarks/ltx25_convrot/cast8_dispatch.signal
       - benchmarks/ltx25_convrot/combo_dispatch.signal
       - benchmarks/ltx25_convrot/default_auto_dispatch.signal
       - benchmarks/ltx25_convrot/hadamard_video_dispatch.signal
@@ -33,6 +34,7 @@ on:
           - e_profile_1024
           - e_workspace_1024
           - e_cast4_1024
+          - e_cast8_1024
           - e_combo_1024
           - e_default_1024
           - e_hadamard_1024
@@ -71,7 +73,7 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
             changed="$(git diff-tree --no-commit-id --name-only -r HEAD |
-              grep -E '^benchmarks/ltx25_convrot/(quality_(r0|e)|real_activation_audit|stage_profile|workspace|cast4|combo|default_auto|debug_explicit|hadamard_video|flat_mm_video|algo2_video)_dispatch[.]signal$' || true)"
+              grep -E '^benchmarks/ltx25_convrot/(quality_(r0|e)|real_activation_audit|stage_profile|workspace|cast4|cast8|combo|default_auto|debug_explicit|hadamard_video|flat_mm_video|algo2_video)_dispatch[.]signal$' || true)"
             case "$changed" in
               benchmarks/ltx25_convrot/quality_r0_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=r0_quality_1024" >> "$GITHUB_ENV"
@@ -90,6 +92,9 @@ jobs:
                 ;;
               benchmarks/ltx25_convrot/cast4_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=e_cast4_1024" >> "$GITHUB_ENV"
+                ;;
+              benchmarks/ltx25_convrot/cast8_dispatch.signal)
+                echo "LTX25_BENCH_VARIANT=e_cast8_1024" >> "$GITHUB_ENV"
                 ;;
               benchmarks/ltx25_convrot/combo_dispatch.signal)
                 echo "LTX25_BENCH_VARIANT=e_combo_1024" >> "$GITHUB_ENV"
@@ -148,7 +153,7 @@ jobs:
             r0_quality_1024)
               echo "WAN2GP_LTX25_CUBLAS_E_MODE=" >> "$GITHUB_ENV"
               ;;
-            e_quality_1024|e_real_activation_audit_1024|e_profile_1024|e_workspace_1024|e_cast4_1024|e_combo_1024|e_debug_fp32rot_samecfg_1024|e_hadamard_1024|e_flat_mm_1024|e_algo2_1024)
+            e_quality_1024|e_real_activation_audit_1024|e_profile_1024|e_workspace_1024|e_cast4_1024|e_cast8_1024|e_combo_1024|e_debug_fp32rot_samecfg_1024|e_hadamard_1024|e_flat_mm_1024|e_algo2_1024)
               echo "WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot" >> "$GITHUB_ENV"
               ;;
             e_default_1024)
@@ -208,6 +213,15 @@ jobs:
             /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/candidate_cast4_preflight.py
 
+      - name: Preflight exact vector8 weight expansion and full BF16/FP16 adapter
+        if: ${{ env.LTX25_BENCH_VARIANT == 'e_cast8_1024' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          WAN2GP_LTX25_HADAMARD=torch WAN2GP_LTX25_E_CAST=vector8 \
+            /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/candidate_cast8_preflight.py
+
       - name: Preflight FP32 radix4 Hadamard against full torch-rotation adapter
         if: ${{ env.LTX25_BENCH_VARIANT == 'e_hadamard_1024' || env.LTX25_BENCH_VARIANT == 'e_default_1024' }}
         shell: bash
@@ -243,7 +257,7 @@ jobs:
             benchmarks/ltx25_convrot/wgp_baseline.py
 
       - name: Require experimental video to match validated no-sync E decoded frames
-        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' || env.LTX25_BENCH_VARIANT == 'e_cast4_1024' || env.LTX25_BENCH_VARIANT == 'e_combo_1024' || env.LTX25_BENCH_VARIANT == 'e_default_1024' || env.LTX25_BENCH_VARIANT == 'e_debug_fp32rot_samecfg_1024' || env.LTX25_BENCH_VARIANT == 'e_hadamard_1024' || env.LTX25_BENCH_VARIANT == 'e_flat_mm_1024' || env.LTX25_BENCH_VARIANT == 'e_algo2_1024' }}
+        if: ${{ env.LTX25_BENCH_VARIANT == 'e_workspace_1024' || env.LTX25_BENCH_VARIANT == 'e_cast4_1024' || env.LTX25_BENCH_VARIANT == 'e_cast8_1024' || env.LTX25_BENCH_VARIANT == 'e_combo_1024' || env.LTX25_BENCH_VARIANT == 'e_default_1024' || env.LTX25_BENCH_VARIANT == 'e_debug_fp32rot_samecfg_1024' || env.LTX25_BENCH_VARIANT == 'e_hadamard_1024' || env.LTX25_BENCH_VARIANT == 'e_flat_mm_1024' || env.LTX25_BENCH_VARIANT == 'e_algo2_1024' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -274,6 +288,7 @@ jobs:
                     "e_profile_1024": "quality_stage_profile",
                     "e_workspace_1024": "quality_workspace",
                     "e_cast4_1024": "quality_cast4",
+                     "e_cast8_1024": "quality_cast8",
                     "e_combo_1024": "quality_combo",
                     "e_default_1024": "quality_default",
                     "e_hadamard_1024": "quality_hadamard",
@@ -362,6 +377,19 @@ jobs:
               print("COMBO_VIDEO_GATE", gate)
               assert gate.get("decoded_pixels_identical") is True, "Combination changed decoded frames"
               assert gate.get("total_frames") == 49
+          if variant == "e_cast8_1024":
+              counters = r.get("candidate_counters") or {}
+              stats = r.get("workspace_stats") or {}
+              gate = r.get("cast8_video_gate") or {}
+              print("CAST8_VIDEO_GATE",counters.get("cast_mode"),gate)
+              assert counters.get("mode") == "fp32rot"
+              assert counters.get("cast_mode") == "vector8"
+              assert counters.get("rotation_mode") == "torch"
+              assert counters.get("used") == 16368
+              assert counters.get("range_fallback") == 4434
+              assert stats.get("persistent_weight_copies") == 0
+              assert gate.get("total_frames") == 49
+              assert gate.get("decoded_pixels_identical") is True, "Vector8 changed reference pixels"
           if variant == "e_cast4_1024":
               assert r.get("candidate_counters", {}).get("cast_mode") == "vector4", "Vector4 cast did not execute"
               gate = r.get("cast4_video_gate") or {}

@@ -14,6 +14,7 @@ VARIANTS = {"r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e",
             "e_profile_1024": "quality_stage_profile",
             "e_workspace_1024": "quality_workspace",
             "e_cast4_1024": "quality_cast4",
+            "e_cast8_1024": "quality_cast8",
             "e_combo_1024": "quality_combo",
             "e_default_1024": "quality_default",
             "e_hadamard_1024": "quality_hadamard",
@@ -55,6 +56,7 @@ def main():
         "workspace_stats": r.get("workspace_stats"),
         "workspace_video_gate": r.get("workspace_video_gate"),
         "cast4_video_gate": r.get("cast4_video_gate"),
+        "cast8_video_gate": r.get("cast8_video_gate"),
         "combo_video_gate": r.get("combo_video_gate"),
         "default_video_gate": r.get("default_video_gate"),
         "hadamard_video_gate": r.get("hadamard_video_gate"),
@@ -94,6 +96,11 @@ def main():
             "not cached). Require native cast preflight, exact 49-frame decoded "
             "video equality, and matched repeated uninstrumented timing trials."
             if variant == "e_cast4_1024" else
+            "Opt-in vector8 INT8-to-FP16 conversion on V100: same exact FP16 "
+            "values as vector4 and PyTorch, no persistent FP16 copy. Require "
+            "full-adapter BF16/FP16 preflight, 49 decoded frames matching "
+            "the historical torch-H256 reference, and matched wall-time checks."
+            if variant == "e_cast8_1024" else
             "Opt-in combination of bounded reusable activation scratch and "
             "bit-exact vector4 transient FP16 weight conversion. "
             "Full-generation time is a single run until controlled repeats "

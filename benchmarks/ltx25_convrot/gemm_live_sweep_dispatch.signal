@@ -1,0 +1,2 @@
+2026-11-13
+Run exact-output SM70 cuBLAS selector sweep for the ten (N,K,M) families newly observed in live 49-frame Candidate E radix4+vector8 profiling (GitHub Actions 43528725302) but not in old selector sweep. 8,960 of 16,368 optimized linears. No production GEMM default changes. Require idle V100 and publish complete results.

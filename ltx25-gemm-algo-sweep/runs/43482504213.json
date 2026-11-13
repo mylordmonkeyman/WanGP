@@ -1,0 +1,871 @@
+{
+  "bit_exact_required_for_promotion": true,
+  "device": "Tesla V100-PCIE-32GB",
+  "kind": "SM70 isolated cublasGemmEx algorithm exact-output sweep",
+  "model_generation": false,
+  "production_eligible": false,
+  "run_id": "43482504213",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43482504213",
+  "shapes": [
+    {
+      "K": 2048,
+      "M": 128,
+      "N": 2048,
+      "baseline_median_ms": 0.06246,
+      "best_bit_exact": -2,
+      "candidates": [
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.06246,
+          "selector": -1,
+          "speedup_vs_reference": 1.0,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.06042,
+          "selector": -2,
+          "speedup_vs_reference": 1.0338,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06542205810546875,
+          "max_normalized_error": 0.002471923828125,
+          "median_ms": 0.05734,
+          "selector": 0,
+          "speedup_vs_reference": 1.0893,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06542205810546875,
+          "max_normalized_error": 0.002471923828125,
+          "median_ms": 0.06963,
+          "selector": 1,
+          "speedup_vs_reference": 0.897,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06542205810546875,
+          "max_normalized_error": 0.002471923828125,
+          "median_ms": 0.0696,
+          "selector": 2,
+          "speedup_vs_reference": 0.8974,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06542205810546875,
+          "max_normalized_error": 0.002471923828125,
+          "median_ms": 0.08909,
+          "selector": 3,
+          "speedup_vs_reference": 0.7011,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06542205810546875,
+          "max_normalized_error": 0.002471923828125,
+          "median_ms": 0.12595,
+          "selector": 4,
+          "speedup_vs_reference": 0.4959,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06542205810546875,
+          "max_normalized_error": 0.002471923828125,
+          "median_ms": 0.09523,
+          "selector": 5,
+          "speedup_vs_reference": 0.6559,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06542205810546875,
+          "max_normalized_error": 0.002471923828125,
+          "median_ms": 0.13619,
+          "selector": 6,
+          "speedup_vs_reference": 0.4586,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06542205810546875,
+          "max_normalized_error": 0.002471923828125,
+          "median_ms": 0.15462,
+          "selector": 7,
+          "speedup_vs_reference": 0.404,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.17264556884765625,
+          "max_normalized_error": 0.001804687432013452,
+          "median_ms": 0.04813,
+          "selector": 8,
+          "speedup_vs_reference": 1.2977,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.17264556884765625,
+          "max_normalized_error": 0.001804687432013452,
+          "median_ms": 0.04813,
+          "selector": 9,
+          "speedup_vs_reference": 1.2977,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.17264556884765625,
+          "max_normalized_error": 0.001804687432013452,
+          "median_ms": 0.04813,
+          "selector": 10,
+          "speedup_vs_reference": 1.2977,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.17264556884765625,
+          "max_normalized_error": 0.001804687432013452,
+          "median_ms": 0.04864,
+          "selector": 11,
+          "speedup_vs_reference": 1.2841,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.17264556884765625,
+          "max_normalized_error": 0.001804687432013452,
+          "median_ms": 0.06042,
+          "selector": 12,
+          "speedup_vs_reference": 1.0338,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.17264556884765625,
+          "max_normalized_error": 0.001804687432013452,
+          "median_ms": 0.05018,
+          "selector": 13,
+          "speedup_vs_reference": 1.2447,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.17264556884765625,
+          "max_normalized_error": 0.001804687432013452,
+          "median_ms": 0.06758,
+          "selector": 14,
+          "speedup_vs_reference": 0.9242,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.17264556884765625,
+          "max_normalized_error": 0.001804687432013452,
+          "median_ms": 0.07373,
+          "selector": 15,
+          "speedup_vs_reference": 0.8471,
+          "status": "PASS"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 16,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 17,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 18,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 19,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 20,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 21,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 22,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 23,
+          "status": "UNSUPPORTED"
+        }
+      ],
+      "exact": 2,
+      "faster_exact": 1,
+      "supported": 18
+    },
+    {
+      "K": 4096,
+      "M": 128,
+      "N": 4096,
+      "baseline_median_ms": 0.12083,
+      "best_bit_exact": -1,
+      "candidates": [
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.12083,
+          "selector": -1,
+          "speedup_vs_reference": 1.0,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.12133,
+          "selector": -2,
+          "speedup_vs_reference": 0.9959,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.05976295471191406,
+          "max_normalized_error": 0.006195068359375,
+          "median_ms": 0.14336,
+          "selector": 0,
+          "speedup_vs_reference": 0.8428,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.05976295471191406,
+          "max_normalized_error": 0.006195068359375,
+          "median_ms": 0.14029,
+          "selector": 1,
+          "speedup_vs_reference": 0.8613,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.05976295471191406,
+          "max_normalized_error": 0.006195068359375,
+          "median_ms": 0.13926,
+          "selector": 2,
+          "speedup_vs_reference": 0.8677,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.05976295471191406,
+          "max_normalized_error": 0.006195068359375,
+          "median_ms": 0.17613,
+          "selector": 3,
+          "speedup_vs_reference": 0.686,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.05976295471191406,
+          "max_normalized_error": 0.006195068359375,
+          "median_ms": 0.24269,
+          "selector": 4,
+          "speedup_vs_reference": 0.4979,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.05976295471191406,
+          "max_normalized_error": 0.006195068359375,
+          "median_ms": 0.19866,
+          "selector": 5,
+          "speedup_vs_reference": 0.6082,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.05976295471191406,
+          "max_normalized_error": 0.006195068359375,
+          "median_ms": 0.26624,
+          "selector": 6,
+          "speedup_vs_reference": 0.4538,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.05976295471191406,
+          "max_normalized_error": 0.006195068359375,
+          "median_ms": 0.30618,
+          "selector": 7,
+          "speedup_vs_reference": 0.3946,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06644821166992188,
+          "max_normalized_error": 0.0079345703125,
+          "median_ms": 0.13414,
+          "selector": 8,
+          "speedup_vs_reference": 0.9008,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06644821166992188,
+          "max_normalized_error": 0.0079345703125,
+          "median_ms": 0.11571,
+          "selector": 9,
+          "speedup_vs_reference": 1.0442,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06644821166992188,
+          "max_normalized_error": 0.0079345703125,
+          "median_ms": 0.1239,
+          "selector": 10,
+          "speedup_vs_reference": 0.9752,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06644821166992188,
+          "max_normalized_error": 0.0079345703125,
+          "median_ms": 0.10752,
+          "selector": 11,
+          "speedup_vs_reference": 1.1238,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06644821166992188,
+          "max_normalized_error": 0.0079345703125,
+          "median_ms": 0.1577,
+          "selector": 12,
+          "speedup_vs_reference": 0.7662,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06644821166992188,
+          "max_normalized_error": 0.0079345703125,
+          "median_ms": 0.11264,
+          "selector": 13,
+          "speedup_vs_reference": 1.0727,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06644821166992188,
+          "max_normalized_error": 0.0079345703125,
+          "median_ms": 0.11162,
+          "selector": 14,
+          "speedup_vs_reference": 1.0825,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.06644821166992188,
+          "max_normalized_error": 0.0079345703125,
+          "median_ms": 0.12595,
+          "selector": 15,
+          "speedup_vs_reference": 0.9593,
+          "status": "PASS"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 16,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 17,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 18,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 19,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 20,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 21,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 22,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 23,
+          "status": "UNSUPPORTED"
+        }
+      ],
+      "exact": 2,
+      "faster_exact": 0,
+      "supported": 18
+    },
+    {
+      "K": 4096,
+      "M": 64,
+      "N": 16384,
+      "baseline_median_ms": 0.38298,
+      "best_bit_exact": 2,
+      "candidates": [
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.38298,
+          "selector": -1,
+          "speedup_vs_reference": 1.0,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.38298,
+          "selector": -2,
+          "speedup_vs_reference": 1.0,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.29952,
+          "selector": 0,
+          "speedup_vs_reference": 1.2786,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.42803,
+          "selector": 1,
+          "speedup_vs_reference": 0.8948,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.28928,
+          "selector": 2,
+          "speedup_vs_reference": 1.3239,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.29901,
+          "selector": 3,
+          "speedup_vs_reference": 1.2808,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.4608,
+          "selector": 4,
+          "speedup_vs_reference": 0.8311,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.31437,
+          "selector": 5,
+          "speedup_vs_reference": 1.2182,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.31693,
+          "selector": 6,
+          "speedup_vs_reference": 1.2084,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.3625,
+          "selector": 7,
+          "speedup_vs_reference": 1.0565,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.039290428161621094,
+          "max_normalized_error": 0.006969710346311331,
+          "median_ms": 0.39066,
+          "selector": 8,
+          "speedup_vs_reference": 0.9803,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.039290428161621094,
+          "max_normalized_error": 0.006969710346311331,
+          "median_ms": 0.44749,
+          "selector": 9,
+          "speedup_vs_reference": 0.8558,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.039290428161621094,
+          "max_normalized_error": 0.006969710346311331,
+          "median_ms": 0.39987,
+          "selector": 10,
+          "speedup_vs_reference": 0.9578,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.039290428161621094,
+          "max_normalized_error": 0.006969710346311331,
+          "median_ms": 0.39117,
+          "selector": 11,
+          "speedup_vs_reference": 0.9791,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.039290428161621094,
+          "max_normalized_error": 0.006969710346311331,
+          "median_ms": 0.52224,
+          "selector": 12,
+          "speedup_vs_reference": 0.7333,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.039290428161621094,
+          "max_normalized_error": 0.006969710346311331,
+          "median_ms": 0.34816,
+          "selector": 13,
+          "speedup_vs_reference": 1.1,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.039290428161621094,
+          "max_normalized_error": 0.006969710346311331,
+          "median_ms": 0.3968,
+          "selector": 14,
+          "speedup_vs_reference": 0.9652,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.039290428161621094,
+          "max_normalized_error": 0.006969710346311331,
+          "median_ms": 0.32154,
+          "selector": 15,
+          "speedup_vs_reference": 1.1911,
+          "status": "PASS"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 16,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 17,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 18,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 19,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 20,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 21,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 22,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 23,
+          "status": "UNSUPPORTED"
+        }
+      ],
+      "exact": 10,
+      "faster_exact": 6,
+      "supported": 18
+    },
+    {
+      "K": 16384,
+      "M": 64,
+      "N": 4096,
+      "baseline_median_ms": 0.3753,
+      "best_bit_exact": -1,
+      "candidates": [
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.3753,
+          "selector": -1,
+          "speedup_vs_reference": 1.0,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": true,
+          "exact_element_fraction": 1.0,
+          "max_normalized_error": 0.0,
+          "median_ms": 0.37734,
+          "selector": -2,
+          "speedup_vs_reference": 0.9946,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.015239715576171875,
+          "max_normalized_error": 0.02911376953125,
+          "median_ms": 0.6144,
+          "selector": 0,
+          "speedup_vs_reference": 0.6108,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.015239715576171875,
+          "max_normalized_error": 0.02911376953125,
+          "median_ms": 0.59341,
+          "selector": 1,
+          "speedup_vs_reference": 0.6324,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.015239715576171875,
+          "max_normalized_error": 0.02911376953125,
+          "median_ms": 0.60314,
+          "selector": 2,
+          "speedup_vs_reference": 0.6222,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.015239715576171875,
+          "max_normalized_error": 0.02911376953125,
+          "median_ms": 0.64102,
+          "selector": 3,
+          "speedup_vs_reference": 0.5855,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.015239715576171875,
+          "max_normalized_error": 0.02911376953125,
+          "median_ms": 0.84378,
+          "selector": 4,
+          "speedup_vs_reference": 0.4448,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.015239715576171875,
+          "max_normalized_error": 0.02911376953125,
+          "median_ms": 0.89754,
+          "selector": 5,
+          "speedup_vs_reference": 0.4181,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.015239715576171875,
+          "max_normalized_error": 0.02911376953125,
+          "median_ms": 0.90522,
+          "selector": 6,
+          "speedup_vs_reference": 0.4146,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.015239715576171875,
+          "max_normalized_error": 0.02911376953125,
+          "median_ms": 1.20269,
+          "selector": 7,
+          "speedup_vs_reference": 0.3121,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.053295135498046875,
+          "max_normalized_error": 0.008056640625,
+          "median_ms": 0.4905,
+          "selector": 8,
+          "speedup_vs_reference": 0.7651,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.053295135498046875,
+          "max_normalized_error": 0.008056640625,
+          "median_ms": 0.50074,
+          "selector": 9,
+          "speedup_vs_reference": 0.7495,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.053295135498046875,
+          "max_normalized_error": 0.008056640625,
+          "median_ms": 0.48026,
+          "selector": 10,
+          "speedup_vs_reference": 0.7815,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.053295135498046875,
+          "max_normalized_error": 0.008056640625,
+          "median_ms": 0.49254,
+          "selector": 11,
+          "speedup_vs_reference": 0.762,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.053295135498046875,
+          "max_normalized_error": 0.008056640625,
+          "median_ms": 0.56166,
+          "selector": 12,
+          "speedup_vs_reference": 0.6682,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.053295135498046875,
+          "max_normalized_error": 0.008056640625,
+          "median_ms": 0.49664,
+          "selector": 13,
+          "speedup_vs_reference": 0.7557,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.053295135498046875,
+          "max_normalized_error": 0.008056640625,
+          "median_ms": 0.50176,
+          "selector": 14,
+          "speedup_vs_reference": 0.748,
+          "status": "PASS"
+        },
+        {
+          "bit_exact_fp32": false,
+          "exact_element_fraction": 0.053295135498046875,
+          "max_normalized_error": 0.008056640625,
+          "median_ms": 0.50637,
+          "selector": 15,
+          "speedup_vs_reference": 0.7412,
+          "status": "PASS"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 16,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 17,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 18,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 19,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 20,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 21,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 22,
+          "status": "UNSUPPORTED"
+        },
+        {
+          "cublas_code": 1207,
+          "selector": 23,
+          "status": "UNSUPPORTED"
+        }
+      ],
+      "exact": 2,
+      "faster_exact": 0,
+      "supported": 18
+    }
+  ],
+  "source_sha": "a57862191041465f6ed53b632afd9a7658e3bd0c",
+  "status": "PASS",
+  "synthetic_input_only": true,
+  "utc": "2026-11-13T18:25:41.267737+00:00"
+}

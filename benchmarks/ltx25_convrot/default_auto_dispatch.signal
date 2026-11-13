@@ -1,1 +1,1 @@
-2026-11-13: verify promoted radix4 default on live V100 with native extension auto build, BF16/FP16 preflight and 49-frame decoded-video diagnostic
+2026-11-13: acceptance rerun: promote radix4 as default; require 16,368 eligible V100 calls and 4,600 radix4 exceptional FP32 rows (not historical torch 4,434). No strict pixel identity requirement, but require valid 49 frames.

@@ -11,7 +11,8 @@ from publish_phase0_status import put
 OUT = Path("/cache/ltx25/results")
 VARIANTS = {"r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e",
             "e_real_activation_audit_1024": "quality_real_audit",
-            "e_profile_1024": "quality_stage_profile"}
+            "e_profile_1024": "quality_stage_profile",
+            "e_workspace_1024": "quality_workspace"}
 
 
 def main():
@@ -44,6 +45,7 @@ def main():
         "candidate_counters": counters,
         "real_activation_audit": r.get("real_activation_audit"),
         "stage_profile": r.get("stage_profile"),
+        "workspace_stats": r.get("workspace_stats"),
         "production_eligible": False if variant.startswith("e_") else None,
         "baked_checkpoint_root": "/opt/ltx25/checkpoints",
         "checkpoint_fetched_in_job": False,
@@ -69,6 +71,10 @@ def main():
             "Compare only reported stage costs, then rerun a matched uninstrumented "
             "full-video benchmark."
             if variant == "e_profile_1024" else
+            "Opt-in bounded reusable scratch (no persistent FP16 weight copy). "
+            "Compare this clip against the no-sync E reference by decoded frame hash, "
+            "and use controlled repeat runs before claiming a timing speedup."
+            if variant == "e_workspace_1024" else
             "Matched 1024x576, 49-frame, 8-step text-to-video quality comparison. "
             "Visual review required; do not infer end-to-end speedup from synthetic layer tests."
         ),
@@ -84,6 +90,7 @@ def main():
         "real_activation_samples": (r.get("real_activation_audit") or {}).get("total_samples"),
         "stage_profile_status": (r.get("stage_profile") or {}).get("status"),
         "stage_profile_samples": (r.get("stage_profile") or {}).get("sample_count"),
+        "workspace_leases": (r.get("workspace_stats") or {}).get("acquired"),
         "videos": doc["videos"],
     })[:5000], flush=True)
 

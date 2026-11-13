@@ -1,2 +1,2 @@
 2026-11-13
-Fresh same-branch uninstrumented no-sync Candidate E PyTorch-cast control, after individual and combined optimization tests. Fixed seed 20261112, 1024x576, 49 frames, 8 steps; guard GPU idle.
+Final same-session A-B-B-A control for uninstrumented Candidate E torch cast without workspace. Compare against combined scratch+vector4 at 95.6/96.3 s and first control 96.6 s. Idle GPU only.

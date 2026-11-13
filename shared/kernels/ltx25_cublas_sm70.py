@@ -26,6 +26,7 @@ from pathlib import Path
 import torch
 
 MODE = os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").strip().lower()
+REAL_ACTIVATION_AUDIT = os.environ.get("WAN2GP_LTX25_REAL_ACTIVATION_AUDIT", "") == "1"
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
 WEIGHT_CAP = 128 * 1024 * 1024
 # Synthetic checkpoint-backed FP32-rotation gate passed these shapes.
@@ -156,6 +157,13 @@ def maybe_linear(x, weight, bias, group):
         raise RuntimeError(f"Candidate E FP32 epilogue failed, status={status}, N={n}, M={m}, K={k}")
     out = c32.to(x.dtype).reshape(*x.shape[:-1], n)
     _record("used", n, k, m)
+    if REAL_ACTIVATION_AUDIT:
+        # NOT a performance run: shed the large no-longer-needed temporary
+        # operands before the next, explicitly synchronizing R0/R1 audit.
+        # All device work is already enqueued on the same current stream.
+        del x32, x16, exponents, slow_rows, c32, w16, scale32, bias32
+        from shared.kernels import ltx25_real_activation_audit
+        ltx25_real_activation_audit.maybe_audit(x, weight, bias, group, out)
     return out
 
 def _summary():

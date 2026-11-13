@@ -128,18 +128,22 @@ def require_default(host, config):
         if config.get(key) not in (None, {}, [], ""):
             unsupported.append("Config." + key)
     if host.get("RestartPolicy", {}).get("Name") != "unless-stopped":
-        fatal("Unexpected restart policy")
+        unsupported.append("HostConfig.RestartPolicy")
     if host.get("IpcMode") not in ("private", "", None):
-        fatal("Unexpected custom IPC namespace")
+        unsupported.append("HostConfig.IpcMode")
     if host.get("CgroupnsMode") not in ("private", "", None):
-        fatal("Unexpected custom cgroup namespace")
-    if host.get("ShmSize", 67108864) != 67108864:
-        fatal("Unexpected custom --shm-size")
+        unsupported.append("HostConfig.CgroupnsMode")
+    # Docker's /dev/shm size is often intentionally enlarged for PyTorch
+    # multiprocess/video workloads. Read it from the actual container and
+    # replay the exact number of bytes instead of assuming 64 MiB.
+    shm_size = host.get("ShmSize", 67108864)
+    if type(shm_size) is not int or not (4096 <= shm_size <= 1024**4):
+        unsupported.append("HostConfig.ShmSize (invalid byte count)")
     log = host.get("LogConfig") or {}
     if log.get("Type") not in ("json-file", "", None) or log.get("Config"):
-        fatal("Unexpected custom log driver/options")
+        unsupported.append("HostConfig.LogConfig")
     if config.get("Tty") or config.get("OpenStdin") or config.get("StdinOnce"):
-        fatal("Unexpected interactive/TTY configuration")
+        unsupported.append("Config.Tty/OpenStdin/StdinOnce")
     if host.get("Init") not in (False, None):
         unsupported.append("HostConfig.Init")
     if unsupported:
@@ -209,6 +213,7 @@ def main():
     print("Network/restart: bridge / unless-stopped")
     print("CPU affinity:", host.get("CpusetCpus") or "unrestricted")
     print("NUMA mem affinity:", host.get("CpusetMems") or "unrestricted")
+    print("Shared memory (/dev/shm):", host.get("ShmSize", 67108864), "bytes")
     print("Dropped capabilities:", ", ".join(host.get("CapDrop") or []) or "none")
     print("Security options:", ", ".join(host.get("SecurityOpt") or []) or "default")
     print("Existing environment: preserving", len(vals), "variables without displaying values")
@@ -234,13 +239,16 @@ def main():
                         ("CpusetMems", "--cpuset-mems")):
         if host.get(field):
             affinity_args += [flag, host[field]]
+    # --shm-size accepts a byte count; applying it also to the preflight
+    # ensures the image check runs with the real runner's memory settings.
+    shm_args = ["--shm-size", str(host.get("ShmSize", 67108864))]
     restriction_args = []
     for cap in host.get("CapDrop") or []:
         restriction_args += ["--cap-drop", cap]
     for opt in host.get("SecurityOpt") or []:
         restriction_args += ["--security-opt", opt]
     run(["docker", "run", "--rm", "--gpus", "device=" + EXPECTED_GPU,
-         *affinity_args, *restriction_args, "--entrypoint",
+         *affinity_args, *shm_args, *restriction_args, "--entrypoint",
          "/opt/venvs/ltx25-cu128/bin/python", IMAGE, "-c", check])
     # Recheck immediately before stopping old runner.
     safe_github_idle()
@@ -251,7 +259,7 @@ def main():
         "--user", "runner", "--entrypoint", "/usr/local/bin/start-runner.sh",
         "--restart", "unless-stopped", "--network", "bridge",
         "--gpus", "device=" + EXPECTED_GPU,
-        *affinity_args, *restriction_args,
+        *affinity_args, *shm_args, *restriction_args,
     ]
     if cfg.get("WorkingDir"):
         command += ["--workdir", cfg["WorkingDir"]]
@@ -289,6 +297,8 @@ def main():
             for field in ("CpusetCpus", "CpusetMems"):
                 if (new["HostConfig"].get(field) or "") != (host.get(field) or ""):
                     fatal("New runner CPU/NUMA affinity differs: " + field)
+            if new["HostConfig"].get("ShmSize") != host.get("ShmSize"):
+                fatal("New runner /dev/shm size differs from original")
             # Docker may normalize capitalization and the implicit :true
             # suffix. Compare the restrictions semantically, not formatting.
             def normalized_cap(value):

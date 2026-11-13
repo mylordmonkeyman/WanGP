@@ -7,7 +7,15 @@ a prerequisite gate, NOT a substitute for video output/visual validation.
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import sys
 from types import SimpleNamespace
+
+# GitHub Actions invokes this file by path rather than via `python -m`.
+# Python otherwise places benchmarks/ltx25_convrot, not the WanGP repository
+# root, on sys.path and cannot resolve the top-level `shared` package.
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
 
 import torch
 

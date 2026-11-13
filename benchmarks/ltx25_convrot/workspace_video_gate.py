@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Strict decoded-frame comparison against the validated no-sync Candidate E.
 
-Runs only after an explicit e_workspace_1024 or e_cast4_1024 test generates a video. All 49
+Runs after selected default/experimental E variants generate a video. All 49
 frames are decoded as yuv420p by the same ffmpeg command. A difference is
 recorded as a failed gate, never silently classified as visually equivalent.
 
@@ -48,6 +48,7 @@ def main():
         "e_workspace_1024": ("quality_workspace", "workspace_video_gate"),
         "e_cast4_1024": ("quality_cast4", "cast4_video_gate"),
         "e_combo_1024": ("quality_combo", "combo_video_gate"),
+        "e_default_1024": ("quality_default", "default_video_gate"),
     }
     if variant not in variants:
         raise ValueError(f"Unsupported decoded video gate variant {variant!r}")

@@ -34,6 +34,7 @@ VARIANTS = {
     "e_workspace_1024": ("1024x576", True),
     "e_cast4_1024": ("1024x576", True),
     "e_combo_1024": ("1024x576", True),
+    "e_default_1024": ("1024x576", True),
 }
 if VARIANT not in VARIANTS:
     raise ValueError(f"Unsupported LTX25_BENCH_VARIANT: {VARIANT!r}")
@@ -42,7 +43,8 @@ IS_REAL_AUDIT = VARIANT == "e_real_activation_audit_1024"
 IS_STAGE_PROFILE = VARIANT == "e_profile_1024"
 IS_WORKSPACE = VARIANT in ("e_workspace_1024", "e_combo_1024")
 IS_CAST4 = VARIANT in ("e_cast4_1024", "e_combo_1024")
-if IS_CANDIDATE != (os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").lower() == "fp32rot"):
+IS_DEFAULT = VARIANT == "e_default_1024"
+if not IS_DEFAULT and IS_CANDIDATE != (os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "").lower() == "fp32rot"):
     raise ValueError("Candidate mode and selected benchmark variant disagree")
 CFG = BASE / f"config-{VARIANT}"
 VIDEOS = BASE / "videos" / VARIANT
@@ -72,6 +74,13 @@ def run(cmd, timeout, log_path):
     began = time.monotonic()
     env = os.environ.copy()
     env["HF_HUB_OFFLINE"] = "1"
+    if IS_DEFAULT:
+        # The default-selection gate MUST exercise *no environment opt-ins*,
+        # including no explicit library path: force auto native build/cache.
+        for name in ("WAN2GP_LTX25_CUBLAS_E_MODE", "WAN2GP_LTX25_E_CAST",
+                     "WAN2GP_LTX25_E_WORKSPACE", "WAN2GP_LTX25_E_AUTO_BUILD",
+                     "LTX25_CUBLAS_E_LIB"):
+            env.pop(name, None)
     if IS_CAST4:
         env["WAN2GP_LTX25_E_CAST"] = "vector4"
     if IS_WORKSPACE:
@@ -182,7 +191,8 @@ def main():
                    "e_profile_1024": "quality_stage_profile",
                    "e_workspace_1024": "quality_workspace",
                    "e_cast4_1024": "quality_cast4",
-                   "e_combo_1024": "quality_combo"}[VARIANT]
+                   "e_combo_1024": "quality_combo",
+                   "e_default_1024": "quality_default"}[VARIANT]
     result_path = OUT / f"runtime_{result_kind}_{sha[:12]}.json"
     try:
         if bootstrap.get("status") != "PASS":
@@ -194,7 +204,7 @@ def main():
         if not MODEL_FILE.is_file() or not TEXT_FILE.is_file():
             report.update(status="BLOCKED", blocker="Image-baked transformer or text encoder checkpoint absent")
             return
-        if VARIANT in ("e_quality_1024", "e_real_activation_audit_1024", "e_profile_1024", "e_workspace_1024", "e_cast4_1024", "e_combo_1024"):
+        if VARIANT in ("e_quality_1024", "e_real_activation_audit_1024", "e_profile_1024", "e_workspace_1024", "e_cast4_1024", "e_combo_1024", "e_default_1024"):
             refdir = BASE / "videos" / "r0_quality_1024"
             if not refdir.is_dir() or not any(refdir.glob("*.mp4")):
                 report.update(
@@ -269,12 +279,20 @@ def main():
             if report["status"] == "PASS" and report.get("candidate_counters", {}).get("used", 0) <= 0:
                 report["status"] = "NO_CANDIDATE_CALLS"
                 report["blocker"] = "A clip was generated but no ConvRot Candidate E calls were recorded"
+        if IS_DEFAULT and report["status"] == "PASS":
+            counters = report.get("candidate_counters", {})
+            if (counters.get("mode") != "auto" or
+                    counters.get("cast_mode") != "vector4" or
+                    counters.get("used", 0) <= 0 or
+                    counters.get("auto_native_fallback", 0) != 0):
+                report["status"] = "DEFAULT_AUTO_NOT_SELECTED"
+                report["blocker"] = "Default automatic SM70 vector4 mode did not execute successfully"
         if IS_CAST4 and report["status"] == "PASS":
             cast_mode = report.get("candidate_counters", {}).get("cast_mode")
             if cast_mode != "vector4":
                 report["status"] = "CAST4_NOT_SELECTED"
                 report["blocker"] = f"Expected vector4 cast counters, got {cast_mode!r}"
-        if IS_WORKSPACE:
+        if IS_WORKSPACE or IS_DEFAULT:
             import re
             # The workspace prints a bounded JSON summary at interpreter exit.
             ws_matches = re.findall(r"\[LTX25_WORKSPACE\] (\{[^\n]+\})",

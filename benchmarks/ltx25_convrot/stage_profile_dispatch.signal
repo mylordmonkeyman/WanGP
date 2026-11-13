@@ -1,2 +1,1 @@
-2026-11-13
-Authorized stage profiler retry after user confirmed other GPU compute process terminated. Preserve early GPU ownership check and run only on idle V100.
+2026-11-13: Reprofile exact active (N,K,M) call distribution and sparse stage latency on promoted radix4/vector8 Candidate E. Keep GEMM_TUNE=off, 49 frames at 1024x576, output mode counts by M, no runtime quantization; profile data is instrumented, never claim uninstrumented end-to-end speed.

@@ -51,8 +51,8 @@ jobs:
               summary[name]={
                   'size_bytes':dest.stat().st_size,
                   'sha256':sha(dest),
-                  'source_run_id':d['run_id'],
-                  'source_sha':d['source_sha'],
+                  'source_run_id':d.get('run_id','historical validated E'),
+                  'source_sha':d.get('source_sha','historical validated E'),
                   'resolution':d.get('resolution'),
                   'frames':d.get('frames'),
                   'seed':d.get('seed'),

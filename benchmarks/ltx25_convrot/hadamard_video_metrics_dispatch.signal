@@ -1,0 +1,2 @@
+2026-11-13
+After H256 full-video strict mismatch, compute per-frame decoded PSNR and SSIM against exact known-good 49-frame Candidate E, CPU only. Never use results as automatic quality acceptance.

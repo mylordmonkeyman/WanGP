@@ -8,9 +8,12 @@ No FP16 master weights are saved or cached, so MMGP can continue to offload
 the INT8 weights normally. Unsupported shapes, CPU and CUDA graph capture
 always use WanGP's native R0 path.
 
-Activation safety is checked each eligible invocation. FP32 rotation is an
-explicit change from the BF16 R0 path. Any borderline visual output must be
-reviewed by the user before further optimization.
+Activation safety is checked entirely on the GPU: each FP32-rotated input row
+receives a reversible power-of-two scale when representable as normal FP16.
+Exceptional rows execute the same operation in FP32 on the GPU *before* its
+output is used. No per-linear .item(), host-side range flags, or stream sync.
+FP32 rotation is an explicit change from BF16 R0; this remains a research pilot
+until real-activation numerical and video quality gates pass.
 """
 from __future__ import annotations
 
@@ -32,8 +35,14 @@ PASS_SHAPES = {
     (16384, 4096), (2048, 8192), (8192, 2048),
 }
 _FN = None
+# Tiny persistent device-side counters, not weights. Read only at process exit.
+# Allocations/updates happen on the current CUDA stream; normal use is a
+# single-threaded WanGP inference stream (concurrent-stream tests still needed).
+_BAD_ROW_COUNTS = {}
 _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
-          "sizes": {}, "mode": MODE, "production_eligible": False}
+          "sizes": {}, "mode": MODE, "production_eligible": False,
+          "range_fallback_units": "rows (device-side FP32 dot)",
+          "row_range_policy": "power_of_two_normal_fp16_else_fp32_dot"}
 
 
 def _fn():
@@ -43,14 +52,29 @@ def _fn():
     if not LIB or not Path(LIB).is_file():
         raise RuntimeError("Explicit ConvRot pilot requires LTX25_CUBLAS_E_LIB with compiled sm_70 cuBLAS extension")
     dll = ctypes.CDLL(LIB)
-    fn = dll.ltx25_cublas_gemm_f16_f32
-    fn.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
-                   ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
-    fn.restype = ctypes.c_int
-    _FN = (dll, fn)  # Retain the library as long as its callable is active.
-    print("[LTX25_CUBLAS_E] Explicit fp32rot pilot enabled; no persistent FP16 weight set", flush=True)
+    ptr = ctypes.c_void_p
+    gemm = dll.ltx25_cublas_gemm_f16_f32
+    gemm.argtypes = [ptr, ptr, ptr, ctypes.c_int, ctypes.c_int, ctypes.c_int, ptr]
+    gemm.restype = ctypes.c_int
+    prepare = dll.ltx25_cublas_prepare_f32_f16
+    prepare.argtypes = [ptr, ptr, ptr, ptr, ptr, ctypes.c_int, ctypes.c_int, ptr]
+    prepare.restype = ctypes.c_int
+    finish = dll.ltx25_cublas_epilogue_f32
+    finish.argtypes = [ptr, ptr, ptr, ptr, ptr, ptr, ptr, ctypes.c_int,
+                       ctypes.c_int, ctypes.c_int, ptr]
+    finish.restype = ctypes.c_int
+    _FN = (dll, gemm, prepare, finish)
+    print("[LTX25_CUBLAS_E] Explicit fp32rot GPU-range-guard pilot enabled; no persistent FP16 weights", flush=True)
     return _FN
 
+
+def _bad_row_counter(device):
+    index = device.index
+    if index is None:
+        index = torch.cuda.current_device()
+    if index not in _BAD_ROW_COUNTS:
+        _BAD_ROW_COUNTS[index] = torch.zeros((1,), device=device, dtype=torch.int32)
+    return _BAD_ROW_COUNTS[index]
 
 def _record(reason, n, k, m):
     key = f"{n}x{k}"
@@ -66,10 +90,11 @@ def _record(reason, n, k, m):
 
 
 def maybe_linear(x, weight, bias, group):
-    """Return experimental result or None for the untouched WanGP R0 path.
+    """Return explicitly selected experimental result or None for WanGP R0.
 
-    Only called by QLinearInt8ConvRot on an explicit environment opt-in.
-    Never called for Quanto non-ConvRot layers or CPU-only weights.
+    The check and any exceptional-row fallback are GPU-only. No unsafe output
+    escapes: the row correction runs on the same stream after cuBLAS and before
+    conversion to the input dtype. CUDA graph capture remains unsupported.
     """
     if MODE != "fp32rot":
         return None
@@ -86,6 +111,8 @@ def maybe_linear(x, weight, bias, group):
             or not x.is_cuda or q.device != x.device or scale.device != x.device
             or (bias is not None and bias.device != x.device)
             or not q.is_contiguous() or q.dtype != torch.int8
+            or scale.dtype != torch.float32 or scale.numel() != n
+            or (bias is not None and bias.numel() != n)
             or q.numel() * 2 > WEIGHT_CAP
             or torch.cuda.get_device_capability(x.device) != (7, 0)
             or torch.compiler.is_compiling()
@@ -95,41 +122,52 @@ def maybe_linear(x, weight, bias, group):
 
     from shared.qtypes.int8_convrot import _rotate_activation
 
-    # Precision path: FP32 Hadamard rotation of BF16 or FP16 input,
-    # then FP16 activation GEMM with FP32 accumulation and row epilogue.
-    # INT8 weights are exactly representable by FP16; a *temporary*, reused
-    # only during this call, holds them. No second long-lived weight set.
-    x32 = _rotate_activation(x.float(), group).reshape(m, k)
-    x16 = x32.to(torch.float16)
-    # FP16 lacks BF16's exponent range. Reject overflows and underflows to 0.
-    finite = torch.isfinite(x16).all()
-    underflow = ((x32 != 0) & (x16 == 0)).any()
-    if not bool(finite.item()) or bool(underflow.item()):
-        _record("range", n, k, m)
-        return None
-
-    w16 = q.to(torch.float16)
+    # FP32 Hadamard is the explicitly selected research variant (not R0).
+    # Own the temporaries until kernels have been enqueued on this stream;
+    # PyTorch's caching allocator tracks the current stream for their reuse.
+    x32 = _rotate_activation(x.float(), group).reshape(m, k).contiguous()
+    x16 = torch.empty((m, k), dtype=torch.float16, device=x.device)
+    exponents = torch.empty((m,), dtype=torch.int32, device=x.device)
+    slow_rows = torch.empty((m,), dtype=torch.int32, device=x.device)
     c32 = torch.empty((m, n), dtype=torch.float32, device=x.device)
-    stream = torch.cuda.current_stream(x.device)
-    dll, gemm = _fn()
-    status = gemm(ctypes.c_void_p(w16.data_ptr()),
-                  ctypes.c_void_p(x16.data_ptr()),
-                  ctypes.c_void_p(c32.data_ptr()),
-                  n, m, k, ctypes.c_void_p(stream.cuda_stream))
-    if status != 0:
+    w16 = q.to(torch.float16)  # Exact INT8 -> FP16, transient and bounded.
+    scale32 = scale.reshape(n).contiguous()
+    bias32 = None if bias is None else bias.float().reshape(n).contiguous()
+    bad_rows = _bad_row_counter(x.device)
+
+    dll, gemm, prepare, finish = _fn()
+    ptr = ctypes.c_void_p
+    stream = ptr(torch.cuda.current_stream(x.device).cuda_stream)
+    status = prepare(ptr(x32.data_ptr()), ptr(x16.data_ptr()),
+                     ptr(exponents.data_ptr()), ptr(slow_rows.data_ptr()),
+                     ptr(bad_rows.data_ptr()), m, k, stream)
+    if status:
+        raise RuntimeError(f"Candidate E row prepare failed, status={status}, N={n}, M={m}, K={k}")
+    status = gemm(ptr(w16.data_ptr()), ptr(x16.data_ptr()),
+                  ptr(c32.data_ptr()), n, m, k, stream)
+    if status:
         raise RuntimeError(f"Candidate E cuBLAS GEMM failed, status={status}, N={n}, M={m}, K={k}")
-    scale32 = scale.reshape(n).float()
-    c32.mul_(scale32.reshape(1, n))
-    if bias is not None:
-        c32.add_(bias.float().reshape(1, n))
+    status = finish(ptr(c32.data_ptr()), ptr(x32.data_ptr()), ptr(q.data_ptr()),
+                    ptr(scale32.data_ptr()),
+                    ptr(0 if bias32 is None else bias32.data_ptr()),
+                    ptr(exponents.data_ptr()), ptr(slow_rows.data_ptr()),
+                    m, n, k, stream)
+    if status:
+        raise RuntimeError(f"Candidate E FP32 epilogue failed, status={status}, N={n}, M={m}, K={k}")
     out = c32.to(x.dtype).reshape(*x.shape[:-1], n)
     _record("used", n, k, m)
     return out
 
-
 def _summary():
-    if MODE == "fp32rot":
-        print("[LTX25_CUBLAS_E] " + json.dumps(_STATS, sort_keys=True)[:6000], flush=True)
+    if MODE != "fp32rot":
+        return
+    # One synchronization, only AFTER generation has finished at interpreter
+    # exit. This is never in the measured per-linear hot path.
+    try:
+        _STATS["range_fallback"] = sum(int(t.item()) for t in _BAD_ROW_COUNTS.values())
+    except Exception as exc:
+        _STATS["range_fallback_read_error"] = f"{type(exc).__name__}: {exc}"
+    print("[LTX25_CUBLAS_E] " + json.dumps(_STATS, sort_keys=True)[:6000], flush=True)
 
 
 if MODE == "fp32rot":

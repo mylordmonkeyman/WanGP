@@ -27,7 +27,7 @@ REPORT = BASE / f"video_comparison_{SHA[:12]}.json"
 CASES = {
     "R0": ("quality_r0", "9d80ef2bccde", 157.9),
     "Archived-E": ("quality_e", "4adc57c0d17f", 112.8),
-    "No-sync-E": ("quality_e", "a566cf56eae", 98.3),
+    "No-sync-E": ("quality_e", "a566cf56eae8", 98.3),
     "Audit-E": ("quality_real_audit", "e8e1398a09c6", 98.5),
 }
 PAIRS = [

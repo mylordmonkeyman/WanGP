@@ -1,2 +1,2 @@
 2026-11-12
-Analyze four already cached matched LTX-2.5 1024x576 videos: R0, archived Candidate E, no-sync Candidate E, and live-activation-audit E. No model inference.
+Retry cached decoded-video comparisons using corrected 12-char source SHA prefixes. No model inference.

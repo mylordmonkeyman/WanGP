@@ -291,7 +291,8 @@ def main():
                 report["blocker"] = "A clip was generated but no ConvRot Candidate E calls were recorded"
         if IS_DEFAULT and report["status"] == "PASS":
             counters = report.get("candidate_counters", {})
-            if (counters.get("mode") != "auto" or
+            if (counters.get("mode") != "fp32rot" or
+                    counters.get("auto_selected") is not True or
                     counters.get("cast_mode") != "vector4" or
                     counters.get("used", 0) <= 0 or
                     counters.get("auto_native_fallback", 0) != 0):

@@ -316,3 +316,66 @@ weights, or change Candidate E. Source:
 and matches PyTorch bit-exactly across the tested shapes.** If promising,
 a separate opt-in full-generation path will be required with V100
 preflight, real-activation R0/R1 gate and exact decoded-frame regression.
+
+## Priority 2: vector4 cast and combined V100 gates (Nov 13, 2026)
+
+The isolated, explicitly signaled SM70 conversion microbenchmark passed
+with exact FP16 output bits for **all six tested matrix shapes**.
+Evidence: https://github.com/mylordmonkeyman/WanGP/actions/runs/43456883623
+
+| Weight shape N×K | PyTorch q.to(FP16) median (ms) | Vector4 median (ms) | Native speedup |
+|---|---:|---:|---:|
+| 2048×2048 | 0.0553 | 0.0343 | 1.61× |
+| 4096×4096 | 0.1310 | 0.1024 | 1.28× |
+| 2048×4096 | 0.0686 | 0.0533 | 1.29× |
+| 16384×4096 | 0.5028 | 0.3963 | 1.27× |
+| 4096×16384 | 0.4813 | 0.3973 | 1.21× |
+| 8192×2048 | 0.1244 | 0.1024 | 1.22× |
+
+These are isolated CUDA-event medians of 50 conversions using synthetic
+but checkpoint-realistic INT8 shapes. Preallocated PyTorch copy_ and native
+scalar-kernel controls were also measured. The results do NOT directly
+predict complete generation time.
+
+`WAN2GP_LTX25_E_CAST=vector4` enables an opt-in exact vectorized CUDA
+conversion inside the existing `ltx25_cublas_e.cu` extension. It creates
+the same **transient FP16 weight buffer** as the PyTorch cast and uses the
+same original INT8 tensor, FP32 checkpoint row scales and FP32 fallback.
+The kernel issues no device-to-host synchronization; default Candidate E
+still uses `q.to(torch.float16)`.
+
+### Full real-model gate — vector4 only
+
+**PASS:** https://github.com/mylordmonkeyman/WanGP/actions/runs/43458031578
+
+- Full 1024×576 49-frame 8-step generation: **95.8 seconds**, one run.
+- CUDA preflight: vector4 and PyTorch-cast complete Candidate E outputs
+  matched **exactly** for FP16 and BF16 inputs and four eligible layer shapes.
+- Original checkpoint INT8 values unchanged; no per-linear CPU sync.
+- All 49 decoded frames **identical** to validated original Candidate E.
+- 16,368 optimized linear calls; 4,434 FP32 exceptional input rows.
+- This suggests about 2.6% wall-time improvement versus the previous
+  98.3–98.5 s uninstrumented E results, **pending controlled repeats**.
+
+### Full real-model gate — vector4 + scratch workspace
+
+**PASS:** https://github.com/mylordmonkeyman/WanGP/actions/runs/43458837188
+
+- Full generation: **95.6 seconds**, one run.
+- Both independent opt-in CUDA preflights pass.
+- 16,360/16,368 calls reused workspace; eight oversized calls used the
+  ephemeral fallback. Scratch max 100,171,264 bytes (~95.5 MiB).
+- Zero persistent FP16 weight copies; vector4 kernel still converts the
+  weight into a transient buffer every call.
+- **All 49 decoded video frames identical** to known-good Candidate E.
+- The 0.2 s difference between vector4-only and combined variants
+  is too small to claim separately without more repeats.
+
+Reversible exact tested-source snapshot:
+`archive/ltx25-convrot-sm70-vector4-workspace-validated-20261113` at
+`0d76d647c79c7af0d5c10d09c2269a7b5ecb2fb5`.
+
+**Remaining acceptance:** fresh same-session uninstrumented baseline
+and combined repeats; representative peak VRAM/thermal control; broader
+real activations, prompts/seeds and LoRA/MMGP compatibility. Neither
+experimental variant is production-eligible or auto-selected.

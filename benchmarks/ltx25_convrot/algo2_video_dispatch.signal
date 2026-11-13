@@ -1,0 +1,2 @@
+2026-11-13
+V100 SM70 full model trial of optional cuBLAS TensorOp Algo2 for N=16384 K=4096 M=64 only, after 8-shape exact FP32 sweep and CPU static checks. Require full-adapter FP16/BF16 numerical bit equality, 49 decoded frames exactly equal, native scratch no persistent FP16 weights; leave default unchanged.

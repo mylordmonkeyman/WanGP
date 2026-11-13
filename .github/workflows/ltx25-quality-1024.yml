@@ -81,6 +81,18 @@ jobs:
             esac
           fi
 
+      - name: Guard GPU ownership before any CUDA-consuming preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          owners="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader)"
+          active="$(printf '%s\n' "$owners" | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$active" ]]; then
+            echo "::warning::V100 is in use by another compute process; refusing GPU work."
+            printf '%s\n' "$active"
+            exit 1
+          fi
+
       - name: Verify SM70 GPU and baked checkpoint manifest (no hash or download)
         shell: bash
         run: |

@@ -1,2 +1,2 @@
 2026-11-13
-CPU-only syntax and default-preservation smoke for standalone radix-4 H256 kernel benchmark. No V100 GPU.
+Validate radix4 H256 opt-in complete ConvRot adapter and default preservation, without touching V100 GPU.

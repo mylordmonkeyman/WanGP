@@ -1,2 +1,2 @@
 2026-11-13
-CPU-only no-CUDA AST/py_compile and strict workspace opt-in verification.
+Repeat CPU-only compile checks after workspace decoded-frame gate addition. No V100 GPU use.

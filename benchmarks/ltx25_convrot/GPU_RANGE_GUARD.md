@@ -379,3 +379,37 @@ Reversible exact tested-source snapshot:
 and combined repeats; representative peak VRAM/thermal control; broader
 real activations, prompts/seeds and LoRA/MMGP compatibility. Neither
 experimental variant is production-eligible or auto-selected.
+
+### Fresh same-session A–B–B–A generation timing screen
+
+All four runs used the same 1024×576, 49-frame, eight-step, fixed-seed
+generation, single V100, MMGP profile 0, SDPA, and the same experiment
+branch code apart from result notes and signal triggers. They used the
+early GPU-ownership guard. The A variant uses original PyTorch FP16
+cast with no reusable scratch; B enables both transient vector4 cast and
+bounded reusable activation/accumulator scratch. Each generation succeeded.
+
+| Run order | Variant | Time (s) | Run |
+|---|---|---:|---|
+| A1 | Default E: torch cast/no reusable pool | 96.6 | [43459483961](https://github.com/mylordmonkeyman/WanGP/actions/runs/43459483961) |
+| B1 | Vector4 + workspace | 95.6 | [43458837188](https://github.com/mylordmonkeyman/WanGP/actions/runs/43458837188) |
+| B2 | Vector4 + workspace | 96.3 | [43460002568](https://github.com/mylordmonkeyman/WanGP/actions/runs/43460002568) |
+| A2 | Default E: torch cast/no reusable pool | 97.5 | [43460664510](https://github.com/mylordmonkeyman/WanGP/actions/runs/43460664510) |
+
+Chronological note: the executed order was **B1 → A1 → B2 → A2**,
+not A1 → B1 → B2 → A2. The labels A1/B1/A2/B2 refer to control and
+candidate trial identity, and the table is grouped by variant for
+readability despite the row order.
+
+Two-run arithmetic mean: A = **97.05 s**, B = **95.95 s**;
+mean observed difference **1.10 s (~1.13%)**. The B run durations
+were 95.6 and 96.3 s, versus A runs of 96.6 and 97.5 s. Sample sizes
+are too small for a confidence interval and clocks/thermal state were
+not captured; treat the advantage as **preliminary**. Workspace alone
+had previously measured 97.2 s (one run).
+
+Both B runs passed the **strict 49-decoded-frame equality test** against
+the validated original E video, and the original GPU-side 4,434 FP32
+exceptional row count remained unchanged. No persistent FP16 weight
+copies were introduced. Broader prompts, LoRA/MMGP lifetime tests
+and real-model production numerical/visual gates remain pending.

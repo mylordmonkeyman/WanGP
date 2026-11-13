@@ -1,0 +1,84 @@
+name: LTX-2.5 V100 isolated INT8-to-FP16 cast microbench
+
+on:
+  push:
+    branches:
+      - perf/ltx25-convrot-sm70
+    paths:
+      - benchmarks/ltx25_convrot/cast_microbench_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  cast:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 35
+    env:
+      LTX25_CAST_BENCH_LIB: /tmp/ltx25_cast_bench.so
+    steps:
+      - name: Checkout source pinned to signal commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Reject GPU compute contention before CUDA initialization
+        shell: bash
+        run: |
+          set -euo pipefail
+          owners="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader)"
+          active="$(printf '%s\n' "$owners" | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$active" ]]; then
+            echo '::warning::Other GPU compute process owns V100; skipping isolated cast benchmark'
+            printf '%s\n' "$active"
+            exit 1
+          fi
+          test -x /opt/venvs/ltx25-cu128/bin/python
+          nvidia-smi -L
+
+      - name: Build standalone cast kernels for SM70
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_cast_bench.cu \
+            -o "$LTX25_CAST_BENCH_LIB"
+          test -s "$LTX25_CAST_BENCH_LIB"
+
+      - name: Run exact cast comparison on V100, no model
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/cast_microbench.py
+
+      - name: Publish raw results
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 benchmarks/ltx25_convrot/publish_cast_microbench.py
+
+      - name: Assert exactness and complete benchmark coverage
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path('/cache/ltx25/results') / ('cast_microbench_' + os.environ['GITHUB_SHA'][:12] + '.json')
+          assert p.is_file(), f'Missing report: {p}'
+          d = json.loads(p.read_text())
+          assert d.get('status') == 'PASS', d.get('error')
+          assert len(d.get('shape_results', [])) == 6
+          assert all(r['exact_int8_to_fp16'] for r in d['shape_results'])
+          PY

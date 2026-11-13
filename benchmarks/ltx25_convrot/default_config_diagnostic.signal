@@ -1,0 +1,2 @@
+2026-11-13
+Investigate mismatch between default-auto and validated combo videos, using sanitized config key-hash comparisons and log stage counts. No model invocation or GPU allocations.

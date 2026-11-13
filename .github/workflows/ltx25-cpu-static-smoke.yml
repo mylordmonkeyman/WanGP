@@ -54,10 +54,13 @@ jobs:
           p = Path('shared/kernels/ltx25_stage_profiler.py').read_text()
           ast.parse(a); ast.parse(w); ast.parse(p)
           assert 'WAN2GP_LTX25_E_WORKSPACE' in a and 'WAN2GP_LTX25_E_WORKSPACE' in w
-          assert 'WAN2GP_LTX25_CUBLAS_E_MODE", "auto"' in a
+          assert 'WAN2GP_LTX25_CUBLAS_E_MODE", "fp32rot"' in a
           assert 'WAN2GP_LTX25_E_CAST", "vector4"' in a
           assert 'WAN2GP_LTX25_E_WORKSPACE", "1"' in a
-          assert 'WAN2GP_LTX25_CUBLAS_E_MODE", "auto"' in dispatch
+          assert 'WAN2GP_LTX25_CUBLAS_E_MODE", "fp32rot"' in dispatch
+          assert 'WAN2GP_LTX25_DEFAULT_ON' in dispatch
+          assert 'WAN2GP_LTX25_DEFAULT_ON' in a
+          assert 'WAN2GP_LTX25_DEFAULT_ON' in Path('wgp.py').read_text()
           assert 'WAN2GP_LTX25_CUBLAS_E_MODE=off' in dispatch
           assert 'get_device_capability(x.device) != (7, 0)' in a
           assert '_NATIVE_UNAVAILABLE' in a and '_native_library()' in a

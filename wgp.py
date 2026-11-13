@@ -2822,6 +2822,9 @@ attention_modes_supported = get_supported_attention_modes()
 override_attention_modes_installed = get_override_attention_modes()
 override_attention_modes_supported = get_supported_override_attention_modes()
 args = parse_wgp_args(CONFIG_FILENAME)
+# Experimental, opt-in LTX-2.5 V100 attention only. No third-party import at startup.
+from shared.ltx25_v100_attention import configure as configure_ltx25_v100_attention
+configure_ltx25_v100_attention(args.ltx25_v100_attention, args.ltx25_v100_min_tokens)
 migrate_loras_layout()
 
 gpu_major, gpu_minor = torch.cuda.get_device_capability(args.gpu if len(args.gpu) > 0 else None)

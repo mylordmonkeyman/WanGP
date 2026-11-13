@@ -13,7 +13,8 @@ VARIANTS = {"r0_quality_1024": "quality_r0", "e_quality_1024": "quality_e",
             "e_real_activation_audit_1024": "quality_real_audit",
             "e_profile_1024": "quality_stage_profile",
             "e_workspace_1024": "quality_workspace",
-            "e_cast4_1024": "quality_cast4"}
+            "e_cast4_1024": "quality_cast4",
+            "e_combo_1024": "quality_combo"}
 
 
 def main():
@@ -49,6 +50,7 @@ def main():
         "workspace_stats": r.get("workspace_stats"),
         "workspace_video_gate": r.get("workspace_video_gate"),
         "cast4_video_gate": r.get("cast4_video_gate"),
+        "combo_video_gate": r.get("combo_video_gate"),
         "production_eligible": False if variant.startswith("e_") else None,
         "baked_checkpoint_root": "/opt/ltx25/checkpoints",
         "checkpoint_fetched_in_job": False,
@@ -82,6 +84,11 @@ def main():
             "not cached). Require native cast preflight, exact 49-frame decoded "
             "video equality, and matched repeated uninstrumented timing trials."
             if variant == "e_cast4_1024" else
+            "Opt-in combination of bounded reusable activation scratch and "
+            "bit-exact vector4 transient FP16 weight conversion. "
+            "Full-generation time is a single run until controlled repeats "
+            "are performed; require 49-frame exact decoded equality."
+            if variant == "e_combo_1024" else
             "Matched 1024x576, 49-frame, 8-step text-to-video quality comparison. "
             "Visual review required; do not infer end-to-end speedup from synthetic layer tests."
         ),

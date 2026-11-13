@@ -1,5 +1,16 @@
 ############# WanGP Copyright DeepBeepMeep 2025-2026 #############
 import os, sys
+# Select the validated SM70 ConvRot fp32rot path by default, matching the
+# exact startup state of the reproducible 49-frame V100 runs.
+# Users may opt out with MODE=off (or ''). Unsupported devices and layers
+# still take WanGP's original dispatch.
+if "WAN2GP_LTX25_CUBLAS_E_MODE" not in os.environ:
+    os.environ["WAN2GP_LTX25_CUBLAS_E_MODE"] = "fp32rot"
+    os.environ["WAN2GP_LTX25_DEFAULT_ON"] = "1"
+elif os.environ["WAN2GP_LTX25_CUBLAS_E_MODE"].strip().lower() == "auto":
+    # Map unstable historical auto alias to the proven explicit-mode path.
+    os.environ["WAN2GP_LTX25_CUBLAS_E_MODE"] = "fp32rot"
+    os.environ["WAN2GP_LTX25_DEFAULT_ON"] = "1"
 # A pipe or a file defaults to the ANSI code page with strict errors: any other character in a print would raise
 for _stream in (sys.stdout, sys.stderr): _stream.reconfigure(encoding="utf-8", errors="replace")
 from tqdm import tqdm

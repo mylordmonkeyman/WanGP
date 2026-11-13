@@ -48,6 +48,7 @@ def main():
     variants = {
         "e_workspace_1024": ("quality_workspace", "workspace_video_gate"),
         "e_cast4_1024": ("quality_cast4", "cast4_video_gate"),
+        "e_cast8_1024": ("quality_cast8", "cast8_video_gate"),
         "e_combo_1024": ("quality_combo", "combo_video_gate"),
         "e_default_1024": ("quality_default", "default_video_gate"),
         "e_hadamard_1024": ("quality_hadamard", "hadamard_video_gate"),

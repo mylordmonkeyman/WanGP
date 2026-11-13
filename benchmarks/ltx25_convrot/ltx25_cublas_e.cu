@@ -9,6 +9,7 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdint>
+#include <climits>
 
 namespace {
 
@@ -126,6 +127,47 @@ __global__ void finish_rows(float* __restrict__ c32,
   }
 }
 
+// Experimental 256-point Kronecker Hadamard, exact H4 sign/order.
+// FP32 rounding differs slightly from torch.matmul; only opt-in.
+// One block per 256-element activation group. No persistent state.
+constexpr int ROT_GROUP=256;
+constexpr int ROT_THREADS=256;
+__global__ void transform_radix4_256(const float* __restrict__ input,
+                                     float* __restrict__ output,
+                                     size_t group_count) {
+  size_t group=static_cast<size_t>(blockIdx.x);
+  if(group>=group_count) return;
+  const int tid=threadIdx.x;
+  // Double buffering in shared memory prevents read/write hazards.
+  __shared__ float buf_a[ROT_GROUP];
+  __shared__ float buf_b[GROUP];
+  const size_t start=group*GROUP;
+  buf_a[tid]=input[start+tid];
+  __syncthreads();
+  float* src=buf_a;
+  float* dst=buf_b;
+  #pragma unroll
+  for (int stage=0;stage<4;++stage) {
+    const int stride=1<<(2*stage);  // 1,4,16,64
+    const int digit=(tid/stride)&3;
+    const int base=tid-digit*stride;
+    const float a=src[base];
+    const float b=src[base+stride];
+    const float c=src[base+2*stride];
+    const float d=src[base+3*stride];
+    float y=0.0f;
+    if(digit==0)      y=((a+b)+c)-d;
+    else if(digit==1) y=((a+b)-c)+d;
+    else if(digit==2) y=((a-b)+c)+d;
+    else              y=((-a+b)+c)+d;
+    dst[tid]=y;
+    __syncthreads();
+    float* old=src; src=dst; dst=old;
+  }
+  // The exact normalization used by _regular_hadamard is 1/sqrt(256).
+  output[start+tid]=src[tid]*0.0625f;
+}
+
 // Optional experimental faster INT8 -> FP16 weight expansion.
 // Exact conversion: every signed INT8 value is precisely representable in FP16.
 // This fills a bounded *transient* FP16 tensor only; no weight cache or
@@ -147,6 +189,21 @@ __global__ void cast_qint8_to_fp16_four(const uint32_t* __restrict__ q,
 }
 
 }  // namespace
+
+// Opt-in FP32 rotation replacement, same stream, output in caller-owned
+// ephemeral memory. Never part of the default candidate unless selected.
+extern "C" int ltx25_cublas_rot256_f32(const void* input, void* output,
+                                        size_t count, void* stream_ptr) {
+  if (!input || !output || !count || (count % 256) || input == output)
+    return -1;
+  const size_t groups=count/256;
+  if (groups>static_cast<size_t>(INT_MAX)) return -2;
+  const auto stream=reinterpret_cast<cudaStream_t>(stream_ptr);
+  transform_radix4_256<<<static_cast<unsigned int>(groups),256,0,stream>>>(
+      static_cast<const float*>(input),static_cast<float*>(output),groups);
+  const auto err=cudaPeekAtLastError();
+  return err==cudaSuccess ? 0 : 5000+int(err);
+}
 
 extern "C" int ltx25_cublas_cast_int8_to_f16_4(
     const void* q, void* dst, size_t count, void* stream_ptr) {

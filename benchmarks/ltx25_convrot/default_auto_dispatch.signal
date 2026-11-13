@@ -1,2 +1,2 @@
 2026-11-13
-Run strict no-opt-in V100 default after switching startup default from divergent 'auto' alias to proven 'fp32rot' selector. Auto-build native CUDA extension, default vector4+workspace, require 16,368 optimized linear calls and exact 49-frame reference equivalence.
+Repeat passing no-env fp32rot default with stricter fixed-reference gates: 16,368 candidate calls, 4,434 device fallback rows, 16,360 scratch leases, exact 49 decoded frames. Preserve idle GPU checks and local native cache.

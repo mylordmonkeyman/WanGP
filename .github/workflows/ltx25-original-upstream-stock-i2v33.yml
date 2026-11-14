@@ -1,0 +1,99 @@
+name: LTX-2.5 V100 actual upstream WanGP stock I2V33 at fork point
+on:
+  push:
+    branches: [perf/ltx25-release-walltime-ab-20261114]
+    paths:
+      - .github/workflows/ltx25-original-upstream-stock-i2v33.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - name: Validate standalone source-isolated stock runner syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile benchmarks/ltx25_convrot/i2v33_original_upstream_stock.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path("benchmarks/ltx25_convrot/i2v33_original_upstream_stock.py").read_text()
+          for token in ("c8d47da27023476777a0874300bbc9a4126acca6",
+                        "UPSTREAM=ROOT/\"stock-wangp-original\"",
+                        "cwd=UPSTREAM", "PYTHONPATH", "original_stock",
+                        "PREVIOUS/\"input.json\"", "base.frames_hash",
+                        "original_repeat_frames_equal"):
+              assert token in s,token
+          print("ORIGINAL_STOCK_STATIC_PASS")
+          PY
+  benchmark:
+    needs: lint
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 90
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_ORIGINAL_STOCK_OUT: /cache/ltx25/results/original-stock-i2v33-${{ github.run_id }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout experiment harness only, no baseline code execution from optimized tree
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - name: Checkout exact historical ORIGINAL WanGP revision independently
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: deepbeepmeep/WanGP
+          ref: c8d47da27023476777a0874300bbc9a4126acca6
+          path: stock-wangp-original
+          persist-credentials: false
+      - name: Verify historical source, same checkpoint and baseline video exist, GPU idle
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C stock-wangp-original rev-parse HEAD)" = c8d47da27023476777a0874300bbc9a4126acca6
+          test -f stock-wangp-original/shared/qtypes/int8_convrot.py
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test -s /cache/ltx25/results/i2v33-3way-43636917878/input.json
+          test -s /cache/ltx25/results/i2v33-3way-43636917878/clips/01-stock.mp4
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::error::V100 in use: $busy"; exit 1; fi
+          nvidia-smi -L
+      - name: Run genuine unmodified upstream WanGP twice with identical 33f I2V settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/i2v33_original_upstream_stock.py 2>&1 | tee original-wangp-stock-i2v33.log
+          grep -Fq 'LTX25_ORIGINAL_STOCK_PASS' original-wangp-stock-i2v33.log
+      - name: Upload original source benchmark results and direct baseline quality assessment
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: genuine-upstream-wangp-stock-33f-i2v-times-quality
+          if-no-files-found: warn
+          retention-days: 21
+          path: |
+            original-wangp-stock-i2v33.log
+            /cache/ltx25/results/original-stock-i2v33-${{ github.run_id }}/manifest.json
+            /cache/ltx25/results/original-stock-i2v33-${{ github.run_id }}/input.json
+            /cache/ltx25/results/original-stock-i2v33-${{ github.run_id }}/partial-results.json
+            /cache/ltx25/results/original-stock-i2v33-${{ github.run_id }}/summary.json
+            /cache/ltx25/results/original-stock-i2v33-${{ github.run_id }}/summary.csv
+            /cache/ltx25/results/original-stock-i2v33-${{ github.run_id }}/results/*.json
+            /cache/ltx25/results/original-stock-i2v33-${{ github.run_id }}/logs/*.log
+      - name: Upload two original stock MP4s
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: genuine-upstream-wangp-stock-i2v33-videos
+          if-no-files-found: warn
+          retention-days: 21
+          compression-level: 0
+          path: /cache/ltx25/results/original-stock-i2v33-${{ github.run_id }}/clips/*.mp4

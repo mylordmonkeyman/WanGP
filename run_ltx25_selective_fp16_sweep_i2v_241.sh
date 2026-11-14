@@ -31,7 +31,7 @@ To do a short exploratory sweep:
   FRAMES=49 SWEEP_CASES=bf16-reference,fp16-s2-all,fp16-both-all bash ...
 
 Optional:
-  SWEEP_OPS=mm,addmm        aten.mm and aten.addmm (both by default)
+  SWEEP_OPS=mm,addmm,qbytes_mm (also intercept live Quanto BF16/INT8 GEMMs)
   SWEEP_GUARD=first         first-per-shape input/output FP16 finite checks
   SWEEP_GUARD=always        full finite checks (INVALID for speed comparisons)
   SWEEP_GUARD=off           fastest, no finite-value guard (higher quality risk)

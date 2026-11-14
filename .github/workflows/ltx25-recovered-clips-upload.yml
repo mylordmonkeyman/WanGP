@@ -1,0 +1,32 @@
+name: Publish recovered 49-frame LTX25 T2V and I2V comparison clips
+on:
+  push:
+    branches: [perf/ltx25-release-walltime-ab-20261114]
+    paths: [.github/workflows/ltx25-recovered-clips-upload.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 10
+    steps:
+      - name: Verify previous run clips exist and match counts
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/cache/ltx25/results/release-ab-43628230267/clips
+          for prefix in t2v49 i2v49; do
+            for arm in prior-1 prior-4 stage2-2 stage2-3; do
+              test -s "$ROOT/$prefix-$arm.mp4"
+            done
+          done
+          ls -lh "$ROOT"/*.mp4
+      - name: Publish recovered comparison clips
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-recovered-49-frame-t2v-i2v-baseline-versus-stage2-fp16
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: error
+          path: /cache/ltx25/results/release-ab-43628230267/clips/*.mp4

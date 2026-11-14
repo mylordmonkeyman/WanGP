@@ -270,6 +270,10 @@ def run_case(case, kind, groups, audit, template, ffmpeg, reference=None):
             stats = json.loads(stats_path.read_text())
             report["converted_mm"] = int(stats.get("stats", {}).get("converted_mm", 0))
             report["converted_addmm"] = int(stats.get("stats", {}).get("converted_addmm", 0))
+            report["converted_qbytes_mm"] = int(stats.get("stats", {}).get("converted_qbytes_mm", 0))
+            report["observed_qbytes_mm"] = int(stats.get("stats", {}).get("observed_qbytes_mm", 0))
+            report["skip_reasons"] = stats.get("skip_reasons", {})
+            report["forward_calls"] = stats.get("transformer_forward_calls", {})
             report["sham_native"] = int(stats.get("stats", {}).get("sham_native", 0))
             report["numerical_sample_count"] = int(stats.get("numerical_sample_count", 0))
             samples = stats.get("numerical_samples", [])
@@ -279,7 +283,7 @@ def run_case(case, kind, groups, audit, template, ffmpeg, reference=None):
                 (float(x["max_abs"]) for x in samples), default=None)
             report["nonfinite_audit_elements"] = sum(
                 int(x["fp16_nonfinite"]) for x in samples)
-            if kind == "fp16" and not report["converted_mm"] and not report["converted_addmm"]:
+            if kind == "fp16" and not (report["converted_mm"] or report["converted_addmm"] or report["converted_qbytes_mm"]):
                 raise RuntimeError("No selected BF16 GEMMs converted; invalid experimental arm")
             if kind == "sham" and not report["sham_native"]:
                 raise RuntimeError("Sham control did not intercept eligible BF16 GEMMs")
@@ -305,7 +309,7 @@ def report_summary(rows):
                 row["video_exact"] = row.get("video_sha256")==ref["video_sha256"]
                 row["audio_exact"] = row.get("audio_sha256")==ref["audio_sha256"]
     keys = ["variant","kind","groups","audit_per_shape","status","wall_seconds",
-            "converted_mm","converted_addmm","sham_native","numerical_sample_count",
+            "converted_mm","converted_addmm","converted_qbytes_mm","observed_qbytes_mm","sham_native","numerical_sample_count",
             "worst_normalized_rms","worst_abs_gemm_error","nonfinite_audit_elements",
             "video_exact","audio_exact","psnr_db","error"]
     with (OUT/"smoke-results.csv").open("w",newline="") as fd:
@@ -339,7 +343,7 @@ def report_summary(rows):
              "Full generation times below include model loading and file encoding.",
              f"{'Variant':<20} {'Status':<8} {'seconds':>9} {'FP16 ops':>10} {'PSNR dB':>9} {'max norm RMS':>13}"]
     for r in rows:
-        fp16=int(r.get("converted_mm",0))+int(r.get("converted_addmm",0))
+        fp16=sum(int(r.get(k,0)) for k in ("converted_mm","converted_addmm","converted_qbytes_mm"))
         db = (r.get("video_psnr") or {}).get("average_db")
         lines.append(f"{r['variant']:<20} {r['status']:<8} {r.get('wall_seconds',0):>9.2f}"
                      f" {fp16:>10} {str(round(db,2)) if db is not None else 'n/a':>9}"

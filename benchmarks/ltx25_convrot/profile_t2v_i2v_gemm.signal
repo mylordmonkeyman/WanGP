@@ -1,0 +1,2 @@
+Controlled matched 49-frame T2V/I2V profiling run, 2026-11-14
+Both: 1024x576, 8 steps, no LoRA, NAG=1.1, same cocktail bar prompt and audio; only I2V receives profile_i2v_1024x576.png.png

@@ -37,7 +37,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 ENABLED = os.environ.get("WAN2GP_LTX25_FP16_GEMM", "0") == "1"
 GROUPS = frozenset(x.strip() for x in os.environ.get("LTX25_FP16_GEMM_GROUPS", "").split(",") if x.strip())
-OPS = frozenset(x.strip() for x in os.environ.get("LTX25_FP16_GEMM_OPS", "mm,addmm").split(",") if x.strip())
+OPS = frozenset(x.strip() for x in os.environ.get("LTX25_FP16_GEMM_OPS", "mm,addmm,qbytes_mm").split(",") if x.strip())
 GUARD = os.environ.get("LTX25_FP16_GEMM_GUARD", "first").strip()
 SHAM = os.environ.get("LTX25_FP16_GEMM_SHAM", "0") == "1"
 TRACE_DISPATCH = os.environ.get("LTX25_FP16_GEMM_TRACE", "0") == "1"
@@ -53,7 +53,7 @@ if ENABLED:
         raise ValueError(f"Unsupported LTX25_FP16_GEMM_GROUPS: {sorted(unknown)}")
     if not GROUPS:
         raise ValueError("FP16 GEMM enabled but LTX25_FP16_GEMM_GROUPS is empty")
-    if OPS - {"mm", "addmm"} or not OPS:
+    if OPS - {"mm", "addmm", "qbytes_mm"} or not OPS:
         raise ValueError(f"Unsupported LTX25_FP16_GEMM_OPS: {sorted(OPS)}")
     if GUARD not in ("off", "first", "always"):
         raise ValueError(f"Unsupported LTX25_FP16_GEMM_GUARD: {GUARD}")
@@ -117,17 +117,40 @@ class _SelectiveMode(TorchDispatchMode):
             bias, a, b = args[:3]
             beta = kwargs.get("beta", args[3] if len(args) > 3 else 1)
             alpha = kwargs.get("alpha", args[4] if len(args) > 4 else 1)
+        elif str(func) == "quanto.qbytes_mm.default":
+            op = "qbytes_mm"
+            if len(args) != 3:
+                return func(*args, **kwargs)
+            a, b, scales = args
+            bias = None
+            alpha = beta = 1
         else:
             return func(*args, **kwargs)
 
         _COUNTS["observed_" + op] += 1
         if op not in OPS:
             return func(*args, **kwargs)
-        if not _plain_bf16(a) or not _plain_bf16(b):
-            _REASONS["not_dense_bf16_cuda"] += 1
-            return func(*args, **kwargs)
-        m, k = a.shape
-        inner, n = b.shape
+        if op == "qbytes_mm":
+            # Actual WanGP 22B path uses Quanto INT8 weight-only GEMMs.
+            # Quanto's native code computes (scales * weights) @ activations.
+            # Do not intercept int8 activation x int8 weight fast paths.
+            if (not _plain_bf16(a)
+                or type(b) is not torch.Tensor or b.dtype != torch.int8
+                or b.device != a.device or b.ndim != 2
+                or type(scales) is not torch.Tensor
+                or scales.device != a.device or scales.dtype != torch.bfloat16
+                or scales.ndim != 2 or scales.shape[1] != 1
+                or scales.shape[0] != b.shape[0]):
+                _REASONS["quanto_unsupported_dtype_or_scale"] += 1
+                return func(*args, **kwargs)
+            m, k = a.shape
+            n, inner = b.shape
+        else:
+            if not _plain_bf16(a) or not _plain_bf16(b):
+                _REASONS["not_dense_bf16_cuda"] += 1
+                return func(*args, **kwargs)
+            m, k = a.shape
+            inner, n = b.shape
         if k != inner or m < MIN_M or n < MIN_DIM or k < MIN_DIM:
             _REASONS["small_or_mismatch"] += 1
             return func(*args, **kwargs)
@@ -153,7 +176,14 @@ class _SelectiveMode(TorchDispatchMode):
 
         # The current dispatch mode is excluded while executing this handler.
         # Conversions, FP16 Tensor Core GEMM and BF16 casts are strictly transient.
-        a16, b16 = _safe_convert(a), _safe_convert(b)
+        if op == "qbytes_mm":
+            # Match Quanto's *BF16 dequantization semantics* before the
+            # temporary FP16 cast. No duplicate persistent weight cache.
+            # Native: dequantized_weight = scales * int8_weight (BF16).
+            dequant = scales * b
+            a16, b16 = _safe_convert(a), _safe_convert(dequant)
+        else:
+            a16, b16 = _safe_convert(a), _safe_convert(b)
         check = GUARD == "always" or (GUARD == "first" and key not in _CHECKED)
         if check:
             _CHECKED.add(key)
@@ -164,7 +194,7 @@ class _SelectiveMode(TorchDispatchMode):
                 _COUNTS["guard_input_reference"] += 1
                 _BY_SHAPE[key]["guard_input_reference"] += 1
                 return func(*args, **kwargs)
-        result16 = torch.ops.aten.mm.default(a16, b16)
+        result16 = torch.ops.aten.mm.default(a16, b16.t() if op == "qbytes_mm" else b16)
         if check and not bool(torch.isfinite(result16).all().item()):
             _BLOCKED.add(key)
             _COUNTS["guard_output_reference"] += 1
@@ -250,7 +280,7 @@ def _report():
         "quality_equivalent": False,
         "valid_for_performance": AUDIT_PER_SHAPE == 0 and GUARD != "always",
         "production_eligible": False,
-        "warning": "FP16 GEMMs can produce different or degraded video/audio. Default first-per-shape finite checks do not guard later spikes.",
+        "warning": "On LTX-2.5 INT8 models qbytes_mm casts transiently dequantized BF16 weights to FP16 before Tensor Core GEMM. First-per-shape finite checks do not guard later spikes; quality not guaranteed.",
     }
     try:
         PATH.parent.mkdir(parents=True, exist_ok=True)

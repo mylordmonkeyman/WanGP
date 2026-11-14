@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import atexit
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -40,6 +41,7 @@ GROUPS = frozenset(x.strip() for x in os.environ.get("LTX25_FP16_GEMM_GROUPS", "
 OPS = frozenset(x.strip() for x in os.environ.get("LTX25_FP16_GEMM_OPS", "mm,addmm,qbytes_mm").split(",") if x.strip())
 GUARD = os.environ.get("LTX25_FP16_GEMM_GUARD", "first").strip()
 SHAM = os.environ.get("LTX25_FP16_GEMM_SHAM", "0") == "1"
+BACKEND = os.environ.get("LTX25_FP16_GEMM_BACKEND", "dispatch").strip().lower()
 TRACE_DISPATCH = os.environ.get("LTX25_FP16_GEMM_TRACE", "0") == "1"
 AUDIT_PER_SHAPE = int(os.environ.get("LTX25_FP16_GEMM_AUDIT_PER_SHAPE", "0"))
 MIN_M = int(os.environ.get("LTX25_FP16_GEMM_MIN_M", "128"))
@@ -64,6 +66,8 @@ if ENABLED:
         raise ValueError(f"Unsupported LTX25_FP16_GEMM_GUARD: {GUARD}")
     if MIN_M < 1 or MIN_DIM < 1:
         raise ValueError("FP16 GEMM minimum dimensions must be positive")
+    if BACKEND not in ("dispatch", "direct"):
+        raise ValueError(f"Unknown LTX25_FP16_GEMM_BACKEND {BACKEND!r}")
 
 _COUNTS = Counter()
 _BY_SHAPE: dict[str, Counter] = defaultdict(Counter)
@@ -256,12 +260,40 @@ class _SelectiveMode(TorchDispatchMode):
         return result
 
 
+@contextmanager
+def _direct_quanto_scope(phase: str):
+    """Intercept *only* Python-level Quanto GEMMs, not every ATen operation.
+
+    Experimental, process-local scope; torch.ops namespace mutation is
+    intentionally never enabled by default or outside an isolated benchmark.
+    The original operator is restored even when inference raises. Do not use
+    with concurrent model-inference threads sharing a Python process.
+    """
+    namespace = torch.ops.quanto
+    packet = namespace.qbytes_mm
+    overload = packet.default
+    selector = _SelectiveMode(phase)
+
+    def quanto_proxy(a, b, scales):
+        return selector.__torch_dispatch__(overload, (), (a, b, scales), {})
+
+    # Calling the saved overload invokes original Quanto CUDA registration,
+    # including every noneligible shape; no recursive interception occurs.
+    namespace.qbytes_mm = quanto_proxy
+    try:
+        yield
+    finally:
+        namespace.qbytes_mm = packet
+
+
 def call_transformer(module: Callable, *args, **kwargs):
-    """Invoke an actual transformer forward without changing model parameters."""
+    """Invoke one transformer forward, preserving model and fallback semantics."""
     if not ENABLED:
         return module(*args, **kwargs)
     _FORWARD_COUNT[_CURRENT_PHASE] += 1
-    # Stage is set by the existing DistilledPipeline at each phase boundary.
+    if BACKEND == "direct":
+        with _direct_quanto_scope(_CURRENT_PHASE):
+            return module(*args, **kwargs)
     with _SelectiveMode(_CURRENT_PHASE):
         return module(*args, **kwargs)
 
@@ -283,6 +315,7 @@ def _report():
     data = {
         "kind": "Research-only selective BF16-to-FP16 GEMM (V100)",
         "enabled": ENABLED, "groups": sorted(GROUPS), "sham": SHAM,
+        "backend": BACKEND,
         "audit_per_shape": AUDIT_PER_SHAPE, "numerical_samples": _AUDIT_ROWS,
         "numerical_sample_count": len(_AUDIT_ROWS),
         "ops": sorted(OPS), "guard": GUARD,

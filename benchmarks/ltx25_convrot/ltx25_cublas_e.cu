@@ -128,6 +128,57 @@ __global__ void finish_rows(float* __restrict__ c32,
   }
 }
 
+// Opt-in exact final conversion fused into the FP32 epilogue. CUDA's RN
+// conversion is the same nearest-even rounding used by torch Tensor.to.
+// Unlike the original finish_rows, the output is written directly as BF16 or
+// FP16; the FP32 c32 scratch is read but need not be written back.
+template <typename OutT>
+__device__ __forceinline__ OutT narrow_output(float value);
+
+template <>
+__device__ __forceinline__ __half narrow_output<__half>(float value) {
+  return __float2half_rn(value);
+}
+
+template <>
+__device__ __forceinline__ __nv_bfloat16 narrow_output<__nv_bfloat16>(float value) {
+  return __float2bfloat16_rn(value);
+}
+
+template <typename OutT>
+__global__ void finish_rows_low(float* __restrict__ c32,
+                                OutT* __restrict__ output,
+                            const float* __restrict__ x32,
+                            const signed char* __restrict__ q,
+                            const float* __restrict__ scale,
+                            const float* __restrict__ bias,
+                            const int* __restrict__ exponents,
+                            const int* __restrict__ slow_rows,
+                            int m, int n, int k) {
+  const int row = blockIdx.x;
+  if (row >= m) return;
+  const int slow = slow_rows[row];
+  const int exponent = exponents[row];
+  const size_t xstart = static_cast<size_t>(row) * k;
+  const size_t outstart = static_cast<size_t>(row) * n;
+  for (int col = threadIdx.x; col < n; col += blockDim.x) {
+    float value;
+    if (slow) {
+      const size_t qstart = static_cast<size_t>(col) * k;
+      float sum = 0.0f;
+      for (int i = 0; i < k; ++i) {
+        sum = fmaf(x32[xstart + i], static_cast<float>(q[qstart + i]), sum);
+      }
+      value = sum;
+    } else {
+      value = ldexpf(c32[outstart + col], -exponent);
+    }
+    value = __fmul_rn(value, scale[col]);
+    if (bias) value = __fadd_rn(value, bias[col]);
+    output[outstart + col] = narrow_output<OutT>(value);
+  }
+}
+
 // Experimental 256-point Kronecker Hadamard, exact H4 sign/order.
 // FP32 rounding differs slightly from torch.matmul; only opt-in.
 // One block per 256-element activation group. No persistent state.
@@ -374,4 +425,43 @@ extern "C" int ltx25_cublas_epilogue_f32(
       static_cast<const int*>(slow_rows), m, n, k);
   const auto err = cudaPeekAtLastError();
   return err == cudaSuccess ? 0 : 3000 + int(err);
+}
+
+// Experimental fused-output epilogue entry points. These are optional and
+// never alter the original ltx25_cublas_epilogue_f32 used by default.
+template <typename OutT>
+static int launch_epilogue_low(
+    void* c32, void* output, const void* x32, const void* q,
+    const void* scale, const void* bias, const void* exponents,
+    const void* slow_rows, int m, int n, int k, void* stream_ptr) {
+  if (!c32 || !output || !x32 || !q || !scale || !exponents ||
+      !slow_rows || m <= 0 || n <= 0 || k <= 0)
+    return -1;
+  const auto stream=reinterpret_cast<cudaStream_t>(stream_ptr);
+  finish_rows_low<OutT><<<m, THREADS, 0, stream>>>(
+      static_cast<float*>(c32), static_cast<OutT*>(output),
+      static_cast<const float*>(x32), static_cast<const signed char*>(q),
+      static_cast<const float*>(scale), static_cast<const float*>(bias),
+      static_cast<const int*>(exponents), static_cast<const int*>(slow_rows),
+      m, n, k);
+  const auto err=cudaPeekAtLastError();
+  return err==cudaSuccess ? 0 : 8000+int(err);
+}
+
+extern "C" int ltx25_cublas_epilogue_f32_to_bf16(
+    void* c32, void* output, const void* x32, const void* q,
+    const void* scale, const void* bias, const void* exponents,
+    const void* slow_rows, int m, int n, int k, void* stream_ptr) {
+  return launch_epilogue_low<__nv_bfloat16>(
+      c32, output, x32, q, scale, bias, exponents, slow_rows,
+      m, n, k, stream_ptr);
+}
+
+extern "C" int ltx25_cublas_epilogue_f32_to_f16(
+    void* c32, void* output, const void* x32, const void* q,
+    const void* scale, const void* bias, const void* exponents,
+    const void* slow_rows, int m, int n, int k, void* stream_ptr) {
+  return launch_epilogue_low<__half>(
+      c32, output, x32, q, scale, bias, exponents, slow_rows,
+      m, n, k, stream_ptr);
 }

@@ -2,3 +2,5 @@ trigger: direct-bf16-f16-radix4-preflight-2026-11-13
 reason: compare staged vs direct conversion on SM70; no default change
 
 retry: compile-before-busy-GPU-guard; keep GPU in-use process untouched
+
+retry2: input-output-fused-exact-and-performance-gates; stable-defaults-unchanged

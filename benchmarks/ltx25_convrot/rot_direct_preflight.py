@@ -44,7 +44,7 @@ def check_rotations():
                                 x.numel(), stream)
                 assert rc_old == rc_new == 0, (dtype, m, k, rc_old, rc_new)
             torch.cuda.synchronize()
-            assert torch.equal(expected, actual), {
+            assert torch.equal(expected.view(torch.int32), actual.view(torch.int32)), {
                 "dtype": str(dtype), "M": m, "K": k,
                 "max_abs_error": float((expected - actual).abs().max().item())}
             results.append({"dtype": str(dtype), "M": m, "K": k, "exact": True})
@@ -79,7 +79,7 @@ def check_adapters():
             torch.cuda.synchronize()
             a = variants[("staged", "torch")]
             for key, b in variants.items():
-                assert torch.equal(a, b), {
+                assert torch.equal(a.view(torch.int16), b.view(torch.int16)), {
                     "variant": key, "dtype": str(dtype), "N": n, "K": k, "M": m,
                     "max_abs_error": float((a.float() - b.float()).abs().max().item())}
             results.append({"dtype": str(dtype), "N": n, "K": k, "M": m,
@@ -124,6 +124,36 @@ def timed_rotation(dtype=torch.bfloat16, m=1008, k=4096, repeats=20):
             "speedup": statistics.median(samples["staged"]) / statistics.median(samples["direct"])}
 
 
+def timed_output(dtype=torch.bfloat16, m=144, n=4096, k=4096, repeats=6):
+    """A-B-B-A layer GPU timings, same rotation, avoiding model reload."""
+    q = torch.randint(-32, 33, (n, k), dtype=torch.int8, device="cuda")
+    weight = SimpleNamespace(_data=q, _scale=torch.rand((n, 1), device="cuda") * 0.002 + 0.001)
+    x = torch.randn((m, k), device="cuda").to(dtype)
+    e.ROT_INPUT = "direct"
+    samples = {"torch": [], "fused": []}
+    for mode in ("torch", "fused", "fused", "torch"):
+        e.OUTPUT_MODE = mode
+        for _ in range(2):
+            result = e.maybe_linear(x, weight, None, 256)
+        assert result is not None
+        torch.cuda.synchronize()
+        measurements = []
+        for _ in range(repeats):
+            start = torch.cuda.Event(enable_timing=True)
+            stop = torch.cuda.Event(enable_timing=True)
+            start.record()
+            result = e.maybe_linear(x, weight, None, 256)
+            stop.record()
+            stop.synchronize()
+            measurements.append(start.elapsed_time(stop))
+        samples[mode].extend(measurements)
+    baseline = statistics.median(samples["torch"])
+    fused = statistics.median(samples["fused"])
+    return {"dtype": str(dtype), "M": m, "N": n, "K": k,
+            "torch_ms": baseline, "fused_ms": fused,
+            "speedup": baseline / fused}
+
+
 def main():
     assert torch.cuda.get_device_capability() == (7, 0)
     assert e.MODE == "fp32rot", e.MODE
@@ -133,8 +163,10 @@ def main():
         exact_rotation = check_rotations()
         exact_adapter = check_adapters()
         timing = [timed_rotation(dtype) for dtype in (torch.bfloat16, torch.float16)]
+        output_timing = [timed_output(dtype) for dtype in (torch.bfloat16, torch.float16)]
     print("LTX25_ROT_DIRECT_PREFLIGHT_OK " + json.dumps({
-        "rotation": exact_rotation, "adapter": exact_adapter, "microbench": timing,
+        "rotation": exact_rotation, "adapter": exact_adapter, "rotation_microbench": timing,
+        "output_microbench": output_timing,
         "bit_exact": True, "persistent_weight_copies": 0,
         "tested_output_mode": "torch_and_fused",
         "note": "Synthetic preflight; no full-video or speech quality assertion"}, sort_keys=True), flush=True)

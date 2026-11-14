@@ -48,6 +48,7 @@ PROFILE_STAGES = os.environ.get("WAN2GP_LTX25_PROFILE_STAGES", "") == "1"
 USE_WORKSPACE = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "1") == "1"
 CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector8").strip().lower()
 ROT_MODE = os.environ.get("WAN2GP_LTX25_HADAMARD", "radix4").strip().lower()
+ROT_INPUT = os.environ.get("WAN2GP_LTX25_ROT_INPUT", "staged").strip().lower()
 GEMM_TUNE = os.environ.get("WAN2GP_LTX25_GEMM_TUNE", "off").strip().lower()
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
 WEIGHT_CAP = 128 * 1024 * 1024
@@ -61,6 +62,7 @@ _FN = None
 _CAST_FN = None
 _CAST8_FN = None
 _ROT_FN = None
+_ROT_DIRECT_FNS = {}
 _ALGO2_FN = None
 _NATIVE_UNAVAILABLE = False
 _NATIVE_FAILURE_REPORTED = False
@@ -75,7 +77,7 @@ _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
           "auto_native_fallback": 0,
           "range_fallback_units": "rows (device-side FP32 dot)",
           "row_range_policy": "power_of_two_nonzero_fp16_else_fp32_dot",
-          "rotation_mode": ROT_MODE,
+          "rotation_mode": ROT_MODE, "rotation_input": ROT_INPUT,
           "gemm_tune": GEMM_TUNE, "gemm_algo2_calls": 0}
 
 
@@ -149,7 +151,7 @@ def _fn():
                        ctypes.c_int, ctypes.c_int, ptr]
     finish.restype = ctypes.c_int
     _FN = (dll, gemm, prepare, finish)
-    print(f"[LTX25_CUBLAS_E] SM70 ConvRot enabled: GPU range guard, cast={CAST_MODE}, rotation={ROT_MODE}, workspace={USE_WORKSPACE}, gemm_tune={GEMM_TUNE}; no persistent FP16 weights", flush=True)
+    print(f"[LTX25_CUBLAS_E] SM70 ConvRot enabled: GPU range guard, cast={CAST_MODE}, rotation={ROT_MODE}, rotation_input={ROT_INPUT}, workspace={USE_WORKSPACE}, gemm_tune={GEMM_TUNE}; no persistent FP16 weights", flush=True)
     return _FN
 
 
@@ -188,6 +190,21 @@ def _rot_fn():
         fn.restype = ctypes.c_int
         _ROT_FN = fn
     return _ROT_FN
+
+
+def _rot_direct_fn(dtype):
+    """Bind opt-in direct BF16/FP16 radix4, with FP32 internal math."""
+    if dtype not in (torch.bfloat16, torch.float16):
+        raise TypeError(f"Unsupported direct radix4 dtype: {dtype}")
+    if dtype not in _ROT_DIRECT_FNS:
+        name = ("ltx25_cublas_rot256_from_bf16_f32" if dtype == torch.bfloat16
+                else "ltx25_cublas_rot256_from_f16_f32")
+        fn = getattr(_fn()[0], name)
+        ptr = ctypes.c_void_p
+        fn.argtypes = [ptr, ptr, ctypes.c_size_t, ptr]
+        fn.restype = ctypes.c_int
+        _ROT_DIRECT_FNS[dtype] = fn
+    return _ROT_DIRECT_FNS[dtype]
 
 
 def _algo2_fn():
@@ -268,7 +285,12 @@ def maybe_linear(x, weight, bias, group):
         elif CAST_MODE == "vector8":
             _cast8_fn()
         if ROT_MODE == "radix4":
-            _rot_fn()
+            if ROT_INPUT == "direct":
+                _rot_direct_fn(x.dtype)
+            elif ROT_INPUT in ("staged", ""):
+                _rot_fn()
+            else:
+                raise ValueError(f"Unknown WAN2GP_LTX25_ROT_INPUT={ROT_INPUT!r}")
         if GEMM_TUNE == "algo2_m64" and (n, k, m) == (16384, 4096, 64):
             _algo2_fn()
     except (OSError, RuntimeError, AttributeError, ImportError) as exc:
@@ -301,14 +323,25 @@ def maybe_linear(x, weight, bias, group):
     # but decoded pixels are not generally bit-identical.
     # HADAMARD=torch restores the historical dense FP32 H256 rotation.
     if ROT_MODE == "radix4":
-        x_source32 = x.float().reshape(m, k).contiguous()
         x32 = torch.empty((m, k), dtype=torch.float32, device=x.device)
         ptr = ctypes.c_void_p
         stream = ptr(torch.cuda.current_stream(x.device).cuda_stream)
-        status = _rot_fn()(ptr(x_source32.data_ptr()), ptr(x32.data_ptr()),
-                           x_source32.numel(), stream)
+        if ROT_INPUT == "direct":
+            # No intermediate FP32 input tensor: the native kernel converts
+            # BF16/FP16 elements directly into FP32 shared memory. Its FP32
+            # Hadamard arithmetic/order is otherwise unchanged.
+            x_source = x.reshape(m, k).contiguous()
+            status = _rot_direct_fn(x.dtype)(
+                ptr(x_source.data_ptr()), ptr(x32.data_ptr()),
+                x_source.numel(), stream)
+        elif ROT_INPUT in ("staged", ""):
+            x_source32 = x.float().reshape(m, k).contiguous()
+            status = _rot_fn()(ptr(x_source32.data_ptr()), ptr(x32.data_ptr()),
+                               x_source32.numel(), stream)
+        else:
+            raise ValueError(f"Unknown WAN2GP_LTX25_ROT_INPUT={ROT_INPUT!r}")
         if status:
-            raise RuntimeError(f"SM70 radix4 Hadamard failed: status={status}, M={m}, K={k}")
+            raise RuntimeError(f"SM70 radix4 Hadamard failed: status={status}, M={m}, K={k}, input={ROT_INPUT}")
     elif ROT_MODE == "flat_mm":
         # Numerically bit-identical to the existing H256 matmul in the
         # isolated V100 shape tests. Reuses the *same* H256 constant,

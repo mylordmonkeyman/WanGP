@@ -44,6 +44,11 @@ TRACE_DISPATCH = os.environ.get("LTX25_FP16_GEMM_TRACE", "0") == "1"
 AUDIT_PER_SHAPE = int(os.environ.get("LTX25_FP16_GEMM_AUDIT_PER_SHAPE", "0"))
 MIN_M = int(os.environ.get("LTX25_FP16_GEMM_MIN_M", "128"))
 MIN_DIM = int(os.environ.get("LTX25_FP16_GEMM_MIN_DIM", "512"))
+SHAPE_CENSUS = os.environ.get("LTX25_FP16_GEMM_SHAPE_CENSUS", "0") == "1"
+# Optional per-stage exact (M,N,K) allowlist, e.g. stage2:4032:4096:2048.
+# A measured fast-shape whitelist is safer than broad shape heuristics.
+ALLOW_SHAPES = frozenset(v.strip() for v in
+    os.environ.get("LTX25_FP16_GEMM_ALLOW_SHAPES", "").split(",") if v.strip())
 PATH = Path(os.environ.get("LTX25_FP16_GEMM_STATS_PATH", "/tmp/ltx25-fp16-gemm-stats.json"))
 GROUP_NAMES = frozenset(f"{phase}:{group}" for phase in ("stage1", "stage2")
                         for group in ("wide", "tall", "balanced"))
@@ -67,6 +72,8 @@ _CHECKED: set[str] = set()
 _REASONS = Counter()
 _TRACE_OPS = Counter()
 _FORWARD_COUNT = Counter()
+_SHAPE_COUNTS = Counter()
+_SHAPE_SIGNATURES = {}
 _MAX_OPS = 0
 _AUDIT_COUNTS = Counter()
 _AUDIT_ROWS = []
@@ -145,6 +152,15 @@ class _SelectiveMode(TorchDispatchMode):
                 return func(*args, **kwargs)
             m, k = a.shape
             n, inner = b.shape
+            if SHAPE_CENSUS:
+                signature = f"{self.phase}:{op}:M={m},N={n},K={k}"
+                _SHAPE_COUNTS[signature] += 1
+                _SHAPE_SIGNATURES[signature] = {
+                    "stage": self.phase, "op": op, "M": int(m), "N": int(n), "K": int(k),
+                    "flops_per_call": int(2 * m * n * k),
+                    "weight_bytes_int8": int(n * k), "group": _shape_class(k, n),
+                    "dtype": str(a.dtype),
+                }
         else:
             if not _plain_bf16(a) or not _plain_bf16(b):
                 _REASONS["not_dense_bf16_cuda"] += 1
@@ -157,6 +173,9 @@ class _SelectiveMode(TorchDispatchMode):
         group = f"{self.phase}:{_shape_class(k, n)}"
         if group not in GROUPS:
             _REASONS["disabled_group"] += 1
+            return func(*args, **kwargs)
+        if ALLOW_SHAPES and f"{self.phase}:{m}:{n}:{k}" not in ALLOW_SHAPES:
+            _REASONS["not_whitelisted_shape"] += 1
             return func(*args, **kwargs)
         if op == "addmm" and (not isinstance(bias, torch.Tensor) or
                              bias.dtype != torch.bfloat16):
@@ -269,6 +288,13 @@ def _report():
         "ops": sorted(OPS), "guard": GUARD,
         "min_m": MIN_M, "min_dimension": MIN_DIM,
         "stats": dict(_COUNTS), "skip_reasons": dict(_REASONS),
+        "shape_census_enabled": SHAPE_CENSUS,
+        "shape_census": [
+            {**_SHAPE_SIGNATURES[signature], "signature": signature,
+             "calls": count, "total_flops": _SHAPE_SIGNATURES[signature]["flops_per_call"] * count}
+            for signature, count in sorted(_SHAPE_COUNTS.items(), key=lambda pair: -pair[1])
+        ],
+        "allow_shapes": sorted(ALLOW_SHAPES),
         "transformer_forward_calls": dict(_FORWARD_COUNT),
         "trace_dispatch_enabled": TRACE_DISPATCH,
         "torch_dispatch_ops_seen": sum(_TRACE_OPS.values()),

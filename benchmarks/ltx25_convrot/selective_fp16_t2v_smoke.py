@@ -179,6 +179,7 @@ def environment(case, kind, groups, audit):
         env.update({
             "WAN2GP_LTX25_FP16_GEMM": "1",
             "LTX25_FP16_GEMM_GROUPS": groups,
+            "LTX25_FP16_GEMM_TRACE": os.environ.get("LTX25_SMOKE_DISPATCH_TRACE", "0"),
             "LTX25_FP16_GEMM_SHAM": "1" if kind == "sham" else "0",
             "LTX25_FP16_GEMM_GUARD": "first",
             "LTX25_FP16_GEMM_AUDIT_PER_SHAPE": str(audit),
@@ -385,12 +386,19 @@ def main():
     template = initialize_config()
     ffmpeg = ffmpeg_bin()
     rows=[]
-    for case,kind,groups,audit,description in CASES:
+    selected = os.environ.get("LTX25_SMOKE_ONLY", "")
+    requested_cases = tuple(x for x in CASES if not selected or x[0] == selected)
+    if not requested_cases:
+        raise ValueError(f"Unknown LTX25_SMOKE_ONLY variant: {selected}")
+    for case,kind,groups,audit,description in requested_cases:
         print("START_SMOKE_CASE",case,description,flush=True)
         previous = next((r for r in rows if r["variant"]=="native-a" and r["status"]=="PASS"),None)
         rows.append(run_case(case,kind,groups,audit,template,ffmpeg,previous))
         report_summary(rows)
     result=report_summary(rows)
+    if selected:
+        print("SELECTIVE_DISPATCH_PROBE_COMPLETE", selected, flush=True)
+        return
     if result["status"]!="PASS":
         sys.exit("Partial T2V smoke: see smoke-summary.txt for failures")
 

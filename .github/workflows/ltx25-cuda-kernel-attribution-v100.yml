@@ -17,6 +17,7 @@ jobs:
       PYTHONPATH: .
       LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
       LTX25_CHROME_ATTRIBUTION_ROOT: /cache/ltx25/results/ltx25-cuda-attribution-${{ github.run_id }}
+      LTX25_NONQUANTO_BENCH_ROOT: /cache/ltx25/results/nonquanto-fp16-microbench-${{ github.run_id }}
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
     steps:
@@ -29,10 +30,18 @@ jobs:
           /opt/venvs/ltx25-cu128/bin/python -m py_compile \
             shared/kernels/ltx25_cuda_trace_attribution.py \
             shared/kernels/ltx25_pipeline_profile.py \
-            benchmarks/ltx25_convrot/profile_single_gpu_kernel_attribution.py
+            benchmarks/ltx25_convrot/profile_single_gpu_kernel_attribution.py \
+            benchmarks/ltx25_convrot/non_quanto_gemm_fp16_microbench.py
           /opt/venvs/ltx25-cu128/bin/python benchmarks/ltx25_convrot/verify_cuda_attribution.py
           busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
           if [[ -n "$busy" ]]; then echo "::error::V100 busy $busy"; exit 1; fi
+      - name: Benchmark actual non-Quanto mm/addmm shapes BF16 vs transient FP16
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python -u benchmarks/ltx25_convrot/non_quanto_gemm_fp16_microbench.py \
+            2>&1 | tee nonquanto-gemm-microbench.log
+          grep -Fq 'NONQUANTO_GEMM_MICROBENCH_PASS ' nonquanto-gemm-microbench.log
       - name: Profile actual Stage1 and Stage2 GPU launches and their CPU Quanto scopes
         shell: bash
         run: |
@@ -49,6 +58,9 @@ jobs:
           if-no-files-found: warn
           path: |
             cuda-real-kernel-attribution.log
+            nonquanto-gemm-microbench.log
+            /cache/ltx25/results/nonquanto-fp16-microbench-${{ github.run_id }}/microbench.json
+            /cache/ltx25/results/nonquanto-fp16-microbench-${{ github.run_id }}/microbench.csv
             /cache/ltx25/results/ltx25-cuda-attribution-${{ github.run_id }}/cuda-kernel-attribution.json
             /cache/ltx25/results/ltx25-cuda-attribution-${{ github.run_id }}/results/*.json
             /cache/ltx25/results/ltx25-cuda-attribution-${{ github.run_id }}/logs/*.log

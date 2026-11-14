@@ -1,0 +1,65 @@
+name: Recover LTX25 release-style ABBA failed run artifacts (read only)
+on:
+  push:
+    branches: [perf/ltx25-release-walltime-ab-20261114]
+    paths: [.github/workflows/ltx25-release-ab-recover-v100.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  recover:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 12
+    steps:
+      - name: Read only recover records and diagnose failed run
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=/cache/ltx25/results/release-ab-43628230267
+          DST="$GITHUB_WORKSPACE/recovery"
+          mkdir -p "$DST"
+          {
+            echo "Recovery timestamp UTC: $(date -u +%FT%TZ)"
+            echo "Runner: $(hostname)"
+            echo "Previous run: 43628230267"
+            echo "Source exists? $([[ -d $SRC ]] && echo yes || echo no)"
+            if [[ -d $SRC ]]; then
+              echo "Files:"
+              find "$SRC" -maxdepth 3 -type f -printf '%p (%s bytes)\n' | sort
+            fi
+          } | tee "$DST/inventory.txt"
+          if [[ -d "$SRC" ]]; then
+            for part in manifest.json summary.json summary.csv; do
+              [[ -f "$SRC/$part" ]] && cp "$SRC/$part" "$DST/" || true
+            done
+            for group in logs results settings; do
+              mkdir -p "$DST/$group"
+              if [[ -d "$SRC/$group" ]]; then
+                find "$SRC/$group" -maxdepth 1 -type f \
+                  \( -name '*.json' -o -name '*.log' -o -name '*.txt' \) \
+                  -size -20M -exec cp -t "$DST/$group" {} +
+              fi
+            done
+            find "$SRC/clips" -maxdepth 1 -type f -name '*.mp4' \
+              -printf '%f (%s bytes)\n' 2>/dev/null | tee "$DST/clips-inventory.txt" || true
+          fi
+          {
+            echo "Recent per-case log endings:"
+            for f in "$DST"/logs/*generation.log; do
+              [[ -f "$f" ]] || continue
+              echo "========== $(basename "$f") =========="
+              tail -n 65 "$f"
+            done
+          } > "$DST/last-generation-logs.txt"
+          tail -n 220 "$DST/last-generation-logs.txt"
+      - name: Upload recovered partial benchmark records
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-release-ab-run-43628230267-recovery
+          retention-days: 21
+          if-no-files-found: error
+          path: recovery/

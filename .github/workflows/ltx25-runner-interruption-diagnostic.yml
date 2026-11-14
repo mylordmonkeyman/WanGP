@@ -1,0 +1,35 @@
+name: Diagnose Nov14 LTX25 long I2V runner interruption (read-only)
+on:
+  push:
+    branches: [perf/ltx25-release-walltime-ab-20261114]
+    paths: [.github/workflows/ltx25-runner-interruption-diagnostic.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 7
+    steps:
+      - name: Inspect host, GPU, filesystem and journal during failed 241-frame stage
+        shell: bash
+        run: |
+          set +e
+          echo '=== UTC now and uptime ==='
+          date -u; uptime; who -b; last -x reboot | head -10
+          echo '=== GPU status ==='
+          nvidia-smi --query-gpu=timestamp,pci.bus_id,temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw --format=csv
+          nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv
+          echo '=== GPU persistent/Xid error history in kernel journal 18:45-19:15Z ==='
+          journalctl -k --utc --since '2026-11-14 18:44:00' --until '2026-11-14 19:15:00' --no-pager -o short-iso |
+            grep -Ei -C 3 'NVRM|Xid|GPU|OOM|out.of.memory|NVIDIA|segfault|pcie|reset|hung|blocked|killed|nvlink|watchdog' | tail -200
+          echo '=== System journal: reboot, runner and failure messages ==='
+          journalctl --utc --since '2026-11-14 18:58:00' --until '2026-11-14 19:15:00' \
+            --no-pager -o short-iso |
+            grep -Ei -C 2 'runner|oom|out.of.memory|killed|shutdown|reboot|nvidia|cuda|network|lost|timeout|heartbeat|systemd' | tail -220
+          echo '=== Other checks ==='
+          df -h /cache
+          free -h
+          ps -eo pid,ppid,etime,stat,cmd | grep -E '[w]gp.py|[r]unner.Listener|[r]unner.Worker|[l]tx25' | tail -30
+          echo '=== Last 241 frame process log line ==='
+          tail -n 22 /cache/ltx25/results/release-ab-43628230267/logs/i2v241-prior-1-generation.log

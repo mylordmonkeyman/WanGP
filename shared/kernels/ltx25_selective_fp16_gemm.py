@@ -297,6 +297,17 @@ def call_transformer(module: Callable, *args, **kwargs):
         return module(*args, **kwargs)
     _FORWARD_COUNT[_CURRENT_PHASE] += 1
     if BACKEND == "direct":
+        # Release-style stage-only dispatch: do not install a Python Quanto
+        # wrapper for stages with no selected GEMM groups. In particular,
+        # Stage 2-only FP16 must leave Stage 1 entirely on its original path.
+        # This also prevents benchmarking overhead on Stage 1 from masking
+        # real wall-to-wall Stage 2 benefits.
+        if not any(group.startswith(_CURRENT_PHASE + ":") for group in GROUPS):
+            _COUNTS["bypassed_unselected_" + _CURRENT_PHASE + "_forwards"] += 1
+            return module(*args, **kwargs)
+        if "qbytes_mm" not in OPS:
+            _COUNTS["bypassed_no_qbytes_mm_" + _CURRENT_PHASE + "_forwards"] += 1
+            return module(*args, **kwargs)
         with _direct_quanto_scope(_CURRENT_PHASE):
             return module(*args, **kwargs)
     with _SelectiveMode(_CURRENT_PHASE):

@@ -1,1 +1,1 @@
-One targeted 49-frame T2V run tracing TorchDispatchMode entrypoints and transformer calls for selective FP16 GEMM root cause.
+Trigger real Quanto qbytes_mm FP16 smoke run after live dispatch diagnosis. 2026-11-14 iteration 2.

@@ -1,0 +1,79 @@
+name: LTX-2.5 V100 241-frame live profile scripts static checks
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths:
+      - shared/kernels/ltx25_stage_profiler.py
+      - benchmarks/ltx25_convrot/summarize_stage_profile.py
+      - run_candidate_e_fusions_i2v_241.sh
+      - run_candidate_e_profile_i2v_241.sh
+      - .github/workflows/ltx25-profile-i2v-script-lint.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-and-report-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Bash syntax, usage, Python compile
+        run: |
+          set -euo pipefail
+          bash -n run_candidate_e_fusions_i2v_241.sh
+          bash -n run_candidate_e_profile_i2v_241.sh
+          bash run_candidate_e_profile_i2v_241.sh --help
+          python3 -m py_compile shared/kernels/ltx25_stage_profiler.py benchmarks/ltx25_convrot/summarize_stage_profile.py
+          git diff --exit-code
+      - name: Mock CUDA event samples and validate report generation without a GPU
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util, json, os, subprocess, sys, tempfile, types
+          from pathlib import Path
+          sys.modules['torch'] = types.ModuleType('torch')
+          os.environ.pop('WAN2GP_LTX25_PROFILE_STAGES', None)
+          spec = importlib.util.spec_from_file_location(
+              'ltx25_profile_under_test', 'shared/kernels/ltx25_stage_profiler.py')
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          class FakeEvent:
+              def __init__(self, stamp):
+                  self.stamp = stamp
+              def synchronize(self):
+                  pass
+              def elapsed_time(self, previous):
+                  return self.stamp - previous.stamp
+          with tempfile.TemporaryDirectory() as tmp:
+              root = Path(tmp)
+              mod.ENABLED = True
+              mod.PATH = root / 'stage_profile.json'
+              cases = [(4096, 4096, 128, 7000, .04),
+                       (16384, 4096, 64, 5000, .07)]
+              for n, k, m, count, duration in cases:
+                  mod._COUNTS[f'{n}x{k}'] = count
+                  mod._M_COUNTS[f'{n}x{k}'][m] = count
+                  mod._KEY_COUNTS[(n,k,m,'torch.bfloat16')] = count
+                  for idx in mod.SAMPLE_CALLS:
+                      mod._SAMPLES.append(types.SimpleNamespace(
+                          shape=f'{n}x{k}', call=idx, n=n, k=k, m=m,
+                          dtype='torch.bfloat16', host_us=[10.]*7,
+                          events=[FakeEvent(i * duration) for i in range(8)]))
+              mod._summary()
+              data = json.loads(mod.PATH.read_text())
+              assert data['status']=='PASS', data
+              assert data['sample_count']==14, data
+              assert data['total_eligible_calls']==12000, data
+              assert data['covered_calls']==12000, data
+              assert len(data['by_shape_m'])==2, data
+              assert data['top_workloads_by_estimated_gpu_ms'][0]['N']==16384
+              subprocess.run([
+                  sys.executable, 'benchmarks/ltx25_convrot/summarize_stage_profile.py',
+                  str(mod.PATH), str(root)
+              ], check=True)
+              assert (root/'profile-shape-costs.csv').is_file()
+              assert 'gemm' in (root/'profile-summary.txt').read_text()
+              print('PASS mock same-stream profiles and ranked reports')
+          PY

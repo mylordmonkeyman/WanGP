@@ -1,0 +1,7 @@
+{
+  "reason": "GPU, model, compile, or preflight gate blocked",
+  "run_id": "43554095337",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43554095337",
+  "source_sha": "560e0584879086e0cfa1d1720ceb8c2f7b6cc4cc",
+  "status": "NOT_RUN"
+}

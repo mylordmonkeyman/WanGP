@@ -1,4 +1,4 @@
-name: LTX-2.5 V100 direct BF16/FP16 radix4 Candidate E preflight
+name: LTX-2.5 V100 exact Candidate E input/output fusion preflight
 
 on:
   push:
@@ -24,6 +24,7 @@ jobs:
       WAN2GP_LTX25_E_CAST: vector8
       WAN2GP_LTX25_HADAMARD: radix4
       WAN2GP_LTX25_ROT_INPUT: direct
+      WAN2GP_LTX25_E_OUTPUT: fused
       WAN2GP_LTX25_E_WORKSPACE: '1'
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
@@ -34,7 +35,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Compile SM70 exact-input fused radix4 and cuBLAS Candidate E
+      - name: Compile SM70 direct-input and fused-output cuBLAS Candidate E
         shell: bash
         run: |
           set -euo pipefail
@@ -57,18 +58,18 @@ jobs:
           fi
           test -x /opt/venvs/ltx25-cu128/bin/python
 
-      - name: Test FP32 bit-exactness and performance on V100
+      - name: Test both input and output bit-exactness and performance on V100
         shell: bash
         run: |
           set -euo pipefail
           /opt/venvs/ltx25-cu128/bin/python \
             benchmarks/ltx25_convrot/rot_direct_preflight.py \
-            2>&1 | tee rot-direct-preflight.log
+            2>&1 | tee candidate-e-next-preflight.log
 
       - name: Store diagnostic output
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ltx25-rot-direct-preflight
+          name: ltx25-candidate-e-next-preflight
           path: rot-direct-preflight.log
           if-no-files-found: ignore

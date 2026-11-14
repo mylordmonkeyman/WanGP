@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/ltx25-selective-fp16-v100-preflight.yml
       - benchmarks/ltx25_convrot/fp16_dispatch_preflight.py
+      - benchmarks/ltx25_convrot/fp16_quanto_direct_preflight.py
       - shared/kernels/ltx25_selective_fp16_gemm.py
   workflow_dispatch:
 permissions:
@@ -46,6 +47,10 @@ jobs:
             benchmarks/ltx25_convrot/fp16_dispatch_preflight.py \
             2>&1 | tee selective-fp16-v100-preflight.log
           grep -Fq 'LTX25_FP16_DISPATCH_PREFLIGHT_OK ' selective-fp16-v100-preflight.log
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/fp16_quanto_direct_preflight.py \
+            2>&1 | tee -a selective-fp16-v100-preflight.log
+          grep -Fq 'LTX25_QUANTO_DIRECT_PREFLIGHT_PASS ' selective-fp16-v100-preflight.log
       - name: Save diagnostic logs
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

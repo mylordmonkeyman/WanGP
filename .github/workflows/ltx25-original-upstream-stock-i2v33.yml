@@ -53,6 +53,26 @@ jobs:
           ref: c8d47da27023476777a0874300bbc9a4126acca6
           path: stock-wangp-original
           persist-credentials: false
+      - name: Populate isolated original-source LoRA paths without moving read-only checkpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Historical WanGP automatically relocates built-in LTX LoRAs on startup.
+          # On this runner the baked source files are read-only. Link the same
+          # underlying bytes in the disposable ORIGINAL checkout; no checkpoint
+          # or tracked original-source file is modified, and no LoRA is activated.
+          dst="stock-wangp-original/loras/ltx2"
+          mkdir -p "$dst"
+          count=0
+          while IFS= read -r -d '' file; do
+            target="$dst/$(basename "$file")"
+            if [[ ! -e "$target" ]]; then
+              ln -s "$file" "$target"
+              count=$((count+1))
+            fi
+          done < <(find /opt/ltx25/checkpoints -type f -iname '*lora*.safetensors' -print0)
+          echo "Linked $count baked LoRA paths into isolated original checkout (no copies or moves)."
+          test "$count" -gt 0
       - name: Verify historical source, same checkpoint and baseline video exist, GPU idle
         shell: bash
         run: |

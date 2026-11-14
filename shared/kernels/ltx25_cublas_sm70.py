@@ -48,8 +48,8 @@ PROFILE_STAGES = os.environ.get("WAN2GP_LTX25_PROFILE_STAGES", "") == "1"
 USE_WORKSPACE = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "1") == "1"
 CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector8").strip().lower()
 ROT_MODE = os.environ.get("WAN2GP_LTX25_HADAMARD", "radix4").strip().lower()
-ROT_INPUT = os.environ.get("WAN2GP_LTX25_ROT_INPUT", "staged").strip().lower()
-OUTPUT_MODE = os.environ.get("WAN2GP_LTX25_E_OUTPUT", "torch").strip().lower()
+ROT_INPUT = os.environ.get("WAN2GP_LTX25_ROT_INPUT", "direct").strip().lower()
+OUTPUT_MODE = os.environ.get("WAN2GP_LTX25_E_OUTPUT", "fused").strip().lower()
 GEMM_TUNE = os.environ.get("WAN2GP_LTX25_GEMM_TUNE", "off").strip().lower()
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
 WEIGHT_CAP = 128 * 1024 * 1024
@@ -195,7 +195,7 @@ def _rot_fn():
 
 
 def _rot_direct_fn(dtype):
-    """Bind opt-in direct BF16/FP16 radix4, with FP32 internal math."""
+    """Bind default direct BF16/FP16 radix4, with FP32 internal math."""
     if dtype not in (torch.bfloat16, torch.float16):
         raise TypeError(f"Unsupported direct radix4 dtype: {dtype}")
     if dtype not in _ROT_DIRECT_FNS:
@@ -210,7 +210,7 @@ def _rot_direct_fn(dtype):
 
 
 def _fused_output_fn(dtype):
-    """Opt-in FP32 corrected epilogue writing the final BF16/FP16 output."""
+    """Bind default FP32 corrected epilogue writing final BF16/FP16 output."""
     if dtype not in (torch.bfloat16, torch.float16):
         raise TypeError(f"Unsupported fused epilogue dtype: {dtype}")
     if dtype not in _FINISH_DIRECT_FNS:

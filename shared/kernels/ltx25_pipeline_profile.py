@@ -23,6 +23,7 @@ import torch
 ENABLED = os.environ.get("WAN2GP_LTX25_PIPELINE_PROFILE", "") == "1"
 OP_SAMPLE = os.environ.get("LTX25_PIPELINE_OP_SAMPLE", "1") == "1"
 GEMM_CENSUS = os.environ.get("LTX25_PIPELINE_GEMM_CENSUS", "0") == "1"
+TRACE_ATTRIBUTION = os.environ.get("LTX25_PIPELINE_TRACE_ATTRIBUTION", "0") == "1"
 PATH = Path(os.environ.get("LTX25_PIPELINE_PROFILE_PATH", "/tmp/ltx25-pipeline-profile.json"))
 _PHASE = None
 _PHASE_START = None
@@ -32,6 +33,7 @@ _FORWARD_PHASE = "stage1"
 _FORWARD_CALLS = defaultdict(int)
 _FORWARD_SAMPLES = []
 _GEMM_CENSUS_SAMPLES = []
+_CHROME_TRACE_SAMPLES = []
 _TRANSFORMER = {}
 _PEAK_ALLOCATED = 0
 _PEAK_RESERVED = 0
@@ -280,6 +282,23 @@ def maybe_sample_forward(module, *args, **kwargs):
             # These are PyTorch op attributions, not a full NVTX/PCIe transfer trace.
             if GEMM_CENSUS:
                 _capture_gemm_census(context, phase, call)
+            if TRACE_ATTRIBUTION:
+                from shared.kernels.ltx25_cuda_trace_attribution import summarize_chrome_trace
+                trace_path = PATH.parent / f"{PATH.stem}-{phase}-cuda-trace.json"
+                trace_path.parent.mkdir(parents=True, exist_ok=True)
+                context.export_chrome_trace(str(trace_path))
+                trace_report = summarize_chrome_trace(trace_path)
+                trace_report["phase"] = phase
+                trace_report["forward_index"] = call
+                _CHROME_TRACE_SAMPLES.append(trace_report)
+                print("[LTX25_CHROME_CUDA_ATTRIBUTION] " + json.dumps({
+                    "phase": phase, "kernels": trace_report["actual_gpu_kernel_events"],
+                    "kernel_gpu_time_ms_sum": trace_report["gpu_time_ms_sum"],
+                    "gpu_time_by_quanto_scope_ms": trace_report["attribution_gpu_time_ms"],
+                    "gemm_kernel_attribution": trace_report["gemm_kernel_attribution"],
+                }, sort_keys=True), flush=True)
+                if os.environ.get("LTX25_PIPELINE_TRACE_RETAIN", "0") != "1":
+                    trace_path.unlink(missing_ok=True)
             _FORWARD_SAMPLES.append({
                 "phase": phase, "forward_index": call,
                 "operator_count": len(operators),
@@ -321,6 +340,7 @@ def _summary() -> None:
         "sampled_operator_forwards": _FORWARD_SAMPLES,
         "gemm_census_enabled": GEMM_CENSUS,
         "gemm_census_samples": _GEMM_CENSUS_SAMPLES,
+        "chrome_trace_kernel_attribution": _CHROME_TRACE_SAMPLES,
         "peak_allocated_mib_at_boundaries": round(_PEAK_ALLOCATED / 2**20, 2),
         "peak_reserved_mib_at_boundaries": round(_PEAK_RESERVED / 2**20, 2),
         "errors": _PHASE_ERRORS,
@@ -343,6 +363,7 @@ def _summary() -> None:
             "transformer": _TRANSFORMER,
             "operator_samples": len(_FORWARD_SAMPLES),
             "gemm_census_samples": len(_GEMM_CENSUS_SAMPLES),
+            "chrome_trace_samples": len(_CHROME_TRACE_SAMPLES),
             "errors": _PHASE_ERRORS, "report": str(PATH),
         }, sort_keys=True), flush=True)
     except Exception as error:

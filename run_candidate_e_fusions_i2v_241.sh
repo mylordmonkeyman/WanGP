@@ -293,7 +293,7 @@ if variant.startswith("fp16-"):
     assert fp16_stats_path.is_file(),f"Missing FP16 dispatch counters: {fp16_stats_path}"
     fp16_stats=json.loads(fp16_stats_path.read_text())
     assert fp16_stats.get("persistent_fp16_weight_copies")==0,fp16_stats
-    converted=sum(fp16_stats.get("stats",{}).get("converted_"+op,0) for op in ("mm","addmm"))
+    converted=sum(fp16_stats.get("stats",{}).get("converted_"+op,0) for op in ("mm","addmm","qbytes_mm"))
     if converted<=0:
         raise RuntimeError(f"Selected case {variant} did not actually convert any BF16 GEMMs; review selectors and shapes")
 else:

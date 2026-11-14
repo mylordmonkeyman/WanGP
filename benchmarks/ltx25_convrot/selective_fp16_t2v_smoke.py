@@ -188,6 +188,10 @@ def environment(case, kind, groups, audit):
             "LTX25_FP16_GEMM_GUARD": "first",
             "LTX25_FP16_GEMM_AUDIT_PER_SHAPE": str(audit),
             "LTX25_FP16_GEMM_STATS_PATH": str(OUT / "results" / f"{case}-fp16-stats.json"),
+            "LTX25_FP16_GEMM_MIN_M": os.environ.get("LTX25_SMOKE_MIN_M", "128"),
+            "LTX25_FP16_GEMM_MIN_DIM": os.environ.get("LTX25_SMOKE_MIN_DIM", "512"),
+            "LTX25_FP16_GEMM_SHAPE_CENSUS": os.environ.get("LTX25_SMOKE_SHAPE_CENSUS", "0"),
+            "LTX25_FP16_GEMM_ALLOW_SHAPES": os.environ.get("LTX25_SMOKE_ALLOW_SHAPES", ""),
         })
     return env
 

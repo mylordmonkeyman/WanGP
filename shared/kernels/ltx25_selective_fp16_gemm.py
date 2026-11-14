@@ -40,6 +40,7 @@ GROUPS = frozenset(x.strip() for x in os.environ.get("LTX25_FP16_GEMM_GROUPS", "
 OPS = frozenset(x.strip() for x in os.environ.get("LTX25_FP16_GEMM_OPS", "mm,addmm").split(",") if x.strip())
 GUARD = os.environ.get("LTX25_FP16_GEMM_GUARD", "first").strip()
 SHAM = os.environ.get("LTX25_FP16_GEMM_SHAM", "0") == "1"
+TRACE_DISPATCH = os.environ.get("LTX25_FP16_GEMM_TRACE", "0") == "1"
 AUDIT_PER_SHAPE = int(os.environ.get("LTX25_FP16_GEMM_AUDIT_PER_SHAPE", "0"))
 MIN_M = int(os.environ.get("LTX25_FP16_GEMM_MIN_M", "128"))
 MIN_DIM = int(os.environ.get("LTX25_FP16_GEMM_MIN_DIM", "512"))
@@ -64,6 +65,8 @@ _BY_SHAPE: dict[str, Counter] = defaultdict(Counter)
 _BLOCKED: set[str] = set()
 _CHECKED: set[str] = set()
 _REASONS = Counter()
+_TRACE_OPS = Counter()
+_FORWARD_COUNT = Counter()
 _MAX_OPS = 0
 _AUDIT_COUNTS = Counter()
 _AUDIT_ROWS = []
@@ -97,6 +100,8 @@ class _SelectiveMode(TorchDispatchMode):
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
         global _MAX_OPS
         kwargs = kwargs or {}
+        if TRACE_DISPATCH:
+            _TRACE_OPS[str(func)] += 1
         op = None
         if func is torch.ops.aten.mm.default:
             op = "mm"
@@ -206,6 +211,7 @@ def call_transformer(module: Callable, *args, **kwargs):
     """Invoke an actual transformer forward without changing model parameters."""
     if not ENABLED:
         return module(*args, **kwargs)
+    _FORWARD_COUNT[_CURRENT_PHASE] += 1
     # Stage is set by the existing DistilledPipeline at each phase boundary.
     with _SelectiveMode(_CURRENT_PHASE):
         return module(*args, **kwargs)
@@ -233,6 +239,10 @@ def _report():
         "ops": sorted(OPS), "guard": GUARD,
         "min_m": MIN_M, "min_dimension": MIN_DIM,
         "stats": dict(_COUNTS), "skip_reasons": dict(_REASONS),
+        "transformer_forward_calls": dict(_FORWARD_COUNT),
+        "trace_dispatch_enabled": TRACE_DISPATCH,
+        "torch_dispatch_ops_seen": sum(_TRACE_OPS.values()),
+        "top_aten_dispatch_ops": dict(_TRACE_OPS.most_common(45)),
         "by_shape": {k: dict(v) for k, v in sorted(_BY_SHAPE.items())},
         "blocked_shapes": sorted(_BLOCKED),
         "persistent_fp16_weight_copies": 0,

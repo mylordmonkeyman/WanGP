@@ -1,0 +1,63 @@
+name: LTX-2.5 V100 241-frame large M Stage2 Candidate E row tile microbenchmark
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths: [benchmarks/ltx25_convrot/large_m_candidate_e_tile.signal]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  pilot:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 35
+    env:
+      PYTHONPATH: .
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      LTX25_LARGE_M_TILE_ROOT: /cache/ltx25/results/large-m-candidate-e-tile-${{ github.run_id }}
+      LTX25_CUBLAS_E_LIB: /cache/ltx25/results/large-m-candidate-e-tile-${{ github.run_id }}/libltx25_cublas_e_sm70.so
+      WAN2GP_LTX25_CUBLAS_E_MODE: fp32rot
+      WAN2GP_LTX25_HADAMARD: radix4
+      WAN2GP_LTX25_E_CAST: vector8
+      WAN2GP_LTX25_ROT_INPUT: direct
+      WAN2GP_LTX25_E_OUTPUT: fused
+      WAN2GP_LTX25_E_WORKSPACE: '1'
+      LTX25_E_WORKSPACE_MAX_MIB: '96'
+      WAN2GP_LTX25_GEMM_TUNE: 'off'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - name: Confirm code, CUDA and idle V100
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python -m py_compile benchmarks/ltx25_convrot/large_m_candidate_e_tile_pilot.py
+          /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+          import torch,optimum.quanto
+          assert torch.cuda.is_available() and torch.cuda.get_device_capability(0)==(7,0)
+          print("V100",torch.cuda.get_device_name(0))
+          PY
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::error::GPU busy: $busy"; exit 1; fi
+      - name: Compare native BF16, temporary FP16 and two Candidate E tile sizes on real M N K shapes
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python -u benchmarks/ltx25_convrot/large_m_candidate_e_tile_pilot.py \
+            2>&1 | tee candidate-e-large-m-tile.log
+          grep -Fq 'LTX25_LARGE_M_TILE_PILOT_PASS ' candidate-e-large-m-tile.log
+      - name: Upload timings numerical RMS and per-shape records
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-large-m-candidate-e-row-tiling-pilot
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            candidate-e-large-m-tile.log
+            /cache/ltx25/results/large-m-candidate-e-tile-${{ github.run_id }}/compile.log
+            /cache/ltx25/results/large-m-candidate-e-tile-${{ github.run_id }}/tile-pilot.json
+            /cache/ltx25/results/large-m-candidate-e-tile-${{ github.run_id }}/tile-pilot.csv

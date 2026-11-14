@@ -1,0 +1,94 @@
+name: LTX-2.5 V100 33-frame 832x480 stock vs Candidate E vs Stage2 FP16
+on:
+  push:
+    branches: [perf/ltx25-release-walltime-ab-20261114]
+    paths:
+      - .github/workflows/ltx25-i2v33-stock-e-fp16-v100.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout benchmark
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - name: Verify Python syntax and three-way matching design
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile benchmarks/ltx25_convrot/i2v33_stock_candidate_e_stage2_abccba.py
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          s=Path("benchmarks/ltx25_convrot/i2v33_stock_candidate_e_stage2_abccba.py").read_text()
+          ast.parse(s)
+          for marker in (
+            'FRAMES = 33','RESOLUTION = "832x480"','STEPS = 4',
+            'ARMS = ("stock", "candidate_e", "stage2_fp16", "stage2_fp16", "candidate_e", "stock")',
+            'WAN2GP_LTX25_CUBLAS_E_MODE', 'WAN2GP_LTX25_FP16_GEMM',
+            'LTX25_FP16_GEMM_BACKEND', 'LTX25_FP16_GEMM_OPS',
+            'base.gpu_free()', 'base.frames_hash', 'base.psnr', 'base.config_for',
+          ):
+              assert marker in s, marker
+          print("THREEWAY_33F_STATIC_PASS")
+          PY
+  benchmark:
+    needs: static
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 150
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_33F_3WAY_OUT: /cache/ltx25/results/i2v33-3way-${{ github.run_id }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout exact three-arm benchmark
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - name: Check V100, offline checkpoint, and idle GPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test -s benchmarks/ltx25_convrot/inputs/profile_i2v_1024x576.png.png
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::error::V100 in use: $busy"; exit 1; fi
+          nvidia-smi -L
+      - name: Run six isolated full-process I2V generations A-B-C-C-B-A (four steps)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/i2v33_stock_candidate_e_stage2_abccba.py 2>&1 | tee i2v33-threeway.log
+          grep -Fq 'LTX25_33F_3WAY_PASS' i2v33-threeway.log
+      - name: Upload complete or partial timing/quality/counter evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-i2v33-832x480-stock-e-fp16-timings
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            i2v33-threeway.log
+            /cache/ltx25/results/i2v33-3way-${{ github.run_id }}/manifest.json
+            /cache/ltx25/results/i2v33-3way-${{ github.run_id }}/input.json
+            /cache/ltx25/results/i2v33-3way-${{ github.run_id }}/partial-results.json
+            /cache/ltx25/results/i2v33-3way-${{ github.run_id }}/summary.json
+            /cache/ltx25/results/i2v33-3way-${{ github.run_id }}/summary.csv
+            /cache/ltx25/results/i2v33-3way-${{ github.run_id }}/results/*.json
+            /cache/ltx25/results/i2v33-3way-${{ github.run_id }}/logs/*.log
+      - name: Upload matched stock versus optimized MP4 clips
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-i2v33-832x480-stock-e-fp16-videos
+          retention-days: 21
+          if-no-files-found: warn
+          compression-level: 0
+          path: /cache/ltx25/results/i2v33-3way-${{ github.run_id }}/clips/*.mp4

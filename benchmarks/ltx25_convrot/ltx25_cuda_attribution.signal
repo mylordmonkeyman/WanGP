@@ -1,1 +1,2 @@
 2026-11-14 real CUDA launch correlations: true CUDA kernel events and Quanto record_function attribution
+run 2: combine microbench and true CUPTI CUDA attribution on one sequential V100 job

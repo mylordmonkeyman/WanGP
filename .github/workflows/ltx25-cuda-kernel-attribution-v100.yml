@@ -1,0 +1,54 @@
+name: LTX-2.5 V100 real CUDA kernel attribution to Quanto and non-Quanto GEMMs
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths: [benchmarks/ltx25_convrot/ltx25_cuda_attribution.signal]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  trace:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 50
+    env:
+      PYTHONPATH: .
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_CHROME_ATTRIBUTION_ROOT: /cache/ltx25/results/ltx25-cuda-attribution-${{ github.run_id }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - name: Validate trace parser, input and idle V100
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python -m py_compile \
+            shared/kernels/ltx25_cuda_trace_attribution.py \
+            shared/kernels/ltx25_pipeline_profile.py \
+            benchmarks/ltx25_convrot/profile_single_gpu_kernel_attribution.py
+          /opt/venvs/ltx25-cu128/bin/python benchmarks/ltx25_convrot/verify_cuda_attribution.py
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::error::V100 busy $busy"; exit 1; fi
+      - name: Profile actual Stage1 and Stage2 GPU launches and their CPU Quanto scopes
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python -u benchmarks/ltx25_convrot/profile_single_gpu_kernel_attribution.py \
+            2>&1 | tee cuda-real-kernel-attribution.log
+          grep -Fq 'LTX25_CUDA_REAL_KERNEL_ATTRIBUTION_PASS ' cuda-real-kernel-attribution.log
+      - name: Publish true CUDA kernel time and shape attribution
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-v100-CUPTI-true-kernel-time-and-quanto-attribution
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            cuda-real-kernel-attribution.log
+            /cache/ltx25/results/ltx25-cuda-attribution-${{ github.run_id }}/cuda-kernel-attribution.json
+            /cache/ltx25/results/ltx25-cuda-attribution-${{ github.run_id }}/results/*.json
+            /cache/ltx25/results/ltx25-cuda-attribution-${{ github.run_id }}/logs/*.log

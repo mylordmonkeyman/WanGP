@@ -1,0 +1,2 @@
+trigger: 2026-11-13-v100-free
+purpose: full-model A-B-B-A compare radix4 vector8 default against direct-input+fused-output; decoded video and audio exactness

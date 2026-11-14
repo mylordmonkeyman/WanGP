@@ -49,6 +49,7 @@ USE_WORKSPACE = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "1") == "1"
 CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector8").strip().lower()
 ROT_MODE = os.environ.get("WAN2GP_LTX25_HADAMARD", "radix4").strip().lower()
 ROT_INPUT = os.environ.get("WAN2GP_LTX25_ROT_INPUT", "staged").strip().lower()
+OUTPUT_MODE = os.environ.get("WAN2GP_LTX25_E_OUTPUT", "torch").strip().lower()
 GEMM_TUNE = os.environ.get("WAN2GP_LTX25_GEMM_TUNE", "off").strip().lower()
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
 WEIGHT_CAP = 128 * 1024 * 1024
@@ -63,6 +64,7 @@ _CAST_FN = None
 _CAST8_FN = None
 _ROT_FN = None
 _ROT_DIRECT_FNS = {}
+_FINISH_DIRECT_FNS = {}
 _ALGO2_FN = None
 _NATIVE_UNAVAILABLE = False
 _NATIVE_FAILURE_REPORTED = False
@@ -77,7 +79,7 @@ _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
           "auto_native_fallback": 0,
           "range_fallback_units": "rows (device-side FP32 dot)",
           "row_range_policy": "power_of_two_nonzero_fp16_else_fp32_dot",
-          "rotation_mode": ROT_MODE, "rotation_input": ROT_INPUT,
+          "rotation_mode": ROT_MODE, "rotation_input": ROT_INPUT, "output_mode": OUTPUT_MODE,
           "gemm_tune": GEMM_TUNE, "gemm_algo2_calls": 0}
 
 
@@ -151,7 +153,7 @@ def _fn():
                        ctypes.c_int, ctypes.c_int, ptr]
     finish.restype = ctypes.c_int
     _FN = (dll, gemm, prepare, finish)
-    print(f"[LTX25_CUBLAS_E] SM70 ConvRot enabled: GPU range guard, cast={CAST_MODE}, rotation={ROT_MODE}, rotation_input={ROT_INPUT}, workspace={USE_WORKSPACE}, gemm_tune={GEMM_TUNE}; no persistent FP16 weights", flush=True)
+    print(f"[LTX25_CUBLAS_E] SM70 ConvRot enabled: GPU range guard, cast={CAST_MODE}, rotation={ROT_MODE}, rotation_input={ROT_INPUT}, output_mode={OUTPUT_MODE}, workspace={USE_WORKSPACE}, gemm_tune={GEMM_TUNE}; no persistent FP16 weights", flush=True)
     return _FN
 
 
@@ -205,6 +207,21 @@ def _rot_direct_fn(dtype):
         fn.restype = ctypes.c_int
         _ROT_DIRECT_FNS[dtype] = fn
     return _ROT_DIRECT_FNS[dtype]
+
+
+def _fused_output_fn(dtype):
+    """Opt-in FP32 corrected epilogue writing the final BF16/FP16 output."""
+    if dtype not in (torch.bfloat16, torch.float16):
+        raise TypeError(f"Unsupported fused epilogue dtype: {dtype}")
+    if dtype not in _FINISH_DIRECT_FNS:
+        name = ("ltx25_cublas_epilogue_f32_to_bf16" if dtype == torch.bfloat16
+                else "ltx25_cublas_epilogue_f32_to_f16")
+        fn = getattr(_fn()[0], name)
+        ptr = ctypes.c_void_p
+        fn.argtypes = [ptr] * 8 + [ctypes.c_int] * 3 + [ptr]
+        fn.restype = ctypes.c_int
+        _FINISH_DIRECT_FNS[dtype] = fn
+    return _FINISH_DIRECT_FNS[dtype]
 
 
 def _algo2_fn():
@@ -291,6 +308,10 @@ def maybe_linear(x, weight, bias, group):
                 _rot_fn()
             else:
                 raise ValueError(f"Unknown WAN2GP_LTX25_ROT_INPUT={ROT_INPUT!r}")
+        if OUTPUT_MODE == "fused":
+            _fused_output_fn(x.dtype)
+        elif OUTPUT_MODE not in ("torch", ""):
+            raise ValueError(f"Unknown WAN2GP_LTX25_E_OUTPUT={OUTPUT_MODE!r}")
         if GEMM_TUNE == "algo2_m64" and (n, k, m) == (16384, 4096, 64):
             _algo2_fn()
     except (OSError, RuntimeError, AttributeError, ImportError) as exc:
@@ -413,16 +434,30 @@ def maybe_linear(x, weight, bias, group):
             _STATS["gemm_algo2_calls"] += 1
         if PROFILE_STAGES:
             profiler.mark(profile, "gemm")
-        status = finish(ptr(c32.data_ptr()), ptr(x32.data_ptr()), ptr(q.data_ptr()),
-                        ptr(scale32.data_ptr()),
-                        ptr(0 if bias32 is None else bias32.data_ptr()),
-                        ptr(exponents.data_ptr()), ptr(slow_rows.data_ptr()),
-                        m, n, k, stream)
+        if OUTPUT_MODE == "fused":
+            # Fuses the final round-to-nearest conversion into the existing
+            # FP32 row-scale/exception-correction pass. No permanent weight
+            # copy and no changes to cuBLAS or safe-row numerics.
+            out = torch.empty((*x.shape[:-1], n), dtype=x.dtype, device=x.device)
+            status = _fused_output_fn(x.dtype)(
+                ptr(c32.data_ptr()), ptr(out.data_ptr()),
+                ptr(x32.data_ptr()), ptr(q.data_ptr()),
+                ptr(scale32.data_ptr()),
+                ptr(0 if bias32 is None else bias32.data_ptr()),
+                ptr(exponents.data_ptr()), ptr(slow_rows.data_ptr()),
+                m, n, k, stream)
+        else:
+            status = finish(ptr(c32.data_ptr()), ptr(x32.data_ptr()), ptr(q.data_ptr()),
+                            ptr(scale32.data_ptr()),
+                            ptr(0 if bias32 is None else bias32.data_ptr()),
+                            ptr(exponents.data_ptr()), ptr(slow_rows.data_ptr()),
+                            m, n, k, stream)
         if status:
             raise RuntimeError(f"Candidate E FP32 epilogue failed, status={status}, N={n}, M={m}, K={k}")
         if PROFILE_STAGES:
             profiler.mark(profile, "epilogue")
-        out = c32.to(x.dtype).reshape(*x.shape[:-1], n)
+        if OUTPUT_MODE != "fused":
+            out = c32.to(x.dtype).reshape(*x.shape[:-1], n)
         if PROFILE_STAGES:
             profiler.mark(profile, "output")
     finally:

@@ -1,0 +1,2 @@
+Launch 49-frame real-model T2V selective FP16 smoke, quality/numerical audits, and sham BF16 vs FP16 ABBA.
+Requested user run; one explicit workflow execution on V100, same offline checkpoint and no production default changes.

@@ -128,7 +128,7 @@ __global__ void finish_rows(float* __restrict__ c32,
   }
 }
 
-// Opt-in exact final conversion fused into the FP32 epilogue. CUDA's RN
+// Exact final conversion fused into the FP32 epilogue (Candidate E default). CUDA's RN
 // conversion is the same nearest-even rounding used by torch Tensor.to.
 // Unlike the original finish_rows, the output is written directly as BF16 or
 // FP16; the FP32 c32 scratch is read but need not be written back.
@@ -283,11 +283,11 @@ extern "C" int ltx25_cublas_rot256_f32(const void* input, void* output,
   return err==cudaSuccess ? 0 : 5000+int(err);
 }
 
-// Experimental direct low-precision input to FP32 radix-4 Hadamard.
+// Default direct low-precision input to FP32 radix-4 Hadamard.
 // The 256-element shared-memory buffer is FP32 and all arithmetic/order is
 // identical to the float-input kernel. Eliminates x.float() staging, one
 // device allocation and one PyTorch conversion launch per eligible call.
-// Opt-in only until exactness and model-level speed/quality gates pass.
+// Passed SM70 preflight and matched full-generation checks; staging remains selectable.
 template <typename InputT>
 static int launch_radix4_direct(const void* input, void* output,
                                 size_t count, void* stream_ptr) {
@@ -427,8 +427,8 @@ extern "C" int ltx25_cublas_epilogue_f32(
   return err == cudaSuccess ? 0 : 3000 + int(err);
 }
 
-// Experimental fused-output epilogue entry points. These are optional and
-// never alter the original ltx25_cublas_epilogue_f32 used by default.
+// Default fused-output epilogue entry points. The original
+// ltx25_cublas_epilogue_f32 remains available via WAN2GP_LTX25_E_OUTPUT=torch.
 template <typename OutT>
 static int launch_epilogue_low(
     void* c32, void* output, const void* x32, const void* q,

@@ -1,0 +1,115 @@
+name: LTX-2.5 V100 Candidate E fused input/output full-video ABBA
+
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths:
+      - benchmarks/ltx25_convrot/e_fusions_abba_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  e-fusions-abba:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 50
+    env:
+      LTX25_CUBLAS_E_LIB: /tmp/libltx25_e_fusions_abba.so
+      LTX25_CHECKPOINT_ROOT: /opt/ltx25/checkpoints
+      WAN2GP_LTX25_CUBLAS_E_MODE: fp32rot
+      WAN2GP_LTX25_E_CAST: vector8
+      WAN2GP_LTX25_HADAMARD: radix4
+      WAN2GP_LTX25_E_WORKSPACE: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout exact experiment commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Syntax-check full-generation benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            benchmarks/ltx25_convrot/e_fusions_abba.py \
+            benchmarks/ltx25_convrot/wgp_baseline.py \
+            benchmarks/ltx25_convrot/rot_direct_preflight.py
+
+      - name: Compile tested SM70 kernel extensions
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_cublas_e.cu \
+            -lcublas -o "$LTX25_CUBLAS_E_LIB"
+          test -s "$LTX25_CUBLAS_E_LIB"
+
+      - name: Verify V100 free and baked checkpoint available
+        shell: bash
+        run: |
+          set -euo pipefail
+          active="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader |
+            grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$active" ]]; then
+            echo "::warning::V100 is occupied; refusing full video run"
+            printf '%s\n' "$active"
+            exit 1
+          fi
+          test -f /opt/ltx25/model-image-manifest.json
+          test -x /opt/venvs/ltx25-cu128/bin/python
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/runtime_validate_baked.py
+
+      - name: Require direct rotation and fused epilogue numerical exactness
+        shell: bash
+        run: |
+          set -euo pipefail
+          WAN2GP_LTX25_ROT_INPUT=direct WAN2GP_LTX25_E_OUTPUT=fused \
+            /opt/venvs/ltx25-cu128/bin/python \
+              benchmarks/ltx25_convrot/rot_direct_preflight.py
+
+      - name: Matched baseline-fused-fused-baseline video and audio gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/e_fusions_abba.py \
+            2>&1 | tee e-fusions-abba.log
+
+      - name: Publish controlled A-B-B-A result
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, "benchmarks/ltx25_convrot")
+          from publish_phase0_status import put
+          path = Path("/cache/ltx25/results") / ("e_fusions_abba_" + os.environ["GITHUB_SHA"][:12] + ".json")
+          obj = json.loads(path.read_text()) if path.exists() else {
+              "status": "NOT_RUN", "reason": "GPU, model, compile, or preflight gate blocked"
+          }
+          obj["run_id"] = os.environ["GITHUB_RUN_ID"]
+          obj["source_sha"] = os.environ["GITHUB_SHA"]
+          obj["run_url"] = "https://github.com/mylordmonkeyman/WanGP/actions/runs/" + obj["run_id"]
+          put("ltx25-e-fusions-abba/latest.json", obj)
+          put("ltx25-e-fusions-abba/runs/" + obj["run_id"] + ".json", obj)
+          PY
+
+      - name: Upload raw log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-e-fusions-abba
+          path: e-fusions-abba.log
+          if-no-files-found: ignore

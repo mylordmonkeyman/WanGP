@@ -60,6 +60,7 @@ from shared.utils.loras_mutipliers import update_loras_slists
 from shared.utils.self_refiner import create_self_refiner_handler, normalize_self_refiner_plan
 from shared.utils.text_encoder_cache import TextEncoderCache
 from shared.kernels import ltx25_pipeline_profile as pipeline_profiler
+from shared.kernels import ltx25_selective_fp16_gemm as fp16_gemm_experiment
 
 device = get_device()
 _BENCH_TRANSFORMER_ENV = "WAN2GP_LTX2_BENCH_TRANSFORMER"
@@ -150,18 +151,18 @@ class _TransformerBenchWrapper:
         # Only the explicitly instrumented pipeline samples torch.profiler
         # operator activity; normal production calls remain unchanged.
         if not self._enabled:
-            return self._module(*args, **kwargs)
+            return fp16_gemm_experiment.call_transformer(self._module, *args, **kwargs)
         if torch.cuda.is_available():
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
             start.record()
-            out = pipeline_profiler.maybe_sample_forward(self._module, *args, **kwargs)
+            out = pipeline_profiler.maybe_sample_forward(fp16_gemm_experiment.call_transformer, self._module, *args, **kwargs)
             end.record()
             self._cuda_events.append((start, end))
             return out
 
         t0 = time.perf_counter()
-        out = pipeline_profiler.maybe_sample_forward(self._module, *args, **kwargs)
+        out = pipeline_profiler.maybe_sample_forward(fp16_gemm_experiment.call_transformer, self._module, *args, **kwargs)
         self._cpu_total_ms += (time.perf_counter() - t0) * 1000.0
         self._cpu_calls += 1
         return out
@@ -760,6 +761,7 @@ class DistilledPipeline:
         # Stage 1: Initial low resolution video generation.
         pipeline_profiler.boundary("stage1_conditioning")
         pipeline_profiler.set_transformer_phase("stage1")
+        fp16_gemm_experiment.set_phase("stage1")
         bench_transformer = _env_flag(_BENCH_TRANSFORMER_ENV, "0") or pipeline_profiler.ENABLED
         skip_stage_2 = bool(skip_stage_2)
         stage_1_pass_no = 0 if skip_stage_2 else 1
@@ -1149,6 +1151,7 @@ class DistilledPipeline:
             callback(-1, None, True, override_num_inference_steps=len(stage_2_sigmas) - 1, pass_no=pass_no)
         pipeline_profiler.boundary("stage2_denoising")
         pipeline_profiler.set_transformer_phase("stage2")
+        fp16_gemm_experiment.set_phase("stage2")
         freeze_audio_stage2 = audio_identity_guidance_scale > 0.0 or bool(joyai_echo.get("freeze_stage2_audio", False))
         stage_2_audio_conditionings = audio_conditionings if audio_conditionings_stage2 is None else audio_conditionings_stage2
         stage_2_audio_conditionings = list(stage_2_audio_conditionings or []) + stage_2_memory_audio_conditionings

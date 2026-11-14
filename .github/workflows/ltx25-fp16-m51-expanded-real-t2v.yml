@@ -14,6 +14,7 @@ jobs:
     runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
     timeout-minutes: 85
     env:
+      PYTHONPATH: .
       LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
       LTX25_FP16_SMOKE_ROOT: /cache/ltx25/results/fp16-m51-real-${{ github.run_id }}
       LTX25_SMOKE_BACKEND: direct

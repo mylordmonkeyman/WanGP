@@ -195,7 +195,7 @@ run_wangp() (
     export LTX25_FP16_GEMM_GROUPS="$selectors"
     export LTX25_FP16_GEMM_STATS_PATH="$RUN_ROOT/results/$variant-fp16-stats.json"
     export LTX25_FP16_GEMM_GUARD="${SWEEP_GUARD:-first}"
-    export LTX25_FP16_GEMM_OPS="${SWEEP_OPS:-mm,addmm}"
+    export LTX25_FP16_GEMM_OPS="${SWEEP_OPS:-mm,addmm,qbytes_mm}"
     export LTX25_FP16_GEMM_MIN_M="${SWEEP_MIN_M:-128}"
     export LTX25_FP16_GEMM_MIN_DIM="${SWEEP_MIN_DIM:-512}"
   fi

@@ -119,13 +119,7 @@ class _SelectiveMode(TorchDispatchMode):
             return func(*args, **kwargs)
         m, k = a.shape
         inner, n = b.shape
-        if k != inner or min(m, n, k) < min(MIN_M, MIN_DIM):
-            # M and K/N have independent cutoffs. Make the exact condition
-            # explicit below so that a small output is never selected.
-            if k != inner or m < MIN_M or n < MIN_DIM or k < MIN_DIM:
-                _REASONS["small_or_mismatch"] += 1
-                return func(*args, **kwargs)
-        if m < MIN_M or n < MIN_DIM or k < MIN_DIM:
+        if k != inner or m < MIN_M or n < MIN_DIM or k < MIN_DIM:
             _REASONS["small_or_mismatch"] += 1
             return func(*args, **kwargs)
         group = f"{self.phase}:{_shape_class(k, n)}"

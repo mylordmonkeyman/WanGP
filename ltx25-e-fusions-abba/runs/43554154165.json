@@ -1,0 +1,79 @@
+{
+  "all_settings_matched": true,
+  "baseline_median_seconds": 96.0,
+  "decoded_audio_pcm_bit_identical": true,
+  "fused_median_seconds": 91.25,
+  "persistent_weight_copies": 0,
+  "production_eligible": false,
+  "rows": [
+    {
+      "audio": {
+        "pcm_bytes": 393216,
+        "sha256": "d10d956b9a930935df462054ac7366db0ee0194f1906a184345ec6ecefff655f"
+      },
+      "candidate_calls": 16368,
+      "clip": "/cache/ltx25/videos/e_hadamard_1024/2026-11-14-03h58m55s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "decoded_frames": 49,
+      "fallback_rows": 4600,
+      "label": "baseline",
+      "output_mode": "torch",
+      "rotation_input": "staged",
+      "seconds": 99.3,
+      "workspace_leases": 16360
+    },
+    {
+      "audio": {
+        "pcm_bytes": 393216,
+        "sha256": "d10d956b9a930935df462054ac7366db0ee0194f1906a184345ec6ecefff655f"
+      },
+      "candidate_calls": 16368,
+      "clip": "/cache/ltx25/videos/e_hadamard_1024/2026-11-14-04h00m40s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "decoded_frames": 49,
+      "fallback_rows": 4600,
+      "label": "fused",
+      "output_mode": "fused",
+      "rotation_input": "direct",
+      "seconds": 91.1,
+      "workspace_leases": 16360
+    },
+    {
+      "audio": {
+        "pcm_bytes": 393216,
+        "sha256": "d10d956b9a930935df462054ac7366db0ee0194f1906a184345ec6ecefff655f"
+      },
+      "candidate_calls": 16368,
+      "clip": "/cache/ltx25/videos/e_hadamard_1024/2026-11-14-04h02m25s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "decoded_frames": 49,
+      "fallback_rows": 4600,
+      "label": "fused",
+      "output_mode": "fused",
+      "rotation_input": "direct",
+      "seconds": 91.4,
+      "workspace_leases": 16360
+    },
+    {
+      "audio": {
+        "pcm_bytes": 393216,
+        "sha256": "d10d956b9a930935df462054ac7366db0ee0194f1906a184345ec6ecefff655f"
+      },
+      "candidate_calls": 16368,
+      "clip": "/cache/ltx25/videos/e_hadamard_1024/2026-11-14-04h04m12s_seed20261112_A sunlit coastal boardwalk in the early morning. A small red sailboat slowly crosses the blue harbor.mp4",
+      "decoded_frames": 49,
+      "fallback_rows": 4600,
+      "label": "baseline",
+      "output_mode": "torch",
+      "rotation_input": "staged",
+      "seconds": 92.7,
+      "workspace_leases": 16360
+    }
+  ],
+  "run_id": "43554154165",
+  "run_url": "https://github.com/mylordmonkeyman/WanGP/actions/runs/43554154165",
+  "seconds_saved": 4.75,
+  "source_sha": "f700436ffe085504a897170233cbbf20c2a5bd19",
+  "status": "PASS",
+  "test": "V100 49-frame LTX-2.5 Candidate E radix4+vector8 fusion ABBA",
+  "utc": "2026-11-14T04:04:17.308270+00:00",
+  "video_frames_bit_identical": true,
+  "wall_reduction_percent": 4.948
+}

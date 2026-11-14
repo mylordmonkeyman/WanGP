@@ -33,7 +33,7 @@ jobs:
           "$LTX25_PYTHON" - <<'PY'
           import json,os,pathlib
           root=pathlib.Path(os.environ["LTX25_FP16_SMOKE_ROOT"])
-          p=root/"results/sham-a1-fp16-stats.json"
+          p=root/"results/fp16-b1-fp16-stats.json"
           d=json.loads(p.read_text())
           print("FP16_RESULT",json.dumps({k:d.get(k) for k in ("transformer_forward_calls","torch_dispatch_ops_seen","top_aten_dispatch_ops","skip_reasons","stats","by_shape")},sort_keys=True))
           PY

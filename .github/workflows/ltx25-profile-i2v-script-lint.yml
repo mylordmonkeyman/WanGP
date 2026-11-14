@@ -45,7 +45,7 @@ jobs:
               def synchronize(self):
                   pass
               def elapsed_time(self, previous):
-                  return self.stamp - previous.stamp
+                  return previous.stamp - self.stamp
           with tempfile.TemporaryDirectory() as tmp:
               root = Path(tmp)
               mod.ENABLED = True

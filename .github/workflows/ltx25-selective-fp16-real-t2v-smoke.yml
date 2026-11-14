@@ -1,0 +1,77 @@
+name: LTX-2.5 V100 real T2V selective FP16 GEMM smoke / quality / ABBA
+
+# Push only the explicit signal: source-only commits must NOT repeatedly run 12 videos.
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths:
+      - benchmarks/ltx25_convrot/fp16_real_smoke_dispatch.signal
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  real-video-smoke:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 85
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_FP16_SMOKE_ROOT: /cache/ltx25/results/selective-fp16-smoke-${{ github.run_id }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout exact experimental commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Check V100 and offline LTX-2.5 22B baked model
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$LTX25_PYTHON"
+          test -f /opt/ltx25/model-image-manifest.json
+          test -f /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test -f /opt/ltx25/checkpoints/gemma4-12b-ltx-v1/gemma4-12b-ltx-v1_int8_convrot.safetensors
+          nvidia-smi -L
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader |
+            grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then
+            echo "::warning::V100 occupied; refusing contested benchmark"
+            printf '%s\n' "$busy"
+            exit 1
+          fi
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0) == (7,0)'
+          "$LTX25_PYTHON" -m py_compile \
+            shared/kernels/ltx25_selective_fp16_gemm.py \
+            benchmarks/ltx25_convrot/selective_fp16_t2v_smoke.py
+          "$LTX25_PYTHON" benchmarks/ltx25_convrot/runtime_validate_baked.py
+
+      - name: Run short T2V numerical/quality variants and A-B-B-A speed control
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" benchmarks/ltx25_convrot/selective_fp16_t2v_smoke.py \
+            2>&1 | tee selective-fp16-t2v-smoke.log
+
+      - name: Upload individual 49-frame videos, logs and numerical/ABBA results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-v100-selective-fp16-t2v-videos-and-results
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            selective-fp16-t2v-smoke.log
+            /cache/ltx25/results/selective-fp16-smoke-${{ github.run_id }}/smoke-summary.json
+            /cache/ltx25/results/selective-fp16-smoke-${{ github.run_id }}/smoke-summary.txt
+            /cache/ltx25/results/selective-fp16-smoke-${{ github.run_id }}/smoke-results.csv
+            /cache/ltx25/results/selective-fp16-smoke-${{ github.run_id }}/input.json
+            /cache/ltx25/results/selective-fp16-smoke-${{ github.run_id }}/*.mp4
+            /cache/ltx25/results/selective-fp16-smoke-${{ github.run_id }}/results/*.json
+            /cache/ltx25/results/selective-fp16-smoke-${{ github.run_id }}/logs/*.log

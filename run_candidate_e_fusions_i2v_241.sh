@@ -134,7 +134,11 @@ PYSET
   echo "cuda_binary_sha256=$(sha256sum "$EXTENSION" | cut -d' ' -f1)"
   echo "frames=$FRAMES; resolution=$RESOLUTION; steps=$STEPS; seed=$SEED"
   echo "nag_scale=$NAG_SCALE; audio_cfg_scale=$AUDIO_CFG_SCALE"
-  if [[ "${PROFILE_PIPELINE_ONLY:-0}" == "1" ]]; then
+  if [[ "${FP16_GEMM_SWEEP_ONLY:-0}" == "1" ]]; then
+    echo "arms=BF16-reference(direct,fused) plus modular experimental FP16 GEMM selectors"
+    echo "sweep_cases=${SWEEP_CASES:-bf16-reference,fp16-s1-wide,fp16-s1-tall,fp16-s1-balanced,fp16-s1-all,fp16-s2-wide,fp16-s2-tall,fp16-s2-balanced,fp16-s2-all,fp16-both-all}"
+    echo "sweep_guard=${SWEEP_GUARD:-first}; sweep_ops=${SWEEP_OPS:-mm,addmm}"
+  elif [[ "${PROFILE_PIPELINE_ONLY:-0}" == "1" ]]; then
     echo "arms=pipeline(direct,fused,whole_pipeline_phases+two_operator_samples); ABBA=not_applicable"
   elif [[ "${PROFILE_ONLY:-0}" == "1" ]]; then
     echo "arms=profile(direct,fused,live_cuda_events); ABBA=not_applicable"
@@ -153,6 +157,8 @@ run_wangp() (
   unset WAN2GP_LTX25_ROT_INPUT WAN2GP_LTX25_E_OUTPUT WAN2GP_LTX25_E_WORKSPACE
   unset WAN2GP_LTX25_CUBLAS_E_MODE LTX25_E_WORKSPACE_MAX_MIB LTX25_CUBLAS_E_LIB
   unset WAN2GP_LTX25_PIPELINE_PROFILE WAN2GP_LTX2_BENCH_TRANSFORMER LTX25_PIPELINE_PROFILE_PATH
+  unset WAN2GP_LTX25_FP16_GEMM LTX25_FP16_GEMM_GROUPS LTX25_FP16_GEMM_STATS_PATH
+  unset LTX25_FP16_GEMM_GUARD LTX25_FP16_GEMM_OPS
   export WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot WAN2GP_LTX25_HADAMARD=radix4
   export WAN2GP_LTX25_E_CAST=vector8 WAN2GP_LTX25_GEMM_TUNE=off
   export WAN2GP_LTX25_E_WORKSPACE=1 LTX25_E_WORKSPACE_MAX_MIB=96
@@ -170,6 +176,28 @@ run_wangp() (
     # The profiler synchronizes CUDA events only at interpreter exit.
     export WAN2GP_LTX25_PROFILE_STAGES=1
     export LTX25_STAGE_PROFILE_PATH="$RUN_ROOT/results/stage_profile.json"
+  fi
+  if [[ "$variant" == fp16-* ]]; then
+    local selectors=""
+    case "$variant" in
+      fp16-s1-wide) selectors="stage1:wide" ;;
+      fp16-s1-tall) selectors="stage1:tall" ;;
+      fp16-s1-balanced) selectors="stage1:balanced" ;;
+      fp16-s1-all) selectors="stage1:wide,stage1:tall,stage1:balanced" ;;
+      fp16-s2-wide) selectors="stage2:wide" ;;
+      fp16-s2-tall) selectors="stage2:tall" ;;
+      fp16-s2-balanced) selectors="stage2:balanced" ;;
+      fp16-s2-all) selectors="stage2:wide,stage2:tall,stage2:balanced" ;;
+      fp16-both-all) selectors="stage1:wide,stage1:tall,stage1:balanced,stage2:wide,stage2:tall,stage2:balanced" ;;
+      *) echo "Unknown modular FP16 GEMM case: $variant" >&2; return 2 ;;
+    esac
+    export WAN2GP_LTX25_FP16_GEMM=1
+    export LTX25_FP16_GEMM_GROUPS="$selectors"
+    export LTX25_FP16_GEMM_STATS_PATH="$RUN_ROOT/results/$variant-fp16-stats.json"
+    export LTX25_FP16_GEMM_GUARD="${SWEEP_GUARD:-first}"
+    export LTX25_FP16_GEMM_OPS="${SWEEP_OPS:-mm,addmm}"
+    export LTX25_FP16_GEMM_MIN_M="${SWEEP_MIN_M:-128}"
+    export LTX25_FP16_GEMM_MIN_DIM="${SWEEP_MIN_DIM:-512}"
   fi
   if [[ "$variant" == pipeline ]]; then
     # Instrument only the actual generation, never the dry-run validation.
@@ -259,17 +287,65 @@ for line in content.splitlines():
 assert ws, "Missing workspace counters"
 w=ws[-1]
 assert w.get("persistent_weight_copies")==0 and w.get("acquired",0)>0,w
+fp16_stats_path=Path(log).parent/f"{variant}-fp16-stats.json"
+fp16_stats=None
+if variant.startswith("fp16-"):
+    assert fp16_stats_path.is_file(),f"Missing FP16 dispatch counters: {fp16_stats_path}"
+    fp16_stats=json.loads(fp16_stats_path.read_text())
+    assert fp16_stats.get("persistent_fp16_weight_copies")==0,fp16_stats
+    converted=sum(fp16_stats.get("stats",{}).get("converted_"+op,0) for op in ("mm","addmm"))
+    if converted<=0:
+        raise RuntimeError(f"Selected case {variant} did not actually convert any BF16 GEMMs; review selectors and shapes")
+else:
+    converted=0
 row={
   "variant":variant,"index":int(index),"seconds":float(Path(time_file).read_text()),
   "clip":clip,"settings_sha256":hashlib.sha256(Path(settings).read_bytes()).hexdigest(),
   "candidate_calls":c["used"],"fallback_rows":c.get("range_fallback"),
-  "workspace_leases":w["acquired"],"persistent_weight_copies":w["persistent_weight_copies"]
+  "workspace_leases":w["acquired"],"persistent_weight_copies":w["persistent_weight_copies"],
+  "selective_fp16_gemm_calls":converted,
+  "selective_fp16_guard_fallback":0 if fp16_stats is None else (
+    fp16_stats.get("stats",{}).get("guard_input_reference",0)+
+    fp16_stats.get("stats",{}).get("guard_output_reference",0)),
 }
 Path(out).write_text(json.dumps(row,indent=2)+"\n")
 print("VERIFIED",variant,"wall_seconds",row["seconds"],"optimized_calls",c["used"],
       "range_fallback_rows",row["fallback_rows"])
 PYRUN
 }
+
+if [[ "${FP16_GEMM_SWEEP_ONLY:-0}" == "1" ]]; then
+  echo "=== Selective BF16-to-FP16 GEMM per-case video sweep ==="
+  declare -a cases=()
+  IFS=',' read -ra cases <<< "${SWEEP_CASES:-bf16-reference,fp16-s1-wide,fp16-s1-tall,fp16-s1-balanced,fp16-s1-all,fp16-s2-wide,fp16-s2-tall,fp16-s2-balanced,fp16-s2-all,fp16-both-all}"
+  [[ "${#cases[@]}" -ge 2 && "${cases[0]}" == bf16-reference ]] || {
+    echo "SWEEP_CASES must start with bf16-reference and include >=1 FP16 case" >&2; exit 2;
+  }
+  declare -A seen_cases=()
+  failed=0
+  for case_name in "${cases[@]}"; do
+    if [[ ! "$case_name" =~ ^(bf16-reference|fp16-s[12]-(wide|tall|balanced|all)|fp16-both-all)$ ]] || [[ -v "seen_cases[$case_name]" ]]; then
+      echo "Invalid or duplicate SWEEP_CASES entry: $case_name" >&2; exit 2
+    fi
+    seen_cases["$case_name"]=1
+  done
+  for case_name in "${cases[@]}"; do
+    if run_one "$case_name" 1; then
+      echo "=== CASE COMPLETE: $case_name ==="
+    else
+      echo "=== CASE FAILED: $case_name (continuing other variants) ===" >&2
+      printf '%s\n' "$case_name" >> "$RUN_ROOT/results/failed-cases.txt"
+      failed=$((failed + 1))
+    fi
+  done
+  "$PY" benchmarks/ltx25_convrot/summarize_selective_fp16_sweep.py "$RUN_ROOT" "${SWEEP_CASES:-bf16-reference,fp16-s1-wide,fp16-s1-tall,fp16-s1-balanced,fp16-s1-all,fp16-s2-wide,fp16-s2-tall,fp16-s2-balanced,fp16-s2-all,fp16-both-all}" \
+    | tee "$RUN_ROOT/sweep-summary.txt"
+  echo "=== Selective FP16 GEMM sweep finished (failed cases: $failed). Results: $RUN_ROOT ==="
+  echo "Review videos: $RUN_ROOT/review-index.html"
+  echo "Benchmark CSV: $RUN_ROOT/results/sweep-benchmark.csv"
+  if (( failed > 0 )); then exit 1; fi
+  exit 0
+fi
 
 if [[ "${PROFILE_PIPELINE_ONLY:-0}" == "1" ]]; then
   echo "=== ONE whole-pipeline instrumented Candidate E I2V run ==="

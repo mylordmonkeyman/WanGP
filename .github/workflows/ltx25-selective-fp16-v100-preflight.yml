@@ -1,0 +1,55 @@
+name: LTX-2.5 V100 selective FP16 GEMM synthetic preflight
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths:
+      - .github/workflows/ltx25-selective-fp16-v100-preflight.yml
+      - benchmarks/ltx25_convrot/fp16_dispatch_preflight.py
+      - shared/kernels/ltx25_selective_fp16_gemm.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-selective-fp16-v100-preflight
+  cancel-in-progress: false
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 12
+    env:
+      PYTHONPATH: .
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Check GPU is not occupied by another process
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvidia-smi -L
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader |
+            grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then
+            echo "::warning::V100 occupied; skipping GPU test"
+            printf '%s\n' "$busy"
+            exit 1
+          fi
+          test -x /opt/venvs/ltx25-cu128/bin/python
+      - name: Test selectors and finite guards on actual V100
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python \
+            benchmarks/ltx25_convrot/fp16_dispatch_preflight.py \
+            2>&1 | tee selective-fp16-v100-preflight.log
+          grep -Fq 'LTX25_FP16_DISPATCH_PREFLIGHT_OK ' selective-fp16-v100-preflight.log
+      - name: Save diagnostic logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-selective-fp16-v100-preflight
+          path: selective-fp16-v100-preflight.log
+          if-no-files-found: ignore

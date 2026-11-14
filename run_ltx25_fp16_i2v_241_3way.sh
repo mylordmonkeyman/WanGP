@@ -268,7 +268,7 @@ run_one() {
     "$SETTINGS" "$log" <<'PYRUN'
 import hashlib,json,sys
 from pathlib import Path
-stats_file,seconds_file,out,case,idx,clip,settings,log=map(Path,sys.argv[1:4]) if False else sys.argv[1:]
+stats_file,seconds_file,out,case,idx,clip,settings,log=sys.argv[1:]
 stats=json.loads(Path(stats_file).read_text())
 assert stats.get("backend")=="direct",stats
 assert stats.get("persistent_fp16_weight_copies")==0,stats

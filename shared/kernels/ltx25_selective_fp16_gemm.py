@@ -39,6 +39,8 @@ ENABLED = os.environ.get("WAN2GP_LTX25_FP16_GEMM", "0") == "1"
 GROUPS = frozenset(x.strip() for x in os.environ.get("LTX25_FP16_GEMM_GROUPS", "").split(",") if x.strip())
 OPS = frozenset(x.strip() for x in os.environ.get("LTX25_FP16_GEMM_OPS", "mm,addmm").split(",") if x.strip())
 GUARD = os.environ.get("LTX25_FP16_GEMM_GUARD", "first").strip()
+SHAM = os.environ.get("LTX25_FP16_GEMM_SHAM", "0") == "1"
+AUDIT_PER_SHAPE = int(os.environ.get("LTX25_FP16_GEMM_AUDIT_PER_SHAPE", "0"))
 MIN_M = int(os.environ.get("LTX25_FP16_GEMM_MIN_M", "128"))
 MIN_DIM = int(os.environ.get("LTX25_FP16_GEMM_MIN_DIM", "512"))
 PATH = Path(os.environ.get("LTX25_FP16_GEMM_STATS_PATH", "/tmp/ltx25-fp16-gemm-stats.json"))
@@ -63,6 +65,8 @@ _BLOCKED: set[str] = set()
 _CHECKED: set[str] = set()
 _REASONS = Counter()
 _MAX_OPS = 0
+_AUDIT_COUNTS = Counter()
+_AUDIT_ROWS = []
 
 
 def _shape_class(k: int, n: int) -> str:
@@ -133,6 +137,10 @@ class _SelectiveMode(TorchDispatchMode):
         key = f"{self.phase}:{op}:M={m},N={n},K={k}"
         _COUNTS["eligible"] += 1
         _BY_SHAPE[key]["eligible"] += 1
+        if SHAM:
+            _COUNTS["sham_native"] += 1
+            _BY_SHAPE[key]["sham_native"] += 1
+            return func(*args, **kwargs)
         if key in _BLOCKED:
             _COUNTS["blocked_reference"] += 1
             _BY_SHAPE[key]["blocked_reference"] += 1
@@ -168,6 +176,26 @@ class _SelectiveMode(TorchDispatchMode):
             result = result32.to(torch.bfloat16)
         else:
             result = result16.to(torch.bfloat16)
+        if AUDIT_PER_SHAPE and _AUDIT_COUNTS[key] < AUDIT_PER_SHAPE:
+            _AUDIT_COUNTS[key] += 1
+            # This reference GEMM uses the exact same real-model operands.
+            # Never count these audit-on runs as fair performance benchmarks.
+            native = func(*args, **kwargs)
+            ref32 = native.float()
+            delta = result.float() - ref32
+            n_elem = ref32.numel()
+            abs_err = delta.abs()
+            rms = torch.sqrt(torch.mean(delta.square()))
+            norm = torch.sqrt(torch.mean(ref32.square()))
+            _AUDIT_ROWS.append({
+                "shape": key, "group": group, "elements": n_elem,
+                "max_abs": float(abs_err.max().item()),
+                "rms_abs": float(rms.item()),
+                "normalized_rms": float((rms / norm.clamp_min(1e-12)).item()),
+                "reference_rms": float(norm.item()),
+                "reference_nonfinite": int((~torch.isfinite(ref32)).sum().item()),
+                "fp16_nonfinite": int((~torch.isfinite(result)).sum().item()),
+            })
         _COUNTS["converted_" + op] += 1
         _BY_SHAPE[key]["converted"] += 1
         _MAX_OPS += 1
@@ -199,7 +227,9 @@ def _report():
         return
     data = {
         "kind": "Research-only selective BF16-to-FP16 GEMM (V100)",
-        "enabled": ENABLED, "groups": sorted(GROUPS),
+        "enabled": ENABLED, "groups": sorted(GROUPS), "sham": SHAM,
+        "audit_per_shape": AUDIT_PER_SHAPE, "numerical_samples": _AUDIT_ROWS,
+        "numerical_sample_count": len(_AUDIT_ROWS),
         "ops": sorted(OPS), "guard": GUARD,
         "min_m": MIN_M, "min_dimension": MIN_DIM,
         "stats": dict(_COUNTS), "skip_reasons": dict(_REASONS),
@@ -208,6 +238,7 @@ def _report():
         "persistent_fp16_weight_copies": 0,
         "output_dtype": "torch.bfloat16",
         "quality_equivalent": False,
+        "valid_for_performance": AUDIT_PER_SHAPE == 0 and GUARD != "always",
         "production_eligible": False,
         "warning": "FP16 GEMMs can produce different or degraded video/audio. Default first-per-shape finite checks do not guard later spikes.",
     }

@@ -1,1 +1,3 @@
 Run full 15-case real 49-frame V100 expanded M51 Quanto FP16 direct backend smoke and BF16 native/sham ABBA wall-to-wall comparison. 2026-11-14.
+
+Rerun after correcting PYTHONPATH for direct Quanto preflight. 2026-11-14 15:06Z.

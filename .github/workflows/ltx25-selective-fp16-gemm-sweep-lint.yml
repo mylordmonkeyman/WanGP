@@ -48,6 +48,8 @@ jobs:
                   self.ndim=len(shape)
               def to(self, dtype=None):
                   return T(self.shape, dtype, self.device.type)
+              def float(self):
+                  return self.to(dtype="float32")
           class Param(T): pass
           fake.Tensor=T
           fake.bfloat16="bfloat16"; fake.float16="float16"

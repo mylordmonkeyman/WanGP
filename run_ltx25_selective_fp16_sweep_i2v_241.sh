@@ -44,7 +44,7 @@ Optional:
 
 Outputs: sweep-summary.txt, results/sweep-benchmark.csv,
          review-index.html, each variant's named MP4 and generation log,
-         results/fp16-<variant>-fp16-stats.json.
+         results/<variant>-fp16-stats.json.
 The generated HTML page is portable with the whole output folder.
 FP16 results are NOT assumed identical or visually acceptable.
 No persistent FP16 master weights are created.

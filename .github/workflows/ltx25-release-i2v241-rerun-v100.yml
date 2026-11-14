@@ -4,6 +4,7 @@ on:
     branches: [perf/ltx25-release-walltime-ab-20261114]
     paths:
       - .github/workflows/ltx25-release-i2v241-rerun-v100.yml
+      - benchmarks/ltx25_convrot/release_walltime_ab.py
   workflow_dispatch:
 permissions:
   contents: read

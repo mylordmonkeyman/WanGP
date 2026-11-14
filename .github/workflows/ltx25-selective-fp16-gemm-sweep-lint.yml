@@ -6,6 +6,7 @@ on:
       - shared/kernels/ltx25_selective_fp16_gemm.py
       - models/ltx2/ltx_pipelines/distilled.py
       - benchmarks/ltx25_convrot/summarize_selective_fp16_sweep.py
+      - benchmarks/ltx25_convrot/fp16_dispatch_preflight.py
       - run_ltx25_selective_fp16_sweep_i2v_241.sh
       - run_candidate_e_fusions_i2v_241.sh
       - .github/workflows/ltx25-selective-fp16-gemm-sweep-lint.yml
@@ -29,7 +30,8 @@ jobs:
           python3 -m py_compile \
             shared/kernels/ltx25_selective_fp16_gemm.py \
             models/ltx2/ltx_pipelines/distilled.py \
-            benchmarks/ltx25_convrot/summarize_selective_fp16_sweep.py
+            benchmarks/ltx25_convrot/summarize_selective_fp16_sweep.py \
+            benchmarks/ltx25_convrot/fp16_dispatch_preflight.py
           git diff --exit-code
       - name: Mock per-phase GEMM dispatch, unselected references and video gallery
         run: |

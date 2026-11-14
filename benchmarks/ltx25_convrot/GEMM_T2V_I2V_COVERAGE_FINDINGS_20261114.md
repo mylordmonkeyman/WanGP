@@ -69,3 +69,34 @@ A 10-shape synthetic V100 microbenchmark with transient FP16 casts and BF16 outp
 3. Remaining dense GEMMs exist, but their transient-FP16 benefit is modest in the synthetic test and may be negative once integrated into full video generation.
 4. High-value potential work: **evaluate** the excluded `M>8192` Stage2 video shapes through *bounded streaming tiling* in the existing Candidate E path instead of applying FP16 casting to every tiny non-Quanto `mm`. This is only a hypothesis; enforce the pre-existing numerical gates, bounded transient workspace, and no persistent duplicated model weights. Do not change defaults without repeated wall-to-wall A/B and quality (including face and audio) checks.
 5. Sampled kernel time is *not* directly subtractable from wall time. Synchronization, host launch, PCIe transfers, stream overlap and CPU+GPU critical-path effects need a live-video comparison.
+
+
+## Follow-up: real 241-frame I2V sampled CUDA profile
+
+Run [43625023936](https://github.com/mylordmonkeyman/WanGP/actions/runs/43625023936) completed successfully. One warmed forward per stage was correlated to actual CUDA kernel events using the same 1024x576, 241-frame bar I2V and native Quanto BF16 sham.
+
+| Measured GPU duration within a sampled forward | Stage 1 | Stage 2 |
+| --- | ---: | ---: |
+| All actual CUDA kernels (summed duration) | 7559ms | 42733ms |
+| Native tagged Quanto `aten::mm` GEMMs | 354ms (48 calls) | **23291ms (480 calls)** |
+| Other untagged `aten::mm` GEMMs | 24ms (48 calls) | 1769ms (480 calls) |
+| Other `aten::addmm` GEMMs | 160ms (316 calls) | 229ms (316 calls) |
+| Other GEMM-named kernels, largely existing Candidate E (FP16) | 2318ms | 2919ms |
+| Attention kernels | 690ms | 8890ms |
+
+Stage 2 native Quanto specifically dominates the long-frame execution; previously observed 241-frame Stage2 FP16 wall-time improvement is consistent with this GPU bottleneck. Other Stage2 dense `mm` and attention times also grow considerably with frame count, but they are NOT the same as a skipped Quanto GEMM. Summed GPU durations are not complete wall times.
+
+## Follow-up: high-M Stage 2 row tiling pilot
+
+Run [43626067703](https://github.com/mylordmonkeyman/WanGP/actions/runs/43626067703), research-only synthetic V100 weights/activations at measured full-resolution `M=17856` shapes. Candidate E's existing *unchanged* kernel was invoked on bounded 4096- and 8192-row chunks. Native BF16 Quanto and current transient FP16 were measured for the exact same synthetic inputs.
+
+| M x N x K | Native BF16 Quanto | Current transient FP16 | Candidate E tile=4096 | Candidate E tile=8192 |
+| --- | ---: | ---: | ---: | ---: |
+| 17856 x 4096 x 4096 | 62.15ms | 12.00ms | 10.80ms | **10.00ms** |
+| 17856 x 2048 x 4096 | 32.97ms | 8.37ms | 6.88ms | **6.28ms** |
+
+Both Candidate E tile sizes produced finite BF16 outputs. **But** normalized RMS relative to native BF16 was ~0.00406 for Candidate E, compared to ~0.00145 for direct transient FP16 on these synthetic inputs (approximately 2.8x the relative error).
+
+In the actual 241-frame I2V video, Stage2 had 864 native Quanto calls with N=4096,K=4096 and 432 with N=2048,K=4096. If synthetic kernel timings extrapolate unchanged, tile8192 would save only **~2.6 GPU seconds across the whole video over current direct FP16**, while introducing additional arithmetic deviation. This is NOT a wall-time speed measurement and says nothing conclusive about facial/audio fidelity.
+
+**Recommendation:** keep the current Stage2-only direct FP16 as the quality-favored experimental candidate. Do **not** enable Candidate E high-M tiling by default; implement a model-backed full-video A/B numerical/quality gate only if another ~2–3 GPU seconds of possible savings justifies the additional complexity and precision risk.

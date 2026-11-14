@@ -1,0 +1,104 @@
+name: LTX-2.5 241-frame whole-pipeline profiler static and mock report
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths:
+      - shared/kernels/ltx25_pipeline_profile.py
+      - models/ltx2/ltx_pipelines/distilled.py
+      - benchmarks/ltx25_convrot/summarize_pipeline_profile.py
+      - run_candidate_e_fusions_i2v_241.sh
+      - run_ltx25_full_pipeline_profile_i2v_241.sh
+      - .github/workflows/ltx25-whole-pipeline-profile-lint.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Syntax and usage
+        run: |
+          set -euo pipefail
+          bash -n run_ltx25_full_pipeline_profile_i2v_241.sh
+          bash -n run_candidate_e_fusions_i2v_241.sh
+          bash run_ltx25_full_pipeline_profile_i2v_241.sh --help
+          python3 -m py_compile \
+            shared/kernels/ltx25_pipeline_profile.py \
+            models/ltx2/ltx_pipelines/distilled.py \
+            benchmarks/ltx25_convrot/summarize_pipeline_profile.py
+          git diff --exit-code
+      - name: Mock pipeline phases and PyTorch operator samples
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util, json, os, subprocess, sys, tempfile, types
+          from pathlib import Path
+          os.environ.pop('WAN2GP_LTX25_PIPELINE_PROFILE', None)
+          fake_torch = types.ModuleType("torch")
+          fake_torch.cuda = types.SimpleNamespace(is_available=lambda: False)
+          sys.modules['torch'] = fake_torch
+          spec = importlib.util.spec_from_file_location(
+              'ltx25_pipeline_under_test', 'shared/kernels/ltx25_pipeline_profile.py')
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          mod.ENABLED = True
+          class FakeRow:
+              def __init__(self, key, device_us):
+                  self.key = key
+                  self.self_device_time_total = device_us
+                  self.self_cpu_time_total = 500
+                  self.count = 4
+          class FakeProfiler:
+              def __init__(self, **kwargs):
+                  self.active = False
+              def start(self):
+                  self.active = True
+              def stop(self):
+                  self.active = False
+              def key_averages(self):
+                  assert not self.active
+                  return [FakeRow("aten::scaled_dot_product_attention", 6000),
+                          FakeRow("aten::copy_", 2000),
+                          FakeRow("aten::mm", 15000)]
+          pmod = types.ModuleType("torch.profiler")
+          pmod.ProfilerActivity = types.SimpleNamespace(CPU="cpu", CUDA="cuda")
+          pmod.profile = FakeProfiler
+          sys.modules['torch.profiler'] = pmod
+          with tempfile.TemporaryDirectory() as temp:
+              root = Path(temp)
+              mod.PATH = root / "pipeline_profile.json"
+              for stage in ("stage1", "stage2"):
+                  mod.set_transformer_phase(stage)
+                  assert mod.maybe_sample_forward(lambda: 7)==7
+                  assert mod.maybe_sample_forward(lambda: 8)==8
+                  mod.record_transformer(stage, 350, 2)
+              phases = ("text_encoding", "stage1_conditioning", "stage1_denoising",
+                        "stage1_postprocessing", "spatial_upsampling",
+                        "stage2_conditioning", "stage2_denoising",
+                        "stage2_postprocessing", "video_vae_decoding",
+                        "audio_vae_decoding")
+              for name in (*phases, "finished"):
+                  mod.boundary(name)
+              mod._summary()
+              report = json.loads(mod.PATH.read_text())
+              assert report["status"] == "PASS", report
+              assert len(report["phases"]) == 10
+              assert len(report["sampled_operator_forwards"]) == 2
+              assert all(x["attention_self_device_ms"] == 6
+                         for x in report["sampled_operator_forwards"])
+              seconds = root / "seconds.txt"
+              seconds.write_text("57.000\n")
+              subprocess.run([
+                  sys.executable,
+                  'benchmarks/ltx25_convrot/summarize_pipeline_profile.py',
+                  str(mod.PATH), str(root), str(seconds),
+              ], check=True)
+              assert (root / "pipeline-summary.txt").is_file()
+              assert (root / "pipeline-phases.csv").is_file()
+              assert (root / "pipeline-operator-samples.csv").is_file()
+              print("PASS mocked pipeline boundaries, operator sampling, and reports")
+          PY

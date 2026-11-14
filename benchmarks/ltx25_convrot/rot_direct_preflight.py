@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""SM70 opt-in fused BF16/FP16->FP32 radix4 gate against existing staged radix4.
+"""SM70 direct radix4 and fused-output epilogue gates against Candidate E.
 
 Requires GPU V100 and the existing SM70 shared extension. Exact FP32 rotated
-values and exact BF16/FP16 full Candidate E output must match. Synthetic only:
+values and exact BF16/FP16 full Candidate E output must match in all four combinations. Synthetic only:
 a separate full-model visual/audio gate is required before default promotion.
 """
 from __future__ import annotations
@@ -64,20 +64,27 @@ def check_adapters():
             x = (torch.randn((m, k), device="cuda") * 0.4).to(dtype)
             x[0].zero_()
             x[1].fill_(0.001953125)
-            e.ROT_INPUT = "staged"
-            a = e.maybe_linear(x, weight, bias, 256)
-            assert a is not None
-            e.ROT_INPUT = "direct"
-            with patch.object(torch.Tensor, "item", side_effect=AssertionError("host item in Candidate E")), \
-                 patch.object(torch.cuda, "synchronize", side_effect=AssertionError("host sync in Candidate E")):
-                b = e.maybe_linear(x, weight, bias, 256)
-            assert b is not None
+            variants = {}
+            for rotation, output in (("staged", "torch"),
+                                     ("direct", "torch"),
+                                     ("staged", "fused"),
+                                     ("direct", "fused")):
+                e.ROT_INPUT = rotation
+                e.OUTPUT_MODE = output
+                with patch.object(torch.Tensor, "item", side_effect=AssertionError("host item in Candidate E")), \
+                     patch.object(torch.cuda, "synchronize", side_effect=AssertionError("host sync in Candidate E")):
+                    result = e.maybe_linear(x, weight, bias, 256)
+                assert result is not None
+                variants[(rotation, output)] = result
             torch.cuda.synchronize()
-            assert torch.equal(a, b), {
-                "dtype": str(dtype), "N": n, "K": k, "M": m,
-                "max_abs_error": float((a.float() - b.float()).abs().max().item())}
-            results.append({"dtype": str(dtype), "N": n, "K": k, "M": m, "exact": True})
-            del a, b, q, scale, bias, weight, x
+            a = variants[("staged", "torch")]
+            for key, b in variants.items():
+                assert torch.equal(a, b), {
+                    "variant": key, "dtype": str(dtype), "N": n, "K": k, "M": m,
+                    "max_abs_error": float((a.float() - b.float()).abs().max().item())}
+            results.append({"dtype": str(dtype), "N": n, "K": k, "M": m,
+                            "exact": True, "variants": 4})
+            del variants, a, b, q, scale, bias, weight, x
     return results
 
 
@@ -129,6 +136,7 @@ def main():
     print("LTX25_ROT_DIRECT_PREFLIGHT_OK " + json.dumps({
         "rotation": exact_rotation, "adapter": exact_adapter, "microbench": timing,
         "bit_exact": True, "persistent_weight_copies": 0,
+        "tested_output_mode": "torch_and_fused",
         "note": "Synthetic preflight; no full-video or speech quality assertion"}, sort_keys=True), flush=True)
 
 

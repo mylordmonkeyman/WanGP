@@ -5,6 +5,9 @@ on:
     branches: [perf/ltx25-convrot-sm70]
     paths:
       - benchmarks/ltx25_convrot/rot_direct_dispatch.signal
+      - shared/kernels/ltx25_cublas_sm70.py
+      - benchmarks/ltx25_convrot/ltx25_cublas_e.cu
+      - .github/workflows/ltx25-rot-direct-v100.yml
   workflow_dispatch:
 
 permissions:
@@ -57,6 +60,21 @@ jobs:
             exit 1
           fi
           test -x /opt/venvs/ltx25-cu128/bin/python
+
+      - name: Assert promoted defaults with environment overrides absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          env -u WAN2GP_LTX25_ROT_INPUT -u WAN2GP_LTX25_E_OUTPUT \
+            /opt/venvs/ltx25-cu128/bin/python - <<'PY'
+          from shared.kernels import ltx25_cublas_sm70 as candidate
+          assert candidate.ROT_INPUT == 'direct', candidate.ROT_INPUT
+          assert candidate.OUTPUT_MODE == 'fused', candidate.OUTPUT_MODE
+          assert candidate.ROT_MODE == 'radix4', candidate.ROT_MODE
+          assert candidate.CAST_MODE == 'vector8', candidate.CAST_MODE
+          assert candidate.GEMM_TUNE == 'off', candidate.GEMM_TUNE
+          print('PASS Candidate E promoted defaults (no explicit input/output flags)')
+          PY
 
       - name: Test both input and output bit-exactness and performance on V100
         shell: bash

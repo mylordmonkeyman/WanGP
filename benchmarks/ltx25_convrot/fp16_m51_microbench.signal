@@ -1,0 +1,1 @@
+Run V100 full-cost Quanto FP16 GEMM microbenchmark on 49-frame real shape census (including M=51) and compare native BF16. 2026-11-14.

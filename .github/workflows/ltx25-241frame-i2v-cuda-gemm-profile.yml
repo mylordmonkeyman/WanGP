@@ -1,0 +1,55 @@
+name: LTX-2.5 V100 241-frame I2V true CUDA GEMM disappearance investigation
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths: [benchmarks/ltx25_convrot/long_i2v_gemm_profile.signal]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  profile:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 70
+    env:
+      PYTHONPATH: .
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_LONG_GEMM_PROFILE_ROOT: /cache/ltx25/results/241-i2v-real-cuda-${{ github.run_id }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - name: Check source, quant checkpoint, input and V100 availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python -m py_compile \
+            benchmarks/ltx25_convrot/profile_long_i2v_gpu_gemm.py \
+            shared/kernels/ltx25_cuda_trace_attribution.py
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test -s benchmarks/ltx25_convrot/inputs/profile_i2v_1024x576.png.png
+          /opt/venvs/ltx25-cu128/bin/python benchmarks/ltx25_convrot/verify_cuda_attribution.py
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::error::V100 in use: $busy"; exit 1; fi
+      - name: Generate 241 frames and capture actual GPU kernel correlation in both stages
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python -u benchmarks/ltx25_convrot/profile_long_i2v_gpu_gemm.py \
+            2>&1 | tee i2v-241-gemm-profile.log
+          grep -Fq 'LTX25_LONG_I2V_CUDA_GEMM_PROFILE_PASS ' i2v-241-gemm-profile.log
+      - name: Publish true stage CPU op shapes and GPU kernel metrics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-241frame-i2v-real-cuda-gemm-attribution
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            i2v-241-gemm-profile.log
+            /cache/ltx25/results/241-i2v-real-cuda-${{ github.run_id }}/long-vs-short-gemm-profile.json
+            /cache/ltx25/results/241-i2v-real-cuda-${{ github.run_id }}/results/*.json
+            /cache/ltx25/results/241-i2v-real-cuda-${{ github.run_id }}/logs/*.log

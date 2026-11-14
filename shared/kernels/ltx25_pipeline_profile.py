@@ -11,7 +11,7 @@ Operator self-CUDA times are sample attribution, not full-run totals.
 from __future__ import annotations
 
 import atexit
-from collections import defaultdict
+from collections import Counter, defaultdict
 import datetime as dt
 import json
 import os
@@ -22,6 +22,7 @@ import torch
 
 ENABLED = os.environ.get("WAN2GP_LTX25_PIPELINE_PROFILE", "") == "1"
 OP_SAMPLE = os.environ.get("LTX25_PIPELINE_OP_SAMPLE", "1") == "1"
+GEMM_CENSUS = os.environ.get("LTX25_PIPELINE_GEMM_CENSUS", "0") == "1"
 PATH = Path(os.environ.get("LTX25_PIPELINE_PROFILE_PATH", "/tmp/ltx25-pipeline-profile.json"))
 _PHASE = None
 _PHASE_START = None
@@ -30,6 +31,7 @@ _PHASE_ERRORS = []
 _FORWARD_PHASE = "stage1"
 _FORWARD_CALLS = defaultdict(int)
 _FORWARD_SAMPLES = []
+_GEMM_CENSUS_SAMPLES = []
 _TRANSFORMER = {}
 _PEAK_ALLOCATED = 0
 _PEAK_RESERVED = 0
@@ -77,6 +79,153 @@ def record_transformer(phase: str, ms: float, calls: int) -> None:
                                "forward_calls": int(calls)}
 
 
+
+def _capture_gemm_census(context, phase: str, forward_index: int) -> None:
+    """Classify sampled CUDA launches and CPU GEMMs without double-counting.
+
+    Native Quanto calls are tagged with LTX25::quanto_qbytes_mm on the CPU.
+    Their inner aten::mm kernels are NOT separate missing-GEMM candidates.
+    All times are per one sampled transformer forward, NOT full generation.
+    """
+    from torch.autograd import DeviceType
+    from collections import defaultdict
+
+    def family(name: str) -> str:
+        n = name.lower()
+        if any(x in n for x in ("attention", "flash", "fmha", "sdpa")):
+            return "attention"
+        if any(x in n for x in ("gemm", "gemv", "matmul", "cublas",
+                                 "cutlass", "sgemm", "hgemm", "bgemm",
+                                 "igemm", "wmma", "mma_", "mmq", "mmv")):
+            return "gemm_or_gemv"
+        if "ltx25" in n:
+            return "custom_ltx25_other"
+        if any(x in n for x in ("copy", "memcpy", "memset")):
+            return "memory"
+        return "other_unknown"
+
+    def has_quanto_ancestor(event) -> bool:
+        cursor = event
+        for _ in range(32):
+            if cursor is None:
+                break
+            if "LTX25::quanto_qbytes_mm" in str(getattr(cursor, "name", "")):
+                return True
+            cursor = getattr(cursor, "cpu_parent", None)
+        return False
+
+    kernel_counts = Counter()
+    kernel_time_us = defaultdict(float)
+    kernel_family = Counter()
+    family_time_us = defaultdict(float)
+    kernel_quanto_us = defaultdict(float)
+    kernel_other_us = defaultdict(float)
+    kernel_unattributed_us = defaultdict(float)
+    cpu_matrix = Counter()
+    cpu_non_quanto_matrix = Counter()
+    cpu_quanto_matrix = Counter()
+    cpu_matrix_shape = Counter()
+    non_quanto_shapes = Counter()
+    other_op = Counter()
+    cuda_kernel_events = 0
+    cuda_gpu_us = 0.0
+    cpu_events = 0
+    for ev in context.events():
+        name = str(getattr(ev, "name", getattr(ev, "key", "")))
+        device = getattr(ev, "device_type", None)
+        if device == DeviceType.CUDA or str(device).endswith(".CUDA"):
+            # CUDA kernels have a real GPU duration; the CPU event's
+            # cuda_time_total attributes are *attribution*, not GPU launches.
+            us = float(getattr(ev, "device_time_total", 0) or
+                       getattr(ev, "self_device_time_total", 0) or 0)
+            cuda_kernel_events += 1
+            cuda_gpu_us += us
+            kernel_counts[name] += 1
+            kernel_time_us[name] += us
+            category = family(name)
+            kernel_family[category] += 1
+            family_time_us[category] += us
+            parent = getattr(ev, "cpu_parent", None)
+            if parent is None:
+                kernel_unattributed_us[name] += us
+            elif has_quanto_ancestor(parent):
+                kernel_quanto_us[name] += us
+            else:
+                kernel_other_us[name] += us
+        elif device == DeviceType.CPU or str(device).endswith(".CPU"):
+            cpu_events += 1
+            canonical = name.lower().replace("::", "_")
+            # Include all dense and batched matmuls. Nested ops are counted
+            # as operator *invocations*, not as independent physical kernels.
+            if canonical in ("aten_mm", "aten_addmm", "aten_bmm",
+                             "aten_baddbmm", "aten_matmul", "aten_linear",
+                             "aten_einsum", "quanto_qbytes_mm"):
+                cpu_matrix[name] += 1
+                tagged = has_quanto_ancestor(ev)
+                if tagged:
+                    cpu_quanto_matrix[name] += 1
+                else:
+                    cpu_non_quanto_matrix[name] += 1
+                shapes = getattr(ev, "input_shapes", []) or []
+                desc = str(shapes)[:350]
+                key = (name, desc)
+                cpu_matrix_shape[key] += 1
+                if not tagged:
+                    non_quanto_shapes[key] += 1
+            else:
+                other_op[name] += 1
+
+    # Do not mistake stacked high-level ops (e.g. linear -> mm) as distinct GEMMs.
+    # CUDA kernel aggregation is the best approximation to actual GPU work.
+    def top_shapes(data, limit=120):
+        return [{"op": name, "input_shapes": shape, "count": n}
+                for (name, shape), n in data.most_common(limit)]
+    all_kernels = sorted(kernel_time_us, key=kernel_time_us.get, reverse=True)
+    kernel_rows = [{
+        "kernel": name, "family": family(name), "calls": int(kernel_counts[name]),
+        "gpu_ms": round(kernel_time_us[name] / 1000, 6),
+        "in_tagged_quanto_gpu_ms": round(kernel_quanto_us[name] / 1000, 6),
+        "outside_tagged_quanto_gpu_ms": round(kernel_other_us[name] / 1000, 6),
+        "unattributed_gpu_ms": round(kernel_unattributed_us[name] / 1000, 6),
+    } for name in all_kernels[:250]]
+    report = {
+        "phase": phase, "forward_index": forward_index,
+        "cuda_kernel_event_count": cuda_kernel_events,
+        "cuda_kernel_gpu_ms_sum": round(cuda_gpu_us / 1000, 6),
+        "cpu_events": cpu_events,
+        "cuda_kernel_family": [
+            {"family": fam, "calls": int(n),
+             "gpu_ms": round(family_time_us[fam] / 1000, 6)}
+            for fam, n in kernel_family.most_common()
+        ],
+        "top_cuda_kernels": kernel_rows,
+        "cpu_matmul_operator_invocations": dict(cpu_matrix),
+        "cpu_matmul_in_tagged_quanto": dict(cpu_quanto_matrix),
+        "cpu_matmul_outside_tagged_quanto": dict(cpu_non_quanto_matrix),
+        "top_cpu_matmul_shapes_all": top_shapes(cpu_matrix_shape),
+        "top_cpu_matmul_shapes_outside_quanto": top_shapes(non_quanto_shapes),
+        "top_other_cpu_ops": [{"operator": key, "calls": n}
+                              for key, n in other_op.most_common(35)],
+        "limitations": [
+            "Only the second transformer forward in this stage is sampled.",
+            "CUDA kernel family is a name heuristic; other_unknown may contain GEMMs.",
+            "High-level CPU mm, linear and matmul can be nested and must not be added.",
+            "Tagging native Quanto with a CPU profiler range is best-effort.",
+            "CUDA kernels with unattributed cpu_parent are not assumed non-Quanto.",
+            "GPU kernel durations may overlap on different CUDA streams.",
+            "Attention kernels and custom CUDA kernels may implement matrix multiplications.",
+        ],
+    }
+    _GEMM_CENSUS_SAMPLES.append(report)
+    print("[LTX25_GEMM_CENSUS] " + json.dumps({
+        "phase": phase, "sampled_forward": forward_index,
+        "cuda_kernels": cuda_kernel_events,
+        "cuda_kernel_gpu_ms_sum": report["cuda_kernel_gpu_ms_sum"],
+        "cpu_gemm_ops": report["cpu_matmul_operator_invocations"],
+        "cpu_gemm_outside_quanto": report["cpu_matmul_outside_tagged_quanto"],
+        "kernel_families": report["cuda_kernel_family"],
+    }, sort_keys=True), flush=True)
+
 def maybe_sample_forward(module, *args, **kwargs):
     """Run transformer unchanged, optionally sample one forward with PyTorch profiler.
 
@@ -95,7 +244,7 @@ def maybe_sample_forward(module, *args, **kwargs):
         activities = [ProfilerActivity.CPU]
         if torch.cuda.is_available():
             activities.append(ProfilerActivity.CUDA)
-        context = profile(activities=activities, record_shapes=False,
+        context = profile(activities=activities, record_shapes=GEMM_CENSUS,
                           profile_memory=False, with_stack=False)
         context.start()
     except Exception as error:
@@ -129,6 +278,8 @@ def maybe_sample_forward(module, *args, **kwargs):
                         if any(token in op["operator"].lower() for token in
                                ("copy_", "to_copy", "memcpy", "to.device", "non_blocking"))]
             # These are PyTorch op attributions, not a full NVTX/PCIe transfer trace.
+            if GEMM_CENSUS:
+                _capture_gemm_census(context, phase, call)
             _FORWARD_SAMPLES.append({
                 "phase": phase, "forward_index": call,
                 "operator_count": len(operators),
@@ -168,6 +319,8 @@ def _summary() -> None:
         "transformer_by_phase": _TRANSFORMER,
         "forward_counts": dict(_FORWARD_CALLS),
         "sampled_operator_forwards": _FORWARD_SAMPLES,
+        "gemm_census_enabled": GEMM_CENSUS,
+        "gemm_census_samples": _GEMM_CENSUS_SAMPLES,
         "peak_allocated_mib_at_boundaries": round(_PEAK_ALLOCATED / 2**20, 2),
         "peak_reserved_mib_at_boundaries": round(_PEAK_RESERVED / 2**20, 2),
         "errors": _PHASE_ERRORS,
@@ -189,6 +342,7 @@ def _summary() -> None:
                        for p in phases],
             "transformer": _TRANSFORMER,
             "operator_samples": len(_FORWARD_SAMPLES),
+            "gemm_census_samples": len(_GEMM_CENSUS_SAMPLES),
             "errors": _PHASE_ERRORS, "report": str(PATH),
         }, sort_keys=True), flush=True)
     except Exception as error:

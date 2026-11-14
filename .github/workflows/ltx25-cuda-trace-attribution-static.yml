@@ -24,4 +24,4 @@ jobs:
           python3 -m py_compile \
             shared/kernels/ltx25_cuda_trace_attribution.py \
             benchmarks/ltx25_convrot/verify_cuda_attribution.py
-          python3 benchmarks/ltx25_convrot/verify_cuda_attribution.py
+          PYTHONPATH=. python3 benchmarks/ltx25_convrot/verify_cuda_attribution.py

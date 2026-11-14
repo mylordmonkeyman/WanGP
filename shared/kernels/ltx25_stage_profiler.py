@@ -107,6 +107,8 @@ def _summary():
             sample.events[-1].synchronize()  # At interpreter exit ONLY.
             gpu = [sample.events[i - 1].elapsed_time(sample.events[i])
                    for i in range(1, len(MARKS))]
+            if not all(0 <= ms < 3600000 for ms in gpu):
+                raise ValueError(f"invalid CUDA event stage durations: {gpu}")
             row.update(status="PASS",
                        gpu_stage_ms=dict(zip(MARKS[1:], gpu)),
                        host_enqueue_us=dict(zip(MARKS[1:], sample.host_us)),

@@ -134,7 +134,11 @@ PYSET
   echo "cuda_binary_sha256=$(sha256sum "$EXTENSION" | cut -d' ' -f1)"
   echo "frames=$FRAMES; resolution=$RESOLUTION; steps=$STEPS; seed=$SEED"
   echo "nag_scale=$NAG_SCALE; audio_cfg_scale=$AUDIO_CFG_SCALE"
-  echo "arms=baseline(staged,torch) fused(direct,fused); ABBA=$ABBA"
+  if [[ "${PROFILE_ONLY:-0}" == "1" ]]; then
+    echo "arms=profile(direct,fused,live_cuda_events); ABBA=not_applicable"
+  else
+    echo "arms=baseline(staged,torch) fused(direct,fused); ABBA=$ABBA"
+  fi
   echo "python=$PY"
   echo "started_utc=$(date -u --iso-8601=seconds)"
 } > "$RUN_ROOT/results/run-manifest.txt"
@@ -158,6 +162,11 @@ run_wangp() (
     export WAN2GP_LTX25_ROT_INPUT=staged WAN2GP_LTX25_E_OUTPUT=torch
   else
     export WAN2GP_LTX25_ROT_INPUT=direct WAN2GP_LTX25_E_OUTPUT=fused
+  fi
+  if [[ "$variant" == profile ]]; then
+    # The profiler synchronizes CUDA events only at interpreter exit.
+    export WAN2GP_LTX25_PROFILE_STAGES=1
+    export LTX25_STAGE_PROFILE_PATH="$RUN_ROOT/results/stage_profile.json"
   fi
   exec "$PY" "$@"
 )
@@ -245,6 +254,19 @@ print("VERIFIED",variant,"wall_seconds",row["seconds"],"optimized_calls",c["used
       "range_fallback_rows",row["fallback_rows"])
 PYRUN
 }
+
+if [[ "${PROFILE_ONLY:-0}" == "1" ]]; then
+  echo "=== ONE instrumented Candidate E (direct+fused) 241-frame I2V run ==="
+  run_one profile 1
+  PROFILE_JSON="$RUN_ROOT/results/stage_profile.json"
+  [[ -s "$PROFILE_JSON" ]] || { echo "Profiler JSON missing: $PROFILE_JSON" >&2; exit 1; }
+  "$PY" benchmarks/ltx25_convrot/summarize_stage_profile.py     "$PROFILE_JSON" "$RUN_ROOT/results" | tee "$RUN_ROOT/profile-summary.txt"
+  echo "=== Profile complete: $RUN_ROOT ==="
+  echo "Video: $RUN_ROOT/profile.mp4"
+  echo "Summary: $RUN_ROOT/profile-summary.txt"
+  echo "Per-shape CSV: $RUN_ROOT/results/profile-shape-costs.csv"
+  exit 0
+fi
 
 run_one baseline 1
 run_one fused 1

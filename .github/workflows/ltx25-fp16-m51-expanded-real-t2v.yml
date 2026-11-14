@@ -1,0 +1,59 @@
+name: LTX-2.5 V100 expanded M51 direct Quanto 49-frame T2V ABBA and quality
+on:
+  push:
+    branches: [perf/ltx25-convrot-sm70]
+    paths: [benchmarks/ltx25_convrot/fp16_m51_real_t2v.signal]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  expanded:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 85
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_FP16_SMOKE_ROOT: /cache/ltx25/results/fp16-m51-real-${{ github.run_id }}
+      LTX25_SMOKE_BACKEND: direct
+      LTX25_SMOKE_MIN_M: '1'
+      LTX25_SMOKE_MIN_DIM: '64'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - name: Confirm idle V100, model resources, direct backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::warning::GPU busy: $busy"; exit 1; fi
+          test -f /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          /opt/venvs/ltx25-cu128/bin/python -m py_compile             shared/kernels/ltx25_selective_fp16_gemm.py benchmarks/ltx25_convrot/selective_fp16_t2v_smoke.py
+          /opt/venvs/ltx25-cu128/bin/python benchmarks/ltx25_convrot/fp16_quanto_direct_preflight.py             2>&1 | tee expanded-preflight.log
+          grep -Fq 'LTX25_QUANTO_DIRECT_PREFLIGHT_PASS ' expanded-preflight.log
+      - name: Run all 15 short real-video configurations and fair BF16 sham vs FP16 ABBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/venvs/ltx25-cu128/bin/python benchmarks/ltx25_convrot/selective_fp16_t2v_smoke.py             2>&1 | tee expanded-m51-t2v.log
+      - name: Preserve all generated clips and audit data regardless of result
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-m51-direct-fp16-video-quality-and-speed
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            expanded-preflight.log
+            expanded-m51-t2v.log
+            /cache/ltx25/results/fp16-m51-real-${{ github.run_id }}/smoke-summary.json
+            /cache/ltx25/results/fp16-m51-real-${{ github.run_id }}/smoke-summary.txt
+            /cache/ltx25/results/fp16-m51-real-${{ github.run_id }}/smoke-results.csv
+            /cache/ltx25/results/fp16-m51-real-${{ github.run_id }}/input.json
+            /cache/ltx25/results/fp16-m51-real-${{ github.run_id }}/*.mp4
+            /cache/ltx25/results/fp16-m51-real-${{ github.run_id }}/results/*.json
+            /cache/ltx25/results/fp16-m51-real-${{ github.run_id }}/logs/*.log

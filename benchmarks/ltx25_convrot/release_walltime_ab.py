@@ -115,6 +115,10 @@ def gpu_snapshot():
     return r.stdout.strip() if r.returncode == 0 else "unavailable: "+r.stderr[-200:]
 
 def run_case(cohort, mode, frames, arm, index, template, diagnostic=False):
+    # The reused 49-frame smoke helper validates decoded frame counts using
+    # its module-level FRAMES setting. Set it per cohort before decoding so
+    # 241-frame outputs are not rejected despite successful generation.
+    base.FRAMES = frames
     name = f"{cohort}-{arm}-{'diag' if diagnostic else index}"
     case_cfg, target = base.config_for(name, template)
     inp = OUT/"settings"/f"{cohort}.json"

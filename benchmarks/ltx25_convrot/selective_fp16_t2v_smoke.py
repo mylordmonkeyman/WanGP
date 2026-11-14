@@ -410,9 +410,13 @@ def main():
     ffmpeg = ffmpeg_bin()
     rows=[]
     selected = os.environ.get("LTX25_SMOKE_ONLY", "")
-    requested_cases = tuple(x for x in CASES if not selected or x[0] == selected)
+    desired = {v.strip() for v in selected.split(",") if v.strip()}
+    available = {case[0] for case in CASES}
+    if desired - available:
+        raise ValueError(f"Unknown LTX25_SMOKE_ONLY variants: {sorted(desired - available)}")
+    requested_cases = tuple(x for x in CASES if not desired or x[0] in desired)
     if not requested_cases:
-        raise ValueError(f"Unknown LTX25_SMOKE_ONLY variant: {selected}")
+        raise ValueError("Empty smoke case selection")
     for case,kind,groups,audit,description in requested_cases:
         print("START_SMOKE_CASE",case,description,flush=True)
         previous = next((r for r in rows if r["variant"]=="native-a" and r["status"]=="PASS"),None)

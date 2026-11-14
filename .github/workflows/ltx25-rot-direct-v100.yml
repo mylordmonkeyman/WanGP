@@ -34,6 +34,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Compile SM70 exact-input fused radix4 and cuBLAS Candidate E
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_cublas_e.cu \
+            -lcublas -o "$LTX25_CUBLAS_E_LIB"
+          test -s "$LTX25_CUBLAS_E_LIB"
+
       - name: Guard V100 ownership before any CUDA work
         shell: bash
         run: |
@@ -47,15 +56,6 @@ jobs:
             exit 1
           fi
           test -x /opt/venvs/ltx25-cu128/bin/python
-
-      - name: Compile SM70 exact-input fused radix4 and cuBLAS Candidate E
-        shell: bash
-        run: |
-          set -euo pipefail
-          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
-            benchmarks/ltx25_convrot/ltx25_cublas_e.cu \
-            -lcublas -o "$LTX25_CUBLAS_E_LIB"
-          test -s "$LTX25_CUBLAS_E_LIB"
 
       - name: Test FP32 bit-exactness and performance on V100
         shell: bash

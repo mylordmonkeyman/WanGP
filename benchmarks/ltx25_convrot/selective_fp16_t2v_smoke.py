@@ -370,6 +370,13 @@ def main():
         (OUT/d).mkdir(parents=True,exist_ok=True)
     gpu_free()
     print("T2V_SMOKE_ROOT",OUT,flush=True)
+    command_run(["nvcc", "-O3", "-std=c++17", "-arch=sm_70",
+                 "-shared", "-Xcompiler", "-fPIC",
+                 "benchmarks/ltx25_convrot/ltx25_cublas_e.cu",
+                 "-lcublas", "-o", str(EXTENSION)], timeout=240,
+                log=OUT/"logs"/"compile-candidate-e.log")
+    if not EXTENSION.is_file() or EXTENSION.stat().st_size == 0:
+        raise RuntimeError("Candidate E extension compilation produced no shared library")
     settings = {"model_type":"ltx2_25_22B_distilled","prompt":PROMPT,
                 "seed":SEED,"num_inference_steps":STEPS,"video_length":FRAMES,
                 "resolution":RESOLUTION,"audio_prompt_type":"","video_prompt_type":"",

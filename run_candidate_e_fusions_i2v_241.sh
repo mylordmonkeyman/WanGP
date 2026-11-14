@@ -134,7 +134,9 @@ PYSET
   echo "cuda_binary_sha256=$(sha256sum "$EXTENSION" | cut -d' ' -f1)"
   echo "frames=$FRAMES; resolution=$RESOLUTION; steps=$STEPS; seed=$SEED"
   echo "nag_scale=$NAG_SCALE; audio_cfg_scale=$AUDIO_CFG_SCALE"
-  if [[ "${PROFILE_ONLY:-0}" == "1" ]]; then
+  if [[ "${PROFILE_PIPELINE_ONLY:-0}" == "1" ]]; then
+    echo "arms=pipeline(direct,fused,whole_pipeline_phases+two_operator_samples); ABBA=not_applicable"
+  elif [[ "${PROFILE_ONLY:-0}" == "1" ]]; then
     echo "arms=profile(direct,fused,live_cuda_events); ABBA=not_applicable"
   else
     echo "arms=baseline(staged,torch) fused(direct,fused); ABBA=$ABBA"
@@ -150,6 +152,7 @@ run_wangp() (
   unset WAN2GP_LTX25_HADAMARD WAN2GP_LTX25_E_CAST WAN2GP_LTX25_GEMM_TUNE
   unset WAN2GP_LTX25_ROT_INPUT WAN2GP_LTX25_E_OUTPUT WAN2GP_LTX25_E_WORKSPACE
   unset WAN2GP_LTX25_CUBLAS_E_MODE LTX25_E_WORKSPACE_MAX_MIB LTX25_CUBLAS_E_LIB
+  unset WAN2GP_LTX25_PIPELINE_PROFILE WAN2GP_LTX2_BENCH_TRANSFORMER LTX25_PIPELINE_PROFILE_PATH
   export WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot WAN2GP_LTX25_HADAMARD=radix4
   export WAN2GP_LTX25_E_CAST=vector8 WAN2GP_LTX25_GEMM_TUNE=off
   export WAN2GP_LTX25_E_WORKSPACE=1 LTX25_E_WORKSPACE_MAX_MIB=96
@@ -167,6 +170,19 @@ run_wangp() (
     # The profiler synchronizes CUDA events only at interpreter exit.
     export WAN2GP_LTX25_PROFILE_STAGES=1
     export LTX25_STAGE_PROFILE_PATH="$RUN_ROOT/results/stage_profile.json"
+  fi
+  if [[ "$variant" == pipeline ]]; then
+    # Instrument only the actual generation, never the dry-run validation.
+    local arg is_dryrun=0
+    for arg in "$@"; do
+      if [[ "$arg" == --dry-run ]]; then is_dryrun=1; fi
+    done
+    if [[ "$is_dryrun" == 0 ]]; then
+      export WAN2GP_LTX25_PIPELINE_PROFILE=1
+      export WAN2GP_LTX2_BENCH_TRANSFORMER=1
+      export LTX25_PIPELINE_PROFILE_PATH="$RUN_ROOT/results/pipeline_profile.json"
+      export LTX25_PIPELINE_OP_SAMPLE="${LTX25_PIPELINE_OP_SAMPLE:-1}"
+    fi
   fi
   exec "$PY" "$@"
 )
@@ -254,6 +270,21 @@ print("VERIFIED",variant,"wall_seconds",row["seconds"],"optimized_calls",c["used
       "range_fallback_rows",row["fallback_rows"])
 PYRUN
 }
+
+if [[ "${PROFILE_PIPELINE_ONLY:-0}" == "1" ]]; then
+  echo "=== ONE whole-pipeline instrumented Candidate E I2V run ==="
+  run_one pipeline 1
+  PIPELINE_JSON="$RUN_ROOT/results/pipeline_profile.json"
+  [[ -s "$PIPELINE_JSON" ]] || { echo "Pipeline profile JSON missing: $PIPELINE_JSON" >&2; exit 1; }
+  "$PY" benchmarks/ltx25_convrot/summarize_pipeline_profile.py     "$PIPELINE_JSON" "$RUN_ROOT/results" "$RUN_ROOT/results/pipeline-1-seconds.txt"     | tee "$RUN_ROOT/pipeline-summary.txt"
+  echo "=== Whole-pipeline profile complete: $RUN_ROOT ==="
+  echo "Video: $RUN_ROOT/pipeline.mp4"
+  echo "Summary: $RUN_ROOT/pipeline-summary.txt"
+  echo "Raw JSON: $RUN_ROOT/results/pipeline_profile.json"
+  echo "Phase CSV: $RUN_ROOT/results/pipeline-phases.csv"
+  echo "Op CSV: $RUN_ROOT/results/pipeline-operator-samples.csv"
+  exit 0
+fi
 
 if [[ "${PROFILE_ONLY:-0}" == "1" ]]; then
   echo "=== ONE instrumented Candidate E (direct+fused) 241-frame I2V run ==="

@@ -1,0 +1,1 @@
+2026-11-14 benchmark the actual matched-profile non-Quanto BF16 mm/addmm shapes on V100 vs temporary FP16 with output BF16.

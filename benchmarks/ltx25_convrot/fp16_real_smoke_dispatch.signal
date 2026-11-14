@@ -1,2 +1,4 @@
 Launch 49-frame real-model T2V selective FP16 smoke, quality/numerical audits, and sham BF16 vs FP16 ABBA.
 Requested user run; one explicit workflow execution on V100, same offline checkpoint and no production default changes.
+
+Rerun after Quanto qbytes_mm selector repair and targeted 144-conversion 49-frame T2V success. Run all Stage1/Stage2 groups with live numeric audits and BF16 sham/FP16 ABBA. 2026-11-14.

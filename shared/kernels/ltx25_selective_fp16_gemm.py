@@ -3,7 +3,7 @@
 
 Opt-in only: WAN2GP_LTX25_FP16_GEMM=1 and LTX25_FP16_GEMM_GROUPS=... .
 Scope is one DistilledPipeline transformer forward at a time. Implements a
-TorchDispatchMode for aten.mm / aten.addmm (not an unsafe global monkeypatch).
+TorchDispatchMode for native aten.mm/aten.addmm and live Quanto qbytes_mm.
 
 Controls: group selectors stage1:wide, stage1:tall, stage1:balanced,
 stage2:wide, stage2:tall, stage2:balanced. Shapes are classified by GEMM

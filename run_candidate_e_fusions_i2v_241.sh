@@ -316,6 +316,15 @@ PYRUN
 
 if [[ "${FP16_GEMM_SWEEP_ONLY:-0}" == "1" ]]; then
   echo "=== Selective BF16-to-FP16 GEMM per-case video sweep ==="
+  if [[ "${SWEEP_SKIP_DISPATCH_PREFLIGHT:-0}" != "1" ]]; then
+    echo "=== V100 synthetic FP16 GEMM dispatcher/overflow preflight ==="
+    PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}" "$PY" \
+      benchmarks/ltx25_convrot/fp16_dispatch_preflight.py 2>&1 \
+      | tee "$RUN_ROOT/results/fp16-dispatch-preflight.log"
+    grep -Fq 'LTX25_FP16_DISPATCH_PREFLIGHT_OK ' "$RUN_ROOT/results/fp16-dispatch-preflight.log" || {
+      echo "FP16 GEMM V100 preflight failed; refusing full multi-video sweep" >&2; exit 1;
+    }
+  fi
   declare -a cases=()
   IFS=',' read -ra cases <<< "${SWEEP_CASES:-bf16-reference,fp16-s1-wide,fp16-s1-tall,fp16-s1-balanced,fp16-s1-all,fp16-s2-wide,fp16-s2-tall,fp16-s2-balanced,fp16-s2-all,fp16-both-all}"
   [[ "${#cases[@]}" -ge 2 && "${cases[0]}" == bf16-reference ]] || {

@@ -35,9 +35,10 @@ def check_rotations():
             expected = torch.empty((m, k), device="cuda", dtype=torch.float32)
             actual = torch.empty_like(expected)
             stream = ptr(torch.cuda.current_stream().cuda_stream)
+            staged_source = x.float().contiguous()
             with patch.object(torch.Tensor, "item", side_effect=AssertionError("host item in radix4")), \
                  patch.object(torch.cuda, "synchronize", side_effect=AssertionError("host sync in radix4")):
-                rc_old = staged(ptr(x.float().contiguous().data_ptr()),
+                rc_old = staged(ptr(staged_source.data_ptr()),
                                 ptr(expected.data_ptr()), x.numel(), stream)
                 rc_new = direct(ptr(x.data_ptr()), ptr(actual.data_ptr()),
                                 x.numel(), stream)

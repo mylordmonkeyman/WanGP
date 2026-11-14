@@ -152,6 +152,8 @@ run_wangp() (
   export LTX25_CUBLAS_E_LIB="$EXTENSION"
   export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 WAN2GP_LTX2_SKIP_BAKED_LORA_MIGRATION=1
   export GRADIO_ANALYTICS_ENABLED=False OMP_NUM_THREADS=8
+  # Direct execution of benchmarks/ltx25_convrot/*.py otherwise omits the repository root from sys.path.
+  export PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
   if [[ "$variant" == baseline ]]; then
     export WAN2GP_LTX25_ROT_INPUT=staged WAN2GP_LTX25_E_OUTPUT=torch
   else

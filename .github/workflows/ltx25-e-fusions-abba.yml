@@ -27,6 +27,7 @@ jobs:
       WAN2GP_LTX25_E_WORKSPACE: '1'
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
+      PYTHONPATH: .
     steps:
       - name: Checkout exact experiment commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

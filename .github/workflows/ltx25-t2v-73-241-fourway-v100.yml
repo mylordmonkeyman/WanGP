@@ -1,0 +1,120 @@
+name: LTX-2.5 V100 matched 73 and 241 frame T2V four-way comparison
+on:
+  push:
+    branches: [perf/ltx25-release-walltime-ab-20261114]
+    paths:
+      - .github/workflows/ltx25-t2v-73-241-fourway-v100.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout four-way benchmark
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - name: Validate syntax and matched T2V settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile benchmarks/ltx25_convrot/t2v73_241_original_stock_fourway.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path("benchmarks/ltx25_convrot/t2v73_241_original_stock_fourway.py").read_text()
+          for marker in (
+            'FRAME_CHOICES = (73, 241)', 'RESOLUTION = "1024x576"',
+            'STEPS = 8', 'SEED = 20261112',
+            'ARMS = ("stock_upstream", "candidate_e", "stage2_fp16", "both_fp16")',
+            'GROUP_BOTH = "stage1:wide,stage1:tall,stage1:balanced,"',
+            'ORIGINAL_SHA = "c8d47da27023476777a0874300bbc9a4126acca6"',
+            'PYTHONPATH":str(UPSTREAM)', 'base.gpu_free()', 'base.frames_hash',
+            'ffmpeg,"-hide_banner","-i"',
+            'T2V_4WAY_SUMMARY',
+          ):
+            assert marker in s, marker
+          assert s.count('"image_start"')==0
+          print("FOUR_WAY_T2V_STATIC_PASS")
+          PY
+  benchmark:
+    needs: static
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        frames: [73, 241]
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 100
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_T2V_4WAY_OUT: /cache/ltx25/results/t2v4way-${{ matrix.frames }}-${{ github.run_id }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout optimized WanGP and benchmark harness
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - name: Checkout actual historical upstream stock WanGP at fork point
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: deepbeepmeep/WanGP
+          ref: c8d47da27023476777a0874300bbc9a4126acca6
+          path: stock-wangp-original
+          persist-credentials: false
+      - name: Link baked legacy LoRAs into disposable original checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          dst="stock-wangp-original/loras/ltx2"
+          mkdir -p "$dst"
+          while IFS= read -r -d '' file; do
+            target="$dst/$(basename "$file")"
+            if [[ ! -e "$target" ]]; then ln -s "$file" "$target"; fi
+          done < <(find /opt/ltx25/checkpoints -type f -iname '*lora*.safetensors' -print0)
+          # Original source is not patched, and no LoRA is activated.
+          test -L "$dst/ltx-2.5-22b-ic-lora-sdr-to-hdr-1.0.safetensors"
+      - name: Verify exact upstream, checkpoint, SM70 GPU and idle status
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C stock-wangp-original rev-parse HEAD)" = c8d47da27023476777a0874300bbc9a4126acca6
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::error::V100 in use: $busy"; exit 1; fi
+          nvidia-smi -L
+      - name: Run true stock, Candidate E, Stage 2 FP16, both-stage FP16 complete T2V generations
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/t2v73_241_original_stock_fourway.py --frames "${{ matrix.frames }}" 2>&1 | tee "t2v4way-${{ matrix.frames }}.log"
+          grep -Fq 'LTX25_T2V_4WAY_ALL_PASS' "t2v4way-${{ matrix.frames }}.log"
+      - name: Publish per-frame-cohort times, source checks, numerical quality and full logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-t2v-fourway-${{ matrix.frames }}-frame-results
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            t2v4way-${{ matrix.frames }}.log
+            /cache/ltx25/results/t2v4way-${{ matrix.frames }}-${{ github.run_id }}/manifest.json
+            /cache/ltx25/results/t2v4way-${{ matrix.frames }}-${{ github.run_id }}/input.json
+            /cache/ltx25/results/t2v4way-${{ matrix.frames }}-${{ github.run_id }}/partial-results.json
+            /cache/ltx25/results/t2v4way-${{ matrix.frames }}-${{ github.run_id }}/summary.json
+            /cache/ltx25/results/t2v4way-${{ matrix.frames }}-${{ github.run_id }}/summary.csv
+            /cache/ltx25/results/t2v4way-${{ matrix.frames }}-${{ github.run_id }}/results/*.json
+            /cache/ltx25/results/t2v4way-${{ matrix.frames }}-${{ github.run_id }}/logs/*.log
+      - name: Publish original and optimized T2V videos for side-by-side face review
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-t2v-fourway-${{ matrix.frames }}-frame-videos
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: /cache/ltx25/results/t2v4way-${{ matrix.frames }}-${{ github.run_id }}/clips/*.mp4

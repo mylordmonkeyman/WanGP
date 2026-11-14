@@ -5,6 +5,7 @@
 // Kept separate from the other WanGP INT8 backends.
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
+#include <cuda_bf16.h>
 #include <cublas_v2.h>
 #include <cfloat>
 #include <cmath>
@@ -132,9 +133,10 @@ __global__ void finish_rows(float* __restrict__ c32,
 // One block per 256-element activation group. No persistent state.
 constexpr int ROT_GROUP=256;
 constexpr int ROT_THREADS=256;
-__global__ void transform_radix4_256(const float* __restrict__ input,
-                                     float* __restrict__ output,
-                                     size_t group_count) {
+template <typename InputT>
+__global__ void transform_radix4_256_typed(const InputT* __restrict__ input,
+                                          float* __restrict__ output,
+                                          size_t group_count) {
   size_t group=static_cast<size_t>(blockIdx.x);
   if(group>=group_count) return;
   const int tid=threadIdx.x;
@@ -142,7 +144,8 @@ __global__ void transform_radix4_256(const float* __restrict__ input,
   __shared__ float buf_a[ROT_GROUP];
   __shared__ float buf_b[ROT_GROUP];
   const size_t start=group*ROT_GROUP;
-  buf_a[tid]=input[start+tid];
+  // BF16/FP16 -> FP32 is exact; identical arithmetic to staging x.float().
+  buf_a[tid]=static_cast<float>(input[start+tid]);
   __syncthreads();
   float* src=buf_a;
   float* dst=buf_b;
@@ -223,10 +226,39 @@ extern "C" int ltx25_cublas_rot256_f32(const void* input, void* output,
   const size_t groups=count/256;
   if (groups>static_cast<size_t>(INT_MAX)) return -2;
   const auto stream=reinterpret_cast<cudaStream_t>(stream_ptr);
-  transform_radix4_256<<<static_cast<unsigned int>(groups),256,0,stream>>>(
+  transform_radix4_256_typed<float><<<static_cast<unsigned int>(groups),256,0,stream>>>(
       static_cast<const float*>(input),static_cast<float*>(output),groups);
   const auto err=cudaPeekAtLastError();
   return err==cudaSuccess ? 0 : 5000+int(err);
+}
+
+// Experimental direct low-precision input to FP32 radix-4 Hadamard.
+// The 256-element shared-memory buffer is FP32 and all arithmetic/order is
+// identical to the float-input kernel. Eliminates x.float() staging, one
+// device allocation and one PyTorch conversion launch per eligible call.
+// Opt-in only until exactness and model-level speed/quality gates pass.
+template <typename InputT>
+static int launch_radix4_direct(const void* input, void* output,
+                                size_t count, void* stream_ptr) {
+  if (!input || !output || !count || (count % 256) || input == output)
+    return -1;
+  const size_t groups = count / 256;
+  if (groups > static_cast<size_t>(INT_MAX)) return -2;
+  const auto stream = reinterpret_cast<cudaStream_t>(stream_ptr);
+  transform_radix4_256_typed<InputT><<<static_cast<unsigned int>(groups), 256, 0, stream>>>(
+      static_cast<const InputT*>(input), static_cast<float*>(output), groups);
+  const auto err = cudaPeekAtLastError();
+  return err == cudaSuccess ? 0 : 7000 + int(err);
+}
+
+extern "C" int ltx25_cublas_rot256_from_bf16_f32(
+    const void* input, void* output, size_t count, void* stream_ptr) {
+  return launch_radix4_direct<__nv_bfloat16>(input, output, count, stream_ptr);
+}
+
+extern "C" int ltx25_cublas_rot256_from_f16_f32(
+    const void* input, void* output, size_t count, void* stream_ptr) {
+  return launch_radix4_direct<__half>(input, output, count, stream_ptr);
 }
 
 extern "C" int ltx25_cublas_cast_int8_to_f16_4(

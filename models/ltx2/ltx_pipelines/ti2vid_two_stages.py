@@ -598,7 +598,7 @@ class TI2VidTwoStagesPipeline:
             stepper: DiffusionStepProtocol,
             preview_tools: VideoLatentTools | None = None,
             mask_context=None,
-         ) -> tuple[LatentState, LatentState]:
+        ) -> tuple[LatentState, LatentState]:
             # The original transformer remains authoritative for MMGP and LoRA steps.
             fp16_forward_transformer = fp16_gemm_experiment.forward_only(transformer)
             denoise_fn = simple_denoising_func(

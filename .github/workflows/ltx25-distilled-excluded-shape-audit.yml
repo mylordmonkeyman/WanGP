@@ -22,7 +22,6 @@ jobs:
       WAN2GP_LTX25_HADAMARD: radix4
       WAN2GP_LTX25_E_CAST: vector8
       WAN2GP_LTX25_E_OUTPUT: fused
-      WAN2GP_LTX25_E_TEST_4096X2048: '1'
       WAN2GP_LTX25_FP16_GEMM: '1'
       LTX25_FP16_GEMM_BACKEND: direct
       LTX25_FP16_GEMM_OPS: qbytes_mm

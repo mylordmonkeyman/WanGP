@@ -49,6 +49,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
           "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/cutoff_crossover_microbench.py 2>&1 | tee cutoff-micro.log
           grep -Fq 'LTX25_CUTOFF_MICRO_PASS' cutoff-micro.log
       - name: Upload synthetic latency and numerical-error results

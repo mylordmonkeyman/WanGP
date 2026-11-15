@@ -345,3 +345,47 @@ complexity. The reversible vector8/radix4 promotion remains in effect.
 Further optimization should focus on measured end-to-end bottlenecks,
 or on an alternate GEMM architecture only if an independently measured
 benefit exceeds these narrow algorithm-selection bounds.
+
+## LTX-2.5 Dev + Distilled selective Stage 2 FP16 default (November 14, 2026)
+
+**New on `perf/ltx25-dev-fp16-stage-default-20261114`:** for a V100 (SM70), both
+the standalone `DistilledPipeline` and non-distilled `TI2VidTwoStagesPipeline`
+now select transient Stage 2 FP16 Quanto GEMMs **without setting environment
+variables**. Stage 1 remains BF16 by default. This is an *experimental,
+user-requested speed/quality tradeoff*, not a claim of exact numerical or visual
+equivalence. It does not change the Conv VAE or save a duplicate weight set.
+
+All existing phase selection flags are shared across both pipelines:
+
+| Configuration | Environment before starting WanGP |
+|---|---|
+| Default on V100 | Leave the selective FP16 variables unset: Stage 2 on, Stage 1 off |
+| Disable entirely | `WAN2GP_LTX25_FP16_GEMM=0` |
+| Explicit Stage 2 only | `WAN2GP_LTX25_FP16_GEMM=1 LTX25_FP16_GEMM_GROUPS=stage2:wide,stage2:tall,stage2:balanced` |
+| Stage 1 only | `WAN2GP_LTX25_FP16_GEMM=1 LTX25_FP16_GEMM_GROUPS=stage1:wide,stage1:tall,stage1:balanced` |
+| Both stages | `WAN2GP_LTX25_FP16_GEMM=1 LTX25_FP16_GEMM_GROUPS=stage1:wide,stage1:tall,stage1:balanced,stage2:wide,stage2:tall,stage2:balanced` |
+
+On supported V100, the implicit selector uses
+`LTX25_FP16_GEMM_BACKEND=direct`, `LTX25_FP16_GEMM_OPS=qbytes_mm`,
+`LTX25_FP16_GEMM_MIN_M=1`, `LTX25_FP16_GEMM_MIN_DIM=64`, and
+`LTX25_FP16_GEMM_GUARD=first`. Override these independently if needed.
+Explicit enable (`=1`) preserves earlier opt-in behavior on other devices;
+implicit enable requires CUDA compute capability SM70. Explicit off (`=0`)
+always wins.
+
+Dev forwards are wrapped **only at the denoising call sites**. The original
+transformer object is still passed directly to MMGP, LoRA activation and
+per-step LoRA scheduling to avoid changing offload or weight ownership.
+The existing selector handles the temporary BF16 dequantization-to-FP16
+matmul and casts its output back to BF16. No persistent FP16 weight copies
+are stored.
+
+**Caution:** `direct` temporarily intercepts the Python-level Quanto op in
+a process-wide scope. It is not safe for concurrent in-process model inference
+without serialization or further concurrency hardening. The first-per-shape
+FP16 overflow guard does not guarantee later inputs are finite, and the
+changed arithmetic is not pixel-identical. Review output video/audio and
+avoid uncontrolled production rollout. The original BF16 path remains
+available with `WAN2GP_LTX25_FP16_GEMM=0`. Update the actual server checkout
+to this branch and restart any long-running WanGP Python process to pick up
+new defaults; a GitHub Actions runner checkout alone does not deploy them.

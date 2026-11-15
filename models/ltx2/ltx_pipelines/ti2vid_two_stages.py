@@ -53,6 +53,7 @@ from shared.utils.loras_mutipliers import update_loras_slists
 from shared.utils.self_refiner import create_self_refiner_handler, normalize_self_refiner_plan
 from shared.utils.text_encoder_cache import TextEncoderCache
 from shared.kernels import ltx25_selective_fp16_gemm as fp16_gemm_experiment
+from shared.kernels import ltx25_cublas_sm70 as candidate_e_research
 
 device = get_device()
 
@@ -507,6 +508,7 @@ class TI2VidTwoStagesPipeline:
         if callback is not None:
             callback(-1, None, True, override_num_inference_steps=len(sigmas) - 1, pass_no=stage_1_pass_no)
         fp16_gemm_experiment.set_phase("stage1")
+        candidate_e_research.set_phase("stage1")
         video_state, audio_state = denoise_audio_video(
             output_shape=stage_1_output_shape,
             conditionings=stage_1_conditionings,
@@ -727,6 +729,7 @@ class TI2VidTwoStagesPipeline:
         if callback is not None:
             callback(-1, None, True, override_num_inference_steps=len(distilled_sigmas) - 1, pass_no=2)
         fp16_gemm_experiment.set_phase("stage2")
+        candidate_e_research.set_phase("stage2")
         freeze_audio_stage2 = audio_identity_guidance_scale > 0.0
         stage_2_audio_conditionings = audio_conditionings if audio_conditionings_stage2 is None else audio_conditionings_stage2
         video_state, audio_state = denoise_audio_video(

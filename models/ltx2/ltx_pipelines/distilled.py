@@ -61,6 +61,7 @@ from shared.utils.self_refiner import create_self_refiner_handler, normalize_sel
 from shared.utils.text_encoder_cache import TextEncoderCache
 from shared.kernels import ltx25_pipeline_profile as pipeline_profiler
 from shared.kernels import ltx25_selective_fp16_gemm as fp16_gemm_experiment
+from shared.kernels import ltx25_cublas_sm70 as candidate_e_research
 
 device = get_device()
 _BENCH_TRANSFORMER_ENV = "WAN2GP_LTX2_BENCH_TRANSFORMER"
@@ -762,6 +763,7 @@ class DistilledPipeline:
         pipeline_profiler.boundary("stage1_conditioning")
         pipeline_profiler.set_transformer_phase("stage1")
         fp16_gemm_experiment.set_phase("stage1")
+        candidate_e_research.set_phase("stage1")
         bench_transformer = _env_flag(_BENCH_TRANSFORMER_ENV, "0") or pipeline_profiler.ENABLED
         skip_stage_2 = bool(skip_stage_2)
         stage_1_pass_no = 0 if skip_stage_2 else 1
@@ -1152,6 +1154,7 @@ class DistilledPipeline:
         pipeline_profiler.boundary("stage2_denoising")
         pipeline_profiler.set_transformer_phase("stage2")
         fp16_gemm_experiment.set_phase("stage2")
+        candidate_e_research.set_phase("stage2")
         freeze_audio_stage2 = audio_identity_guidance_scale > 0.0 or bool(joyai_echo.get("freeze_stage2_audio", False))
         stage_2_audio_conditionings = audio_conditionings if audio_conditionings_stage2 is None else audio_conditionings_stage2
         stage_2_audio_conditionings = list(stage_2_audio_conditionings or []) + stage_2_memory_audio_conditionings

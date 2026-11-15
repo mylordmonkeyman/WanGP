@@ -1,0 +1,32 @@
+name: Quick LTX25 Dev and Distilled checkpoint header-only shape census
+on:
+  push:
+    branches: [research/ltx25-checkpoint-header-census-20261114]
+    paths:
+      - .github/workflows/ltx25-fast-weight-header-census.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  headers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Read remote safetensors headers; never download tensor data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -u benchmarks/ltx25_convrot/remote_safetensors_header_census.py | tee checkpoint-header-census.log
+          grep -Fq HEADER_WEIGHT_SHAPE_PASS checkpoint-header-census.log
+      - name: Publish actual file header shape census
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-dev-distilled-remote-header-weight-census
+          path: |
+            checkpoint-header-census.log
+            checkpoint_shape_header_inventory.json
+          retention-days: 14
+          if-no-files-found: warn

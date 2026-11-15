@@ -40,7 +40,7 @@ def require(condition, message):
 def flags_preflight():
     code = (
         "import json; from shared.kernels import ltx25_selective_fp16_gemm as f;"
-        "print(json.dumps({'enabled':f.ENABLED,'groups':sorted(f.GROUPS),"
+        "print('FP16_PREFLIGHT_JSON='+json.dumps({'enabled':f.ENABLED,'groups':sorted(f.GROUPS),"
         "'ops':sorted(f.OPS),'backend':f.BACKEND,'min_m':f.MIN_M,"
         "'min_dim':f.MIN_DIM}))"
     )
@@ -63,7 +63,10 @@ def flags_preflight():
             [sys.executable, "-c", code], cwd=ROOT, env=env,
             capture_output=True, text=True, timeout=40, check=True
         )
-        data = json.loads(result.stdout.strip().splitlines()[-1])
+        marker = next((x for x in result.stdout.splitlines()
+                       if x.startswith("FP16_PREFLIGHT_JSON=")), None)
+        require(marker is not None, f"{name}: no preflight marker: {result.stdout[-800:]}")
+        data = json.loads(marker.split("=",1)[1])
         require(data["enabled"] == expected_on, f"{name}: enabled={data['enabled']}")
         require(data["groups"] == sorted(groups), f"{name}: groups {data['groups']}")
         if name == "default":

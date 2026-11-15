@@ -4,6 +4,9 @@ on:
     branches: [perf/ltx25-distilled-shape-stage-i2v-t2v73-20261114]
     paths:
       - .github/workflows/ltx25-candidate-e-default-4096x2048-flags.yml
+      - benchmarks/ltx25_convrot/test_candidate_e_4096x2048_stage_flags.py
+      - benchmarks/ltx25_convrot/verify_candidate_e_4096x2048_default_flags.py
+      - shared/kernels/ltx25_cublas_sm70.py
   workflow_dispatch:
 permissions:
   contents: read

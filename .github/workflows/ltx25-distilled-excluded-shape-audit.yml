@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ltx25-runtime-baseline-once
+  group: ltx25-distilled-excluded-numerical-v100
   cancel-in-progress: false
 jobs:
   audit:

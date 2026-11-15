@@ -1,0 +1,66 @@
+name: LTX-2.5 V100 experimental tiled epilogue parity and microbench
+on:
+  push:
+    branches: [perf/ltx25-v100-next-optimizations-20261115]
+    paths:
+      - .github/workflows/ltx25-epilogue-tiled-microbench-v100.yml
+      - benchmarks/ltx25_convrot/bench_epilogue_tiling.py
+      - benchmarks/ltx25_convrot/ltx25_cublas_e.cu
+      - shared/kernels/ltx25_cublas_sm70.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-v100-epilogue-tiled-micro
+  cancel-in-progress: false
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Compile Python and confirm default is OFF
+        run: |
+          set -euo pipefail
+          python3 -m py_compile benchmarks/ltx25_convrot/bench_epilogue_tiling.py shared/kernels/ltx25_cublas_sm70.py
+          grep -Fq 'WAN2GP_LTX25_E_EPILOGUE_TILED", "0"' shared/kernels/ltx25_cublas_sm70.py
+          grep -Fq 'ltx25_cublas_epilogue_f32_to_bf16_tiled' benchmarks/ltx25_convrot/ltx25_cublas_e.cu
+          echo LTX25_TILED_EPILOGUE_STATIC_PASS
+  microbench:
+    needs: syntax
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 25
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_CUBLAS_E_LIB: /cache/ltx25/results/tiled-epilogue-${{ github.run_id }}/libltx25_epilogue_tiled.so
+      LTX25_EPILOGUE_BENCH_JSON: /cache/ltx25/results/tiled-epilogue-${{ github.run_id }}/epilogue-tiled-results.json
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Confirm idle V100 and create output directory
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          test -z "$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '[0-9]' || true)"
+          mkdir -p "$(dirname "$LTX25_CUBLAS_E_LIB")"
+          nvidia-smi --query-gpu=name,clocks.gr,clocks.mem,temperature.gpu,power.draw,pstate --format=csv
+      - name: Build optional epilogue and verify BF16 bit-exactness before timing
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvcc -O3 -std=c++17 -arch=sm_70 -shared -Xcompiler -fPIC \
+            benchmarks/ltx25_convrot/ltx25_cublas_e.cu \
+            -lcublas -o "$LTX25_CUBLAS_E_LIB"
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/bench_epilogue_tiling.py | tee tiled-epilogue-microbench.log
+          grep -Fq EPILOGUE_TILED_MICROBENCH_PASS tiled-epilogue-microbench.log
+      - name: Upload raw timing and exact-parity report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-epilogue-tiled-sm70-microbench
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            tiled-epilogue-microbench.log
+            /cache/ltx25/results/tiled-epilogue-${{ github.run_id }}/epilogue-tiled-results.json

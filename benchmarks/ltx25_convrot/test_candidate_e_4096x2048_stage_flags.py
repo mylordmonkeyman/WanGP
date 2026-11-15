@@ -28,7 +28,7 @@ result['stat_disabled']=mod._STATS['disabled_4096x2048_stages']
 result['base_shape']=(2048,2048) in mod.PASS_SHAPES
 result['min_m']=mod.MIN_M
 result['max_m']=mod.MAX_M
-print(json.dumps(result,sort_keys=True))
+print("E_SHAPE_FLAG_JSON="+json.dumps(result,sort_keys=True),flush=True)
 """
 
 CASES=[
@@ -72,7 +72,10 @@ def main():
         p=child(flags)
         if p.returncode:
             raise RuntimeError(f"{name}: code {p.returncode}: {p.stderr[-1200:]}")
-        got=json.loads(p.stdout.strip().splitlines()[-1])
+        payloads=[l.split("E_SHAPE_FLAG_JSON=",1)[1] for l in p.stdout.splitlines()
+                  if "E_SHAPE_FLAG_JSON=" in l]
+        assert len(payloads)==1,(name,p.stdout[-1800:])
+        got=json.loads(payloads[0])
         expected=sorted(active)
         assert got["active"]==expected,(name,got,expected)
         assert got["stat_active"]==expected,(name,got,expected)

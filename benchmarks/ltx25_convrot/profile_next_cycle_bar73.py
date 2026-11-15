@@ -297,7 +297,7 @@ def main():
     template = base.initialize_config()
     results = []
     # Production measurements first; trace runs separately to avoid contamination.
-    for instrumented in (False, True):
+    for instrumented in ((True,) if os.getenv("LTX25_NEXT_PROFILE_ONLY") == "1" else (False, True)):
         for mode in MODES:
             row = run(mode, instrumented, template)
             results.append(row)
@@ -306,6 +306,8 @@ def main():
         "status": "PROFILED", "baseline_sha": SHA,
         "unprofiled_wall_times": {r["mode"]: r["wall_s_not_comparable_if_instrumented"]
                                  for r in results if not r["instrumented"]},
+        "prior_unprofiled_main_equivalent_seconds": {"t2v": 112.322, "i2v": 113.989},
+        "prior_run_id": 43746795037,
         "results": results,
         "limitations": [
             "One unprofiled run per mode is a sanity baseline, not a speed distribution",

@@ -47,8 +47,8 @@ jobs:
           name="ltx-2.5-22b-distilled-lora-450_bf16.safetensors"
           official="ltx-2.5-22b-distilled-lora-450-bf16.safetensors"
           candidate_paths=[
-              Path("/cache/ltx25/models/loras")/name,
-              Path("/cache/ltx25/models/loras")/official,
+              Path("/cache/ltx25/results/dev-lora-cache")/name,
+              Path("/cache/ltx25/results/dev-lora-cache")/official,
               Path("/opt/ltx25/checkpoints")/name,
               Path("/opt/ltx25/checkpoints")/official,
               Path("/cache/ltx25/checkpoints")/name,
@@ -58,7 +58,7 @@ jobs:
           if existing is not None:
               print("REUSED_LORA",existing,existing.stat().st_size,flush=True)
           else:
-              work=Path("/cache/ltx25/models/loras")
+              work=Path("/cache/ltx25/results/dev-lora-cache")
               work.mkdir(parents=True,exist_ok=True)
               try:
                   existing=Path(hf_hub_download(repo_id="DeepBeepMeep/LTX-2",filename=name,local_dir=str(work)))

@@ -1,0 +1,67 @@
+name: LTX2.5 V100 post-cleanup bit-exact 73f T2V and I2V smoke
+on:
+  push:
+    branches: [perf/ltx25-distilled-shape-stage-i2v-t2v73-20261114]
+    paths:
+      - .github/workflows/ltx25-cleanup-73f-bitexact-v100.yml
+      - benchmarks/ltx25_convrot/verify_cleanup_bar73_bitexact.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-cleanup-73f-bitexact
+  cancel-in-progress: false
+jobs:
+  cleanup:
+    name: ${{ matrix.mode }} 73f stable hashes after profiler cleanup
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: {mode: [t2v, i2v]}
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_CLEAN_REGRESSION_OUT: /cache/ltx25/results/cleanup-e73-${{ matrix.mode }}-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout cleaned research branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Verify V100, existing checkpoint, reference and image
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -m py_compile \
+            benchmarks/ltx25_convrot/verify_cleanup_bar73_bitexact.py \
+            models/ltx2/ltx_pipelines/distilled.py \
+            models/ltx2/ltx_pipelines/ti2vid_two_stages.py \
+            shared/kernels/ltx25_cublas_sm70.py \
+            shared/qtypes/int8_convrot.py
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test -s /cache/ltx25/results/bar73-stage-shape-${{ matrix.mode }}-43683731705-attempt1/input.json
+          test ! -e "$LTX25_CLEAN_REGRESSION_OUT"
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::error::V100 busy: $busy"; exit 1; fi
+      - name: Run ${{ matrix.mode }} with canonical defaults and verify pre-cleanup decoded output hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/verify_cleanup_bar73_bitexact.py \
+            --mode "${{ matrix.mode }}" 2>&1 | tee "cleanup-bitexact-${{ matrix.mode }}.log"
+          grep -Fq LTX25_CLEANUP_BAR73_BITEXACT_PASS "cleanup-bitexact-${{ matrix.mode }}.log"
+      - name: Store clean regression metrics, routing and logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-cleanup-${{ matrix.mode }}-73f-regression
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            cleanup-bitexact-${{ matrix.mode }}.log
+            /cache/ltx25/results/cleanup-e73-${{ matrix.mode }}-${{ github.run_id }}-attempt${{ github.run_attempt }}/input.json
+            /cache/ltx25/results/cleanup-e73-${{ matrix.mode }}-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.json
+            /cache/ltx25/results/cleanup-e73-${{ matrix.mode }}-${{ github.run_id }}-attempt${{ github.run_attempt }}/results/*.json
+            /cache/ltx25/results/cleanup-e73-${{ matrix.mode }}-${{ github.run_id }}-attempt${{ github.run_attempt }}/logs/*.log

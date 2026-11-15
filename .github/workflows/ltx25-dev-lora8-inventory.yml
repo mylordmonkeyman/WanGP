@@ -1,0 +1,35 @@
+name: LTX25 Dev + distillation LoRA prerequisites on V100
+on:
+  push:
+    branches: [perf/ltx25-dev-lora8-73f-20261114]
+    paths:
+      - benchmarks/ltx25_convrot/dev_lora8_inventory.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  inventory:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 6
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+    steps:
+      - name: Checkout optimized WanGP
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Locate Dev checkpoints, rank-450 LoRA, model setup, and storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/dev_lora8_inventory.py | tee dev-lora8-inventory.log
+      - name: Save inventory
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-dev-lora8-inventory
+          retention-days: 14
+          if-no-files-found: warn
+          path: dev-lora8-inventory.log

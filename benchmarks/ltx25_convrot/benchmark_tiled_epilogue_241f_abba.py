@@ -2,7 +2,7 @@
 """Matched 241f T2V/I2V A-B-B-A: Candidate E legacy vs opt-in tiled epilogue.
 
 A: stable main-equivalent kernel, same exact settings and checkpoint.
-B: ONLY WAN2GP_LTX25_E_EPILOGUE_TILED=1, narrow-M (<=128) wide-N.
+B: ONLY WAN2GP_LTX25_E_EPILOGUE_TILED=1, narrow-M (<=256) wide-N.
 No permanent weight sets, no profiling instrumentation, no other GPU changes.
 """
 from __future__ import annotations
@@ -121,7 +121,7 @@ def case(mode,arm,config):
         result["fidelity_status"]="MISMATCH_REQUIRES_QUALITY_ANALYSIS"
         if not matches["video"]:
             result["video_psnr"]=base.psnr(Path(ref["clip"]),clips[0],base.ffmpeg_bin())
-        (OUT/"results"/f"{name}-summary.json").write_text(json.dumps(result,indent=2)+"\\n")
+        (OUT/"results"/f"{name}-summary.json").write_text(json.dumps(result,indent=2)+"\n")
     return result
 
 

@@ -38,18 +38,15 @@ from pathlib import Path
 
 import torch
 
-_MODE_IMPLICIT = (os.environ.get("WAN2GP_LTX25_DEFAULT_ON") == "1"
-                  or "WAN2GP_LTX25_CUBLAS_E_MODE" not in os.environ)
-MODE = os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "fp32rot").strip().lower()
+_requested_mode = os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE")
+_MODE_IMPLICIT = _requested_mode is None or _requested_mode.strip().lower() == "auto"
+MODE = (_requested_mode or "fp32rot").strip().lower()
 if MODE == "auto":
-    # Never run the unvalidated auto dispatch. Normalize to the exact
-    # fp32rot selector which matched all 49 decoded frames on the V100.
+    # Compatibility with older explicit auto invocations.
     MODE = "fp32rot"
-    _MODE_IMPLICIT = True
-    os.environ["WAN2GP_LTX25_CUBLAS_E_MODE"] = "fp32rot"
-    os.environ["WAN2GP_LTX25_DEFAULT_ON"] = "1"
-REAL_ACTIVATION_AUDIT = os.environ.get("WAN2GP_LTX25_REAL_ACTIVATION_AUDIT", "") == "1"
-PROFILE_STAGES = os.environ.get("WAN2GP_LTX25_PROFILE_STAGES", "") == "1"
+    os.environ["WAN2GP_LTX25_CUBLAS_E_MODE"] = MODE
+if MODE not in ("fp32rot", "off"):
+    raise ValueError(f"Unsupported WAN2GP_LTX25_CUBLAS_E_MODE={MODE!r}")
 USE_WORKSPACE = os.environ.get("WAN2GP_LTX25_E_WORKSPACE", "1") == "1"
 CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector8").strip().lower()
 ROT_MODE = os.environ.get("WAN2GP_LTX25_HADAMARD", "radix4").strip().lower()
@@ -86,32 +83,24 @@ def _bool_flag(name: str) -> bool:
 _DISABLE_4096X2048_STAGE1 = _bool_flag("WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1")
 _DISABLE_4096X2048_STAGE2 = _bool_flag("WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2")
 
-# Preserve the prior research overrides so historical A/B test scripts still
-# select their original arms. If neither legacy override is supplied, default
-# to both stages ON. Explicit new opt-outs always take precedence.
-_LEGACY_PHASES = os.environ.get("WAN2GP_LTX25_E_TEST_4096X2048_PHASES")
-_LEGACY_ENABLE = os.environ.get("WAN2GP_LTX25_E_TEST_4096X2048")
-if _LEGACY_PHASES is not None:
-    tokens = [x.strip() for x in _LEGACY_PHASES.split(",")]
-    if tokens == ["none"]:
-        configured = set()
-    else:
-        configured = set(tokens)
-        if not configured or configured - {"stage1", "stage2"}:
-            raise ValueError(f"Invalid WAN2GP_LTX25_E_TEST_4096X2048_PHASES={_LEGACY_PHASES!r}")
-elif _LEGACY_ENABLE is not None:
-    if _LEGACY_ENABLE not in ("0", "1"):
-        raise ValueError("WAN2GP_LTX25_E_TEST_4096X2048 must be 0 or 1")
-    configured = {"stage1", "stage2"} if _LEGACY_ENABLE == "1" else set()
-else:
-    configured = {"stage1", "stage2"}
-
-if _DISABLE_4096X2048_STAGE1:
-    configured.discard("stage1")
-if _DISABLE_4096X2048_STAGE2:
-    configured.discard("stage2")
-_TEST_PHASES = frozenset(configured)  # Compatibility with earlier research tests.
-_TEST_FAILED_SHAPE = bool(_TEST_PHASES)
+# Old research-only enable controls duplicated the independent opt-outs.
+# Reject stale launch settings rather than silently selecting the wrong path.
+_OBSOLETE_STAGE_FLAGS = (
+    "WAN2GP_LTX25_E_TEST_4096X2048",
+    "WAN2GP_LTX25_E_TEST_4096X2048_PHASES",
+)
+for _obsolete in _OBSOLETE_STAGE_FLAGS:
+    if _obsolete in os.environ:
+        raise ValueError(
+            f"{_obsolete} is obsolete; use the independent "
+            "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1/2=1 opt-outs"
+        )
+ENABLED_4096X2048_PHASES = frozenset(
+    phase for phase, disabled in (
+        ("stage1", _DISABLE_4096X2048_STAGE1),
+        ("stage2", _DISABLE_4096X2048_STAGE2),
+    ) if not disabled
+)
 _CURRENT_PHASE = "stage1"
 
 def set_phase(phase: str) -> None:
@@ -149,16 +138,14 @@ _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
           "rotation_mode": ROT_MODE, "rotation_input": ROT_INPUT, "output_mode": OUTPUT_MODE,
           "gemm_tune": GEMM_TUNE, "gemm_algo2_calls": 0,
           "min_m": MIN_M, "max_m": MAX_M, "row_census_enabled": ROW_CENSUS,
-          "experimental_failed_shape_enabled": _TEST_FAILED_SHAPE,
-          "experimental_failed_shape_phases": sorted(_TEST_PHASES),
-          "active_4096x2048_phases": sorted(_TEST_PHASES),
+          "active_4096x2048_phases": sorted(ENABLED_4096X2048_PHASES),
           "disabled_4096x2048_stages": [
               stage for stage, disabled in (
                   ("stage1", _DISABLE_4096X2048_STAGE1),
                   ("stage2", _DISABLE_4096X2048_STAGE2),
               ) if disabled
           ],
-          "experimental_shape_by_phase": {
+          "shape_4096x2048_by_phase": {
               "stage1": {"used": 0, "fallback": 0},
               "stage2": {"used": 0, "fallback": 0},
           },
@@ -332,7 +319,7 @@ def _record(reason, n, k, m):
     row = _STATS["sizes"].setdefault(key, {"calls": 0, "eligible_calls": 0})
     row["calls"] += 1
     if (n, k) == (4096, 2048):
-        phase_counts = _STATS["experimental_shape_by_phase"][_CURRENT_PHASE]
+        phase_counts = _STATS["shape_4096x2048_by_phase"][_CURRENT_PHASE]
         phase_counts["used" if reason == "used" else "fallback"] += 1
     if ROW_CENSUS:
         signature = f"M={m},N={n},K={k}"
@@ -363,7 +350,7 @@ def maybe_linear(x, weight, bias, group):
     n, k = q.shape
     m = x.numel() // x.shape[-1]
     if ((n, k) not in PASS_SHAPES
-            or ((n, k) == (4096, 2048) and _CURRENT_PHASE not in _TEST_PHASES)
+            or ((n, k) == (4096, 2048) and _CURRENT_PHASE not in ENABLED_4096X2048_PHASES)
             or group != 256 or m < MIN_M or m > MAX_M):
         _record("shape", n, k, m)
         return None
@@ -418,13 +405,6 @@ def maybe_linear(x, weight, bias, group):
 
     from shared.qtypes.int8_convrot import _rotate_activation
 
-    if PROFILE_STAGES:
-        from shared.kernels import ltx25_stage_profiler as profiler
-        profile = profiler.begin(n, k, m, x.dtype, x.device,
-                                 torch.cuda.current_stream(x.device))
-    else:
-        profile = None
-
     if GEMM_TUNE not in ("off", "", "algo2_m64"):
         raise ValueError(f"Unsupported WAN2GP_LTX25_GEMM_TUNE={GEMM_TUNE!r}")
     use_algo2 = GEMM_TUNE == "algo2_m64" and (n, k, m) == (16384, 4096, 64)
@@ -466,8 +446,6 @@ def maybe_linear(x, weight, bias, group):
         x32 = _rotate_activation(x.float(), group).reshape(m, k).contiguous()
     else:
         raise ValueError(f"Unknown WAN2GP_LTX25_HADAMARD={ROT_MODE!r}")
-    if PROFILE_STAGES:
-        profiler.mark(profile, "rotation")
     scale32 = scale.reshape(n).contiguous()
     bias32 = None if bias is None else bias.float().reshape(n).contiguous()
     bad_rows = _bad_row_counter(x.device)
@@ -484,8 +462,6 @@ def maybe_linear(x, weight, bias, group):
         exponents = torch.empty((m,), dtype=torch.int32, device=x.device)
         slow_rows = torch.empty((m,), dtype=torch.int32, device=x.device)
         c32 = torch.empty((m, n), dtype=torch.float32, device=x.device)
-    if PROFILE_STAGES:
-        profiler.mark(profile, "alloc")
     try:
         if CAST_MODE in ("vector4", "vector8"):
             # Both exact integer conversion kernels use one transient FP16
@@ -503,8 +479,6 @@ def maybe_linear(x, weight, bias, group):
             w16 = q.to(torch.float16)
         else:
             raise ValueError(f"Unsupported WAN2GP_LTX25_E_CAST={CAST_MODE!r}")
-        if PROFILE_STAGES:
-            profiler.mark(profile, "weight_cast")
 
         dll, gemm, prepare, finish = _fn()
         ptr = ctypes.c_void_p
@@ -514,8 +488,6 @@ def maybe_linear(x, weight, bias, group):
                          ptr(bad_rows.data_ptr()), m, k, stream)
         if status:
             raise RuntimeError(f"Candidate E row prepare failed, status={status}, N={n}, M={m}, K={k}")
-        if PROFILE_STAGES:
-            profiler.mark(profile, "prepare")
         selected_gemm = _algo2_fn() if use_algo2 else gemm
         status = selected_gemm(ptr(w16.data_ptr()), ptr(x16.data_ptr()),
                                ptr(c32.data_ptr()), n, m, k, stream)
@@ -523,8 +495,6 @@ def maybe_linear(x, weight, bias, group):
             raise RuntimeError(f"Candidate E cuBLAS GEMM failed, status={status}, N={n}, M={m}, K={k}")
         if use_algo2:
             _STATS["gemm_algo2_calls"] += 1
-        if PROFILE_STAGES:
-            profiler.mark(profile, "gemm")
         if OUTPUT_MODE == "fused":
             # Fuses the final round-to-nearest conversion into the existing
             # FP32 row-scale/exception-correction pass. No permanent weight
@@ -545,24 +515,13 @@ def maybe_linear(x, weight, bias, group):
                             m, n, k, stream)
         if status:
             raise RuntimeError(f"Candidate E FP32 epilogue failed, status={status}, N={n}, M={m}, K={k}")
-        if PROFILE_STAGES:
-            profiler.mark(profile, "epilogue")
         if OUTPUT_MODE != "fused":
             out = c32.to(x.dtype).reshape(*x.shape[:-1], n)
-        if PROFILE_STAGES:
-            profiler.mark(profile, "output")
     finally:
         if lease is not None:
             # Output conversion is enqueued: same-stream reuse is safe.
             lease.release()
     _record("used", n, k, m)
-    if REAL_ACTIVATION_AUDIT:
-        # NOT a performance run: shed the large no-longer-needed temporary
-        # operands before the next, explicitly synchronizing R0/R1 audit.
-        # All device work is already enqueued on the same current stream.
-        del x32, x16, exponents, slow_rows, c32, w16, scale32, bias32
-        from shared.kernels import ltx25_real_activation_audit
-        ltx25_real_activation_audit.maybe_audit(x, weight, bias, group, out)
     return out
 
 def _summary():

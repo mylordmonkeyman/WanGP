@@ -213,7 +213,11 @@ def main():
         "code_overlay":"temporary, restored after each complete subprocess"
     },indent=2)+"\n")
     cases=[]
-    for mode in ("t2v","i2v"):
+    selected_modes=tuple(x.strip() for x in os.environ.get(
+        "LTX25_MMGP_PROBE_MODES", "t2v,i2v").split(",") if x.strip())
+    require(bool(selected_modes) and all(x in ("t2v","i2v") for x in selected_modes),
+            "Invalid LTX25_MMGP_PROBE_MODES")
+    for mode in selected_modes:
         cases.append(run(mode,cfg))
         (OUT/"partial.json").write_text(json.dumps(cases,indent=2)+"\n")
     (OUT/"summary.json").write_text(json.dumps({"status":"PASS","cases":cases},indent=2)+"\n")

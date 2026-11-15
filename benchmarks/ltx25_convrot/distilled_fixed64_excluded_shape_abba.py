@@ -2,7 +2,7 @@
 """Isolated Distilled A-B-B-A for opt-in N=4096,K=2048 at fixed MIN_M=64.
 
 Four independent 49-frame 1024x576/8-step/seed=20261112 runs. Only
-WAN2GP_LTX25_E_TEST_4096X2048 is varied. The experimental family was
+WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1 and WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2 is varied. The experimental family was
 previously rejected by a strict numerical gate, so the script measures
 stock-relative PSNR, SSIM and decoded PCM audio, not quality approval.
 """
@@ -90,7 +90,8 @@ def main():
             "WAN2GP_LTX25_E_MIN_M":"64",
             "WAN2GP_LTX25_E_MAX_M":"8192",
             "WAN2GP_LTX25_E_ROW_CENSUS":"1",
-            "WAN2GP_LTX25_E_TEST_4096X2048":"1" if active_enable else "0",
+            "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1":"0" if active_enable else "1",
+            "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2":"0" if active_enable else "1",
         })
         return env
     four.optimized_env=env_for
@@ -106,7 +107,7 @@ def main():
         "seed":20261112,"steps":8,"frames":FRAMES,"resolution":"1024x576",
         "min_m":64,"max_m":8192,"candidate_e_radix":"radix4",
         "stage1_fp16":False,"stage2_fp16":True,
-        "only_changed_variable":"WAN2GP_LTX25_E_TEST_4096X2048",
+        "only_changed_variable":"WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1/2",
         "arms":list(CASES),"prompt":four.PROMPT,
         "source_sha":os.getenv("GITHUB_SHA","manual"),
         "warning":"Closer to stock is not a ground truth assessment of visual quality."
@@ -124,7 +125,7 @@ def main():
         require(row["settings_sha256"]==manifest["settings_sha256"],
                 "Run settings differ from reference")
         e=four.read_candidate_stats(log)
-        require(e is not None and e.get("experimental_failed_shape_enabled")==enabled,
+        require(e is not None and e.get("active_4096x2048_phases")==(["stage1","stage2"] if enabled else []),
                 f"Experimental family flag mismatch: {label}")
         require(e.get("min_m")==64 and e.get("max_m")==8192 and e.get("row_census_enabled") is True,
                 f"Row thresholds or census wrong: {label}")
@@ -205,7 +206,7 @@ def main():
     after=statistics.median(x["wall_seconds"] for x in trial)
     summary={
         "status":"MEASURED_NOT_QUALITY_APPROVED",
-        "on_off_only_change":"WAN2GP_LTX25_E_TEST_4096X2048",
+        "on_off_only_change":"WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1/2",
         "min_m":64,"max_m":8192,
         "off_median_seconds":round(before,3),
         "on_median_seconds":round(after,3),

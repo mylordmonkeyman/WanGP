@@ -1,0 +1,92 @@
+name: Distilled 241f Candidate E 8192 vs 18432 upper cutoff ABBA
+on:
+  push:
+    branches: [perf/ltx25-distilled-candidate-e-expansion-20261114]
+    paths:
+      - benchmarks/ltx25_convrot/distilled_maxm241_abba.py
+      - .github/workflows/ltx25-distilled-maxm241-abba.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-distilled-maxm241-v100
+  cancel-in-progress: false
+jobs:
+  upper_cutoff:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 65
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_DISTILLED_MAXM_OUT: /cache/ltx25/results/distilled-maxm241-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      WAN2GP_LTX25_CUBLAS_E_MODE: fp32rot
+      WAN2GP_LTX25_HADAMARD: radix4
+      WAN2GP_LTX25_E_CAST: vector8
+      WAN2GP_LTX25_E_OUTPUT: fused
+      WAN2GP_LTX25_FP16_GEMM: '1'
+      LTX25_FP16_GEMM_BACKEND: direct
+      LTX25_FP16_GEMM_OPS: qbytes_mm
+      LTX25_FP16_GEMM_GROUPS: stage2:wide,stage2:tall,stage2:balanced
+      LTX25_FP16_GEMM_MIN_M: '1'
+      LTX25_FP16_GEMM_MIN_DIM: '64'
+      LTX25_FP16_GEMM_GUARD: first
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout Distilled experimental branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Compile and verify V100 and model files
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -m py_compile benchmarks/ltx25_convrot/distilled_maxm241_abba.py
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test ! -e "$LTX25_DISTILLED_MAXM_OUT"
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::error::V100 busy: $busy"; exit 1; fi
+      - name: Preflight actual M17856 CUDA FP16 candidate vs fallback on both supported weight shapes
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+          "$LTX25_PYTHON" -u - <<'PY' | tee long-m-preflight.log
+          import json
+          from benchmarks.ltx25_convrot.cutoff_crossover_microbench import compare
+          for n,k in ((2048,4096),(4096,4096)):
+              d=compare(17856,n,k)
+              assert d["finite"] and d["candidate_gpu_ms"]>0
+              assert d["fp16_gpu_ms"]>0
+              print("M17856_PREFLIGHT_PASS",json.dumps(d,sort_keys=True),flush=True)
+          PY
+          test "$(grep -Fc M17856_PREFLIGHT_PASS long-m-preflight.log)" = "2"
+      - name: Generate four matched 241-frame videos with cutoff 8192/18432
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/distilled_maxm241_abba.py 2>&1 | tee distilled-maxm241-abba.log
+          grep -Fq LTX25_DISTILLED_MAXM_ABBA_PASS distilled-maxm241-abba.log
+      - name: Upload timing, 241-frame shape routing and numerical audit
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: distilled-maxm241-abba-results
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            long-m-preflight.log
+            distilled-maxm241-abba.log
+            /cache/ltx25/results/distilled-maxm241-${{ github.run_id }}-attempt${{ github.run_attempt }}/manifest.json
+            /cache/ltx25/results/distilled-maxm241-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.json
+            /cache/ltx25/results/distilled-maxm241-${{ github.run_id }}-attempt${{ github.run_attempt }}/partial-results.json
+            /cache/ltx25/results/distilled-maxm241-${{ github.run_id }}-attempt${{ github.run_attempt }}/results/*.json
+            /cache/ltx25/results/distilled-maxm241-${{ github.run_id }}-attempt${{ github.run_attempt }}/logs/*.log
+      - name: Upload four quality review MP4s
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: distilled-maxm241-abba-videos
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: /cache/ltx25/results/distilled-maxm241-${{ github.run_id }}-attempt${{ github.run_attempt }}/clips/*.mp4

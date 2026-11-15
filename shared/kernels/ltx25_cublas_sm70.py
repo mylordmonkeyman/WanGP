@@ -1,9 +1,12 @@
 # Copyright (c) 2026. Experimental LTX-2.5 SM70 cuBLAS ConvRot research.
 """SM70-specific auto-selected cuBLAS FP32-output ConvRot on V100.
 
-Default on eligible V100 INT8 ConvRot shape families. It uses only the
-checkpoint-backed numerical-audit passing shape families and the original
-INT8 weight (the FP16 expansion is a bounded *transient* scratch allocation).
+Default on eligible V100 INT8 ConvRot shape families, including (4096,2048)
+in both denoising stages unless specifically disabled for a stage. The
+(4096,2048) family failed the historical strict per-GEMM numerical audit;
+its default was explicitly selected after T2V/I2V video comparisons. All
+other families passed that gate. The original INT8 checkpoint is preserved
+and the FP16 expansion uses only bounded *transient* scratch allocation.
 No FP16 master weights are saved or cached, so MMGP can continue to offload
 the INT8 weights normally. Unsupported shapes, CPU and CUDA graph capture
 always use WanGP's native R0 path.
@@ -12,9 +15,11 @@ Activation safety is checked entirely on the GPU: each FP32-rotated input row
 receives a reversible power-of-two scale when representable as nonzero FP16.
 Exceptional rows execute the same operation in FP32 on the GPU *before* its
 output is used. No per-linear .item(), host-side range flags, or stream sync.
-FP32 rotation changes arithmetic relative to native BF16 R0. Candidate E
-passed the recorded single-seed numerical/video gates, but this is NOT a
-claim of universal perceptual equivalence. Set WAN2GP_LTX25_CUBLAS_E_MODE=off
+FP32 rotation changes arithmetic relative to native BF16 R0. Recorded
+single-seed video comparisons are not universal perceptual-quality gates.
+Set WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1=1 and/or
+WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2=1 to keep that shape on fallback
+during the specified denoising stage(s). Set WAN2GP_LTX25_CUBLAS_E_MODE=off
 to restore WanGP's original dispatch without rebuilding or changing weights.
 If the compiled extension is unavailable, the implicit default safely uses
 native R0. An explicitly requested fp32rot mode retains strict test errors.
@@ -61,36 +66,59 @@ MAX_M = int(os.environ.get("WAN2GP_LTX25_E_MAX_M", "8192"))
 ROW_CENSUS = os.environ.get("WAN2GP_LTX25_E_ROW_CENSUS", "0") == "1"
 if not (1 <= MIN_M <= MAX_M <= 65536):
     raise ValueError(f"Invalid Candidate E row thresholds: min={MIN_M}, max={MAX_M}")
-# Synthetic checkpoint-backed FP32-rotation gate passed these shapes.
-# The (N=4096,K=2048) shape failed and must remain native.
+# Seven original families passed the strict checkpoint-backed numerical audit.
+# The eighth family (N=4096,K=2048) failed that gate, but the user explicitly
+# chose to enable it by default based on 73-frame Distilled T2V/I2V testing.
+# The opt-out flags below can independently return it to the unchanged native
+# WanGP fallback (and Stage2 selective FP16, when configured) in either stage.
 PASS_SHAPES = {
     (2048, 2048), (4096, 4096), (2048, 4096), (4096, 16384),
-    (16384, 4096), (2048, 8192), (8192, 2048),
+    (16384, 4096), (2048, 8192), (8192, 2048), (4096, 2048),
 }
-# Strictly experimental. NEVER enable merely by increasing the M range:
-# this (N,K) family was rejected by an earlier checkpoint-based accuracy gate.
-# Research comparison runs must opt in separately and verify actual dispatch.
-# Explicitly staged opt-in for the historically rejected shape. Legacy
-# WAN2GP_LTX25_E_TEST_4096X2048=1 continues to mean both stages, with no
-# behavior change for any non-experimental WanGP installation.
-# Values: "none", "stage2", or "stage1,stage2".
-_TEST_PHASES_ENV = os.environ.get("WAN2GP_LTX25_E_TEST_4096X2048_PHASES")
-if _TEST_PHASES_ENV is None:
-    _TEST_PHASES = frozenset(("stage1", "stage2")) if os.environ.get(
-        "WAN2GP_LTX25_E_TEST_4096X2048", "0") == "1" else frozenset()
-else:
-    _TEST_PHASES = frozenset(x.strip() for x in _TEST_PHASES_ENV.split(",") if x.strip() and x.strip() != "none")
-if _TEST_PHASES - {"stage1", "stage2"}:
-    raise ValueError(f"Invalid research-only 4096x2048 phases: {sorted(_TEST_PHASES)}")
-_TEST_FAILED_SHAPE = bool(_TEST_PHASES)
-if _TEST_FAILED_SHAPE:
-    PASS_SHAPES.add((4096, 2048))
-_CURRENT_PHASE = "stage1"
-def set_phase(phase: str) -> None:
-    """Set Candidate E's independent pipeline phase before denoising.
 
-    Called even if Stage1/2 selective FP16 is disabled so the experiment does
-    not depend on that other backend's per-stage state.
+def _bool_flag(name: str) -> bool:
+    """Reject misspelled/ambiguous opt-outs instead of silently bypassing them."""
+    value = os.environ.get(name, "0")
+    if value not in ("0", "1"):
+        raise ValueError(f"{name} must be 0 or 1, got {value!r}")
+    return value == "1"
+
+_DISABLE_4096X2048_STAGE1 = _bool_flag("WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1")
+_DISABLE_4096X2048_STAGE2 = _bool_flag("WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2")
+
+# Preserve the prior research overrides so historical A/B test scripts still
+# select their original arms. If neither legacy override is supplied, default
+# to both stages ON. Explicit new opt-outs always take precedence.
+_LEGACY_PHASES = os.environ.get("WAN2GP_LTX25_E_TEST_4096X2048_PHASES")
+_LEGACY_ENABLE = os.environ.get("WAN2GP_LTX25_E_TEST_4096X2048")
+if _LEGACY_PHASES is not None:
+    tokens = [x.strip() for x in _LEGACY_PHASES.split(",")]
+    if tokens == ["none"]:
+        configured = set()
+    else:
+        configured = set(tokens)
+        if not configured or configured - {"stage1", "stage2"}:
+            raise ValueError(f"Invalid WAN2GP_LTX25_E_TEST_4096X2048_PHASES={_LEGACY_PHASES!r}")
+elif _LEGACY_ENABLE is not None:
+    if _LEGACY_ENABLE not in ("0", "1"):
+        raise ValueError("WAN2GP_LTX25_E_TEST_4096X2048 must be 0 or 1")
+    configured = {"stage1", "stage2"} if _LEGACY_ENABLE == "1" else set()
+else:
+    configured = {"stage1", "stage2"}
+
+if _DISABLE_4096X2048_STAGE1:
+    configured.discard("stage1")
+if _DISABLE_4096X2048_STAGE2:
+    configured.discard("stage2")
+_TEST_PHASES = frozenset(configured)  # Compatibility with earlier research tests.
+_TEST_FAILED_SHAPE = bool(_TEST_PHASES)
+_CURRENT_PHASE = "stage1"
+
+def set_phase(phase: str) -> None:
+    """Select the active denoising stage for the (4096,2048) per-stage gate.
+
+    Both Distilled and Dev two-stage pipelines call this before their
+    denoising transformer; independent of Stage2 selective FP16 interceptors.
     """
     global _CURRENT_PHASE
     if phase not in ("stage1", "stage2"):
@@ -123,6 +151,13 @@ _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
           "min_m": MIN_M, "max_m": MAX_M, "row_census_enabled": ROW_CENSUS,
           "experimental_failed_shape_enabled": _TEST_FAILED_SHAPE,
           "experimental_failed_shape_phases": sorted(_TEST_PHASES),
+          "active_4096x2048_phases": sorted(_TEST_PHASES),
+          "disabled_4096x2048_stages": [
+              stage for stage, disabled in (
+                  ("stage1", _DISABLE_4096X2048_STAGE1),
+                  ("stage2", _DISABLE_4096X2048_STAGE2),
+              ) if disabled
+          ],
           "experimental_shape_by_phase": {
               "stage1": {"used": 0, "fallback": 0},
               "stage2": {"used": 0, "fallback": 0},

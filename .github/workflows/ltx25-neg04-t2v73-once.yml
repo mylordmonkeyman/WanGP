@@ -1,0 +1,70 @@
+name: LTX-2.5 V100 negative-0.4 baked distilled 73-frame T2V smoke
+on:
+  push:
+    branches: [perf/ltx25-neg04-73f-smoke-20261114]
+    paths:
+      - benchmarks/ltx25_convrot/t2v73_neg04_smoke.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  neg04_t2v73:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 30
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_NEG04_OUT: /cache/ltx25/results/neg04-t2v73-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout isolated optimized WanGP test branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Check syntax, V100 and shared hard-linked checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -m py_compile benchmarks/ltx25_convrot/t2v73_neg04_smoke.py
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          MODEL="/cache/ltx25/models/ltx-2.5-22b-distilled-neg04_diffusion_model_int8_convrot.safetensors"
+          test -s "$MODEL"
+          ls -lh "$MODEL"
+          test ! -e "$LTX25_NEG04_OUT"
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then
+            echo "::error::V100 already in use: $busy"
+            exit 1
+          fi
+          nvidia-smi -L
+      - name: Run one 73-frame T2V with Candidate E Radix4 Stage2 FP16 and measure complete process
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/t2v73_neg04_smoke.py 2>&1 | tee neg04-t2v73.log
+          grep -Fq 'LTX25_NEG04_T2V73_PASS' neg04-t2v73.log
+      - name: Save logs, wall-clock timing, checkpoint provenance and optimization checks
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-neg04-t2v73-results
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            neg04-t2v73.log
+            /cache/ltx25/results/neg04-t2v73-${{ github.run_id }}-attempt${{ github.run_attempt }}/manifest.json
+            /cache/ltx25/results/neg04-t2v73-${{ github.run_id }}-attempt${{ github.run_attempt }}/input.json
+            /cache/ltx25/results/neg04-t2v73-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.json
+            /cache/ltx25/results/neg04-t2v73-${{ github.run_id }}-attempt${{ github.run_attempt }}/results/*.json
+            /cache/ltx25/results/neg04-t2v73-${{ github.run_id }}-attempt${{ github.run_attempt }}/logs/*.log
+      - name: Save generated 73-frame MP4 for side-by-side comparison
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-neg04-t2v73-video
+          retention-days: 21
+          if-no-files-found: warn
+          compression-level: 0
+          path: /cache/ltx25/results/neg04-t2v73-${{ github.run_id }}-attempt${{ github.run_attempt }}/clips/*.mp4

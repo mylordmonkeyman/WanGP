@@ -84,31 +84,31 @@ def temporary_inference_profile_overlay(enabled: bool):
         "fp16_gemm_experiment.call_transformer, self._module, *args, **kwargs)")
     replace_one(
         "        dtype = torch.bfloat16\n\n        enable_audio_text_nag",
-        "        pipeline_profiler.boundary(\\"text_encoding\\")\n"
+        "        pipeline_profiler.boundary(\"text_encoding\")\n"
         "        dtype = torch.bfloat16\n\n        enable_audio_text_nag")
     replace_one(
         "        # Stage 1: Initial low resolution video generation.\n",
-        "        pipeline_profiler.boundary(\\"stage1_conditioning\\")\n"
-        "        pipeline_profiler.set_transformer_phase(\\"stage1\\")\n"
+        "        pipeline_profiler.boundary(\"stage1_conditioning\")\n"
+        "        pipeline_profiler.set_transformer_phase(\"stage1\")\n"
         "        # Stage 1: Initial low resolution video generation.\n")
     replace_one(
         "        video_state, audio_state = denoise_audio_video(\n"
         "            output_shape=stage_1_output_shape,",
-        "        pipeline_profiler.boundary(\\"stage1_denoising\\")\n"
+        "        pipeline_profiler.boundary(\"stage1_denoising\")\n"
         "        video_state, audio_state = denoise_audio_video(\n"
         "            output_shape=stage_1_output_shape,")
     common = "        if video_state is None or (not skip_audio and audio_state is None):"
     if source.count(common) != 2:
         raise RuntimeError("Unexpected number of stage completion anchors")
     source = source.replace(common,
-        "        pipeline_profiler.boundary(\\"stage1_postprocessing\\")\n" + common, 1)
+        "        pipeline_profiler.boundary(\"stage1_postprocessing\")\n" + common, 1)
     replace_one(
         "        upscaled_video_latent = upsample_video(",
-        "        pipeline_profiler.boundary(\\"spatial_upsampling\\")\n"
+        "        pipeline_profiler.boundary(\"spatial_upsampling\")\n"
         "        upscaled_video_latent = upsample_video(")
     replace_one(
         "        pass_no = 2\n        stage_2_ref_context",
-        "        pipeline_profiler.boundary(\\"stage2_conditioning\\")\n"
+        "        pipeline_profiler.boundary(\"stage2_conditioning\")\n"
         "        pass_no = 2\n        stage_2_ref_context")
     replace_one(
         '        fp16_gemm_experiment.set_phase("stage2")',

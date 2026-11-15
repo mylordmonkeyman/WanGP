@@ -1,5 +1,33 @@
 # WanGP
 
+## This fork: LTX-2.5 acceleration on NVIDIA V100 (SM70)
+
+This fork retains WanGP's models and UI, while accelerating **LTX-2.5 Distilled/Dev with INT8 ConvRot checkpoints** on the Tesla V100. Eligible ConvRot linears use **Candidate E** (FP32 Radix-4 Hadamard rotation, transient INT8→FP16 cast, cuBLAS Tensor Core GEMM, GPU-side scaling/range correction, BF16 output). A reusable scratch workspace avoids permanent duplicate FP16 weights, and ineligible operations fall back to WanGP. A separate **Stage 2 transient FP16 Quanto-GEMM** path is enabled by default on V100; Stage 1 selective FP16 remains off by default. These kernels are SM70-specific, not a blanket speedup for every WanGP model or GPU.
+
+**Candidate E defaults:** 64–8192 input rows and eight allowed weight-shape families, including `(N=4096, K=2048)` in **both** denoising stages. That last family **failed the strict per-GEMM precision audit** but was expressly enabled following 73-frame T2V/I2V video tests; it is not certified perceptually equivalent. Disable it independently per stage using the flags below.
+
+| Environment variable | Default | Effect |
+| --- | --- | --- |
+| `WAN2GP_LTX25_CUBLAS_E_MODE` | `fp32rot` (implicit) | `off` disables all Candidate E; `auto` aliases the implicit path. |
+| `WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1` | `0` | `1` routes only the `(4096,2048)` family in Stage 1 to fallback. |
+| `WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2` | `0` | `1` routes only that family in Stage 2 to fallback; both `=1` disable it in both stages. |
+| `WAN2GP_LTX25_E_MIN_M` / `WAN2GP_LTX25_E_MAX_M` | `64` / `8192` | Eligible Candidate E input-row range. |
+| `WAN2GP_LTX25_HADAMARD` | `radix4` | Rotation implementation; `torch` and `flat_mm` are research alternatives. |
+| `WAN2GP_LTX25_E_CAST` | `vector8` | Exact transient INT8→FP16 kernel; `vector4` or `torch` for comparison. |
+| `WAN2GP_LTX25_ROT_INPUT` / `WAN2GP_LTX25_E_OUTPUT` | `direct` / `fused` | Rotation input conversion and fused FP32-to-BF16 output; `staged` / `torch` alternatives. |
+| `WAN2GP_LTX25_E_WORKSPACE` | `1` | Enable reuse of temporary activation/GEMM scratch buffers; `0` disables reuse. |
+| `WAN2GP_LTX25_GEMM_TUNE` | `off` | Experimental `algo2_m64` microkernel option (not generally faster). |
+| `WAN2GP_LTX25_FP16_GEMM` | On automatically on V100 | `0` disables selective transient FP16 GEMMs; `1` explicitly enables them. |
+| `LTX25_FP16_GEMM_GROUPS` | `stage2:wide,stage2:tall,stage2:balanced` | Stage/shape groups eligible for selective FP16; Stage 1 groups require explicit opt-in. |
+| `LTX25_FP16_GEMM_OPS` / `LTX25_FP16_GEMM_BACKEND` | `qbytes_mm` / `direct` | Intercepted operator and dispatch method; `mm`/`addmm` and `dispatch` are research alternatives. |
+| `LTX25_FP16_GEMM_GUARD` | `first` | Check FP16 finiteness on first call per shape; `always` checks every call (slower), `off` skips checks. |
+| `LTX25_FP16_GEMM_MIN_M` / `LTX25_FP16_GEMM_MIN_DIM` | `1` / `64` | Minimum M and N/K for selective FP16 conversion. |
+| `LTX25_FP16_GEMM_ALLOW_SHAPES` | Unset | Optional exact `stage:M:N:K` allowlist for selective FP16. |
+| `LTX25_CUBLAS_E_LIB` / `WAN2GP_LTX25_E_AUTO_BUILD` | Auto-build / `1` | Override the compiled SM70 library path or disable compiling it on demand. |
+| `WAN2GP_LTX25_E_ROW_CENSUS` / `LTX25_FP16_GEMM_STATS_PATH` | `0` / `/tmp/ltx25-fp16-gemm-stats.json` | Optional Candidate E per-shape dispatch census and Stage 2 selector report destination. |
+
+The old experimental `WAN2GP_LTX25_E_TEST_4096X2048`, `WAN2GP_LTX25_E_TEST_4096X2048_PHASES`, and duplicate `WAN2GP_LTX25_DEFAULT_ON` controls have been retired; use the documented controls. Flags are read at process import, so restart the WanGP inference process after changing them. See [V100 default and opt-out validation](benchmarks/ltx25_convrot/CANDIDATE_E_4096X2048_DEFAULT_STAGE_FLAGS.md).
+
 -----
 <p align="center">
 <b>WanGP by DeepBeepMeep : The best Open Source Generative Models Accessible to the GPU Poor</b>

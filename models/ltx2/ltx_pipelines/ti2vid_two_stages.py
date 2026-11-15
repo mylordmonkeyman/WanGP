@@ -52,6 +52,7 @@ from ..editanything import build_editanything_reference_conditioning
 from shared.utils.loras_mutipliers import update_loras_slists
 from shared.utils.self_refiner import create_self_refiner_handler, normalize_self_refiner_plan
 from shared.utils.text_encoder_cache import TextEncoderCache
+from shared.kernels import ltx25_selective_fp16_gemm as fp16_gemm_experiment
 
 device = get_device()
 
@@ -358,6 +359,8 @@ class TI2VidTwoStagesPipeline:
             preview_tools: VideoLatentTools | None = None,
             mask_context=None,
         ) -> tuple[LatentState, LatentState]:
+            # Wrap ONLY denoising forwards; LoRA-step and MMGP keep the real model.
+            fp16_forward_transformer = fp16_gemm_experiment.forward_only(transformer)
             if use_hq_sampler:
                 hq_stg_blocks = list(perturbation_layers or [])
                 hq_stg_scale = 1.0 if perturbation_switch == PERTURBATION_SKIP_SELF_ATTENTION else 0.0
@@ -389,7 +392,7 @@ class TI2VidTwoStagesPipeline:
                         ),
                         v_context_p=v_context_p,
                         a_context_p=a_context_p,
-                        transformer=transformer,  # noqa: F821
+                        transformer=fp16_forward_transformer,  # forward-only FP16 scope
                         audio_identity_guidance_scale=audio_identity_guidance_scale,
                         ref_context=stage_1_ref_context,
                         ref_adaln=stage_1_ref_adaln,
@@ -417,7 +420,7 @@ class TI2VidTwoStagesPipeline:
                     v_context_n,
                     a_context_p,
                     a_context_n,
-                    transformer=transformer,  # noqa: F821
+                    transformer=fp16_forward_transformer,  # forward-only FP16 scope
                     alt_guidance_scale=alt_guidance_scale,
                     alt_scale=alt_scale,
                     perturbation_switch=perturbation_switch,
@@ -503,6 +506,7 @@ class TI2VidTwoStagesPipeline:
         )
         if callback is not None:
             callback(-1, None, True, override_num_inference_steps=len(sigmas) - 1, pass_no=stage_1_pass_no)
+        fp16_gemm_experiment.set_phase("stage1")
         video_state, audio_state = denoise_audio_video(
             output_shape=stage_1_output_shape,
             conditionings=stage_1_conditionings,
@@ -594,11 +598,13 @@ class TI2VidTwoStagesPipeline:
             stepper: DiffusionStepProtocol,
             preview_tools: VideoLatentTools | None = None,
             mask_context=None,
-        ) -> tuple[LatentState, LatentState]:
+         ) -> tuple[LatentState, LatentState]:
+            # The original transformer remains authoritative for MMGP and LoRA steps.
+            fp16_forward_transformer = fp16_gemm_experiment.forward_only(transformer)
             denoise_fn = simple_denoising_func(
                 video_context=v_context_p,
                 audio_context=a_context_p,
-                transformer=transformer,  # noqa: F821
+                transformer=fp16_forward_transformer,  # forward-only FP16 scope
                 alt_guidance_scale=1.0,
                 manage_lora_step=not use_hq_sampler,
                 ref_context=stage_2_ref_context,
@@ -720,6 +726,7 @@ class TI2VidTwoStagesPipeline:
         )
         if callback is not None:
             callback(-1, None, True, override_num_inference_steps=len(distilled_sigmas) - 1, pass_no=2)
+        fp16_gemm_experiment.set_phase("stage2")
         freeze_audio_stage2 = audio_identity_guidance_scale > 0.0
         stage_2_audio_conditionings = audio_conditionings if audio_conditionings_stage2 is None else audio_conditionings_stage2
         video_state, audio_state = denoise_audio_video(

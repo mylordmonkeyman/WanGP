@@ -70,3 +70,19 @@ The change is limited to this GitHub development branch. No installed `/opt/ai/w
 - Import-time env contract: `benchmarks/ltx25_convrot/test_candidate_e_4096x2048_stage_flags.py`.
 - End-to-end 49-frame Distilled T2V: `benchmarks/ltx25_convrot/verify_candidate_e_4096x2048_default_flags.py`.
 - Workflow: `.github/workflows/ltx25-candidate-e-default-4096x2048-flags.yml`.
+
+## Completed final V100 validation (2026-11-15)
+
+[GitHub Actions successful run 43739803642](https://github.com/mylordmonkeyman/WanGP/actions/runs/43739803642) passed 12 import-time valid flag combinations, 5 invalid-flag rejection cases, and all four matched actual **49-frame** 1024×576 Distilled T2V generations.
+
+| 4096x2048 selection | Used in Stage1 | Used in Stage2 | Stage2 transient FP16 GEMMs | PSNR to original stock |
+|---|---:|---:|---:|---:|
+| Default both ON | 384 | 144 | 1728 | 23.107871 dB |
+| Disable Stage1 | 0 | 144 | 1728 | 23.394218 dB |
+| Disable Stage2 | 384 | 0 | 1872 | 23.106580 dB |
+| Disable both | 0 | 0 | 1872 | 23.396925 dB |
+
+All dispatch counts match the expected flags. Each was a single-seed run, so small timing differences should not be interpreted as statistically established acceleration. The strict per-GEMM gate caution above remains in force.
+
+[Results and full logs](https://github.com/mylordmonkeyman/WanGP/actions/runs/43739803642/artifacts/14172312004) |
+[Four comparison MP4s](https://github.com/mylordmonkeyman/WanGP/actions/runs/43739803642/artifacts/14171794228)

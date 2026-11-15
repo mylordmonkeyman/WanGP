@@ -26,6 +26,14 @@ _block_loads = []
 _errors = []
 _clock = time.perf_counter_ns
 _forward_indices = defaultdict(int)
+_active_forward = None  # labels host-enqueued copies, not GPU completion timestamps
+
+
+def _forward_label():
+    # The prefetch worker may enqueue concurrently. This label is sampled at
+    # submission; prefetch work near boundaries can belong to a later forward.
+    with _lock:
+        return _active_forward
 
 
 def _phase():
@@ -52,7 +60,7 @@ def copy_stop(stream, start, entry_name, nbytes):
     if start is not None:
         end = _event(stream)
         with _lock:
-            _copies.append((entry_name, int(nbytes), _phase(), start, end))
+            _copies.append((entry_name, int(nbytes), _phase(), start, end, _active_forward))
 
 
 def consumer_wait(consumer, transfer, entry_name, future_resolver):
@@ -67,7 +75,7 @@ def consumer_wait(consumer, transfer, entry_name, future_resolver):
         consumer.wait_event(cuda_event)
         after = _event(consumer)
     with _lock:
-        _waits.append((entry_name, _phase(), host_future_ms, before, after))
+        _waits.append((entry_name, _phase(), host_future_ms, before, after, _active_forward))
 
 
 def block_load_start():
@@ -77,7 +85,7 @@ def block_load_start():
 def block_load_stop(t0, model_id, block_name, preload):
     with _lock:
         _block_loads.append((str(model_id), str(block_name), bool(preload),
-                             _phase(), (_clock() - t0) / 1e6))
+                             _phase(), (_clock() - t0) / 1e6, _active_forward))
 
 
 def record_plan(model_id, count, nbytes, max_block, window, total_blocks):
@@ -90,10 +98,13 @@ def record_plan(model_id, count, nbytes, max_block, window, total_blocks):
 
 
 def forward_call(fn, *args, **kwargs):
+    global _active_forward
     phase = _phase()
     with _lock:
         _forward_indices[phase] += 1
         nth = _forward_indices[phase]
+        previous = _active_forward
+        _active_forward = (phase, nth)
     start_host = _clock()
     consumer = torch.cuda.current_stream()
     before = _event(consumer) if not torch.cuda.is_current_stream_capturing() else None
@@ -103,6 +114,7 @@ def forward_call(fn, *args, **kwargs):
         after = _event(consumer) if before is not None else None
         with _lock:
             _forwards.append((phase, nth, (_clock() - start_host)/1e6, before, after))
+            _active_forward = previous
 
 
 def _gpu_ms(a, b):
@@ -125,29 +137,46 @@ def _report():
             "wait_for_prefetch_future_host_ms_sum": 0.0,
             "block_load_count": 0, "block_load_host_ms_sum": 0.0})
         copy_entries = defaultdict(lambda: {"calls": 0, "bytes": 0, "gpu_ms_sum": 0.0})
-        for entry, nbytes, phase, a, b in _copies:
+        by_forward = defaultdict(lambda: {"copy_count":0,"copy_bytes":0,"copy_gpu_ms_sum":0.0,
+            "consumer_wait_count":0,"consumer_wait_gpu_ms_sum":0.0,
+            "prefetch_future_host_ms_sum":0.0,"block_load_count":0,
+            "block_load_host_ms_sum":0.0})
+        def forward_id(label):
+            return "outside_transformer" if label is None else f"{label[0]}:{label[1]}"
+        for entry, nbytes, phase, a, b, forward in _copies:
             elapsed = _gpu_ms(a, b)
             x = buckets[phase]
             x["copy_count"] += 1
             x["copy_bytes"] += nbytes
             x["copy_event_gpu_ms_sum"] += elapsed or 0
+            z=by_forward[forward_id(forward)]
+            z["copy_count"] += 1
+            z["copy_bytes"] += nbytes
+            z["copy_gpu_ms_sum"] += elapsed or 0
             y = copy_entries[entry]
             y["calls"] += 1
             y["bytes"] += nbytes
             y["gpu_ms_sum"] += elapsed or 0
         waits = []
-        for entry, phase, host_ms, a, b in _waits:
+        for entry, phase, host_ms, a, b, forward in _waits:
             gpu_ms = _gpu_ms(a, b)
             x = buckets[phase]
             x["wait_count"] += 1
             x["consumer_wait_gpu_ms_sum"] += gpu_ms or 0
             x["wait_for_prefetch_future_host_ms_sum"] += host_ms
+            z=by_forward[forward_id(forward)]
+            z["consumer_wait_count"] += 1
+            z["consumer_wait_gpu_ms_sum"] += gpu_ms or 0
+            z["prefetch_future_host_ms_sum"] += host_ms
             waits.append({"entry":entry,"phase":phase,"future_host_ms":round(host_ms,6),
                           "consumer_wait_gpu_ms":gpu_ms})
-        for model_id, block_name, preload, phase, ms in _block_loads:
+        for model_id, block_name, preload, phase, ms, forward in _block_loads:
             x = buckets[phase]
             x["block_load_count"] += 1
             x["block_load_host_ms_sum"] += ms
+            z=by_forward[forward_id(forward)]
+            z["block_load_count"] += 1
+            z["block_load_host_ms_sum"] += ms
         forwards = [{"phase":phase, "number":nth, "host_call_ms":round(ms,5),
                      "gpu_span_ms":_gpu_ms(a,b)}
                     for phase,nth,ms,a,b in _forwards]
@@ -160,9 +189,11 @@ def _report():
                 "Copy streams, prefetches and transformer execution may overlap.",
                 "Consumer stream wait event interval is a dependency-stall proxy, not necessarily total MMGP overhead.",
                 "Event recorder overhead perturbs instrumented full-process timing; compare to separately measured normal baseline.",
-                "Instrumentation captures MMGP _move_block fused-buffer transfers; fallback per-tensor copies can be uncounted."
+                "Instrumentation captures MMGP _move_block fused-buffer transfers; fallback per-tensor copies can be uncounted.",
+                "Per-forward tags label host enqueue time, not GPU execution: prefetches can cross forward boundaries."
             ],
             "by_phase": dict(buckets),
+            "by_forward_host_enqueue": dict(by_forward),
             "preload_plans": _plans,
             "transformer_forwards": forwards,
             "longest_consumer_gpu_waits": sorted(

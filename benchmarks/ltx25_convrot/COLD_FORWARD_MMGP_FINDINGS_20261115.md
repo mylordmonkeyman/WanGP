@@ -45,3 +45,32 @@ The first forward has essentially the same main math kernel duration as the seco
 `WAN2GP_LTX25_STAGE2_KEEP_CUDA_CACHE=1` in `models/ltx2/ltx_pipelines/distilled.py` skips **only** the one CUDA caching-allocator purge just after spatial upscaling; the existing `gc.collect()` and `torch.cuda.synchronize()` remain. Flag defaults to off. Model weights and numerical kernels are untouched, and it does not create a second persistent FP16 weight set. The hypothesis is that retaining free allocator blocks reduces the large cold Stage2 CPU block-load cost, but it may not: MMGP auto-preload can also release model blocks to make room for the upscaler.
 
 [73f T2V/I2V A–B–B–A end-to-end run 43765110798](https://github.com/mylordmonkeyman/WanGP/actions/runs/43765110798) tests eight fresh processes and checks every decoded video/audio hash against the stable main. Do not promote unless output parity, memory safety and a reproducible whole-video saving are demonstrated.
+
+## Completed A–B–B–A cache-retention experiment (73f)
+
+[Eight-generation run 43765110798](https://github.com/mylordmonkeyman/WanGP/actions/runs/43765110798) **PASS**. Each arm uses one fresh 73-frame 1024×576, 8-step bar generation; no CUDA profiler in timing runs, same Candidate E coverage (27,360) and disabled tiled epilogue (zero tiled calls). All eight videos' decoded video/audio SHA256 match pinned stable `main`.
+
+| Mode | A1 original | B1 keep cache | B2 keep cache | A2 original | A mean | B mean | B speedup |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| T2V | 112.267 s | 111.822 s | 112.077 s | 112.077 s | 112.172 s | 111.9495 s | +0.1984% |
+| I2V | 113.440 s | 113.282 s | 114.290 s | 114.133 s | 113.7865 s | 113.7860 s | +0.0004% |
+
+**Decision:** Leave `WAN2GP_LTX25_STAGE2_KEEP_CUDA_CACHE` default **off**. Marginal T2V change and zero I2V change are within run-to-run scatter and do not justify promotion. This narrows the bottleneck: simply retaining free CUDA allocator cache blocks is not sufficient to remove cold host block-installation overhead.
+
+## Completed MMGP per-block CPU breakdown
+
+[Profiling run 43765627202](https://github.com/mylordmonkeyman/WanGP/actions/runs/43765627202) **PASS**, T2V only, decoded outputs bit-identical. Temporary instrumentation overlays restored bytes after process. In each per-forward table, component timing sums are **nested** and not additive; the sections measure synchronous host time spent invoking Python work and enqueuing GPU work, not exclusive GPU wall.
+
+| MMGP CPU section (summed, T2V) | Stage 1 first | Stage 1 second | Stage 2 first | Stage 2 second |
+| --- | ---: | ---: | ---: | ---: |
+| All `gpu_load_blocks` calls | 1,310 ms | 384 ms | **5,840 ms** | 642 ms |
+| `copy_block` parameter installation / LoRA (within above) | 353 ms | 15 ms | **5,018 ms** | **27 ms** |
+| `_move_block` allocation + fused H2D copy enqueue (nested) | 325 ms | 326 ms | 291 ms | 551 ms |
+| `_load_pipelined` (nested) | 544 ms | 368 ms | 383 ms | 623 ms |
+| Unload preceding block | 8 ms | — | 7 ms | — |
+| MMGP `empty_cache_if_needed` checks | 1 ms | — | 3 ms | — |
+| Recorded `copy_block` invocations | 51 | 46 | **99** | 46 |
+
+The cold Stage 2 forward executes many **preload=True** parameter installations in addition to ordinary recurrent block loads: this is the dominant measured CPU-side section. The stage2 first cold 99 `copy_block` calls incur 5.02 seconds vs 27 milliseconds for 46 warm calls. Largest individual 64-block and base-weight loads are ~100–338 ms. The 5.02 seconds is not necessarily recoverable, since some work overlaps GPU compute and weights must be transferred/installed somewhere.
+
+**Revised next target:** Profile or change the cold `copy_block` parameter-installation/preload path, not a generic global allocator cache purge. Test whether the cold passes create many small unpinned per-tensor copies and whether grouping/staging or first-pass preload placement can cut launch and CPU dispatch overhead without a second persistent weight set or increased peak VRAM. Start with a strictly opt-in, bounded change and repeat end-to-end A–B–B–A before default promotion.

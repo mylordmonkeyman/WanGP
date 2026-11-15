@@ -49,7 +49,8 @@ def main():
             "WAN2GP_LTX25_E_MIN_M":str(current_min),
             "WAN2GP_LTX25_E_MAX_M":"8192",
             "WAN2GP_LTX25_E_ROW_CENSUS":"1",
-            "WAN2GP_LTX25_E_TEST_4096X2048":"0",
+            "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1":"1",
+            "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2":"1",
         })
         return env
 
@@ -78,7 +79,7 @@ def main():
         stats=four.read_candidate_stats(log)
         require(stats and stats.get("min_m")==min_m and stats.get("max_m")==8192,
                 "Incorrect effective E thresholds")
-        require(not stats.get("experimental_failed_shape_enabled"),
+        require(not stats.get("active_4096x2048_phases"),
                 "Unsafe shape enabled")
         census=stats.get("row_census",{})
         require(stats.get("row_census_enabled") and any(k.startswith("M=51,") for k in census),

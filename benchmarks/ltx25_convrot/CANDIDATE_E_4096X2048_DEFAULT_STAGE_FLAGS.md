@@ -90,3 +90,25 @@ All dispatch counts match the expected flags. Each was a single-seed run, so sma
 
 [Results and full logs](https://github.com/mylordmonkeyman/WanGP/actions/runs/43739803642/artifacts/14172312004) |
 [Four comparison MP4s](https://github.com/mylordmonkeyman/WanGP/actions/runs/43739803642/artifacts/14171794228)
+
+## Post-cleanup full-video numerical regression
+
+After retiring the Candidate E and Distilled whole-pipeline profiling hooks
+and removing the duplicate shape-enablement environment flags:
+
+- [49-frame four-way stage opt-out regression](https://github.com/mylordmonkeyman/WanGP/actions/runs/43741570613):
+  **PASS**, all four routes exercised correctly; decoded video hashes and
+  stock-reference PSNR/SSIM unchanged from the pre-cleanup outputs.
+  Import-time flag contract: 5 valid configurations and 9 invalid/rejected
+  configurations, including the two retired legacy research switches.
+- [73-frame T2V/I2V bit-exact regression](https://github.com/mylordmonkeyman/WanGP/actions/runs/43742195972):
+  **PASS** for both modes using the original bar prompt and image.
+  Each cleaned output's decoded frame SHA-256 and PCM-audio SHA-256 matched
+  the corresponding pre-cleanup video from run 43686816635 exactly.
+  Both modes retained 27,360 Candidate E calls, including precisely 384
+  Stage 1 and 144 Stage 2 calls for the (4096,2048) family.
+  T2V took 112.736s and I2V took 113.777s (individual whole-process runs).
+
+These checks establish absence of numerical output regressions on the tested
+seed and settings; they do not override the previously failed strict per-GEMM
+accuracy gate or establish universal perceptual equivalence.

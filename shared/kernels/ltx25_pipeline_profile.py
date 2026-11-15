@@ -22,6 +22,11 @@ import torch
 
 ENABLED = os.environ.get("WAN2GP_LTX25_PIPELINE_PROFILE", "") == "1"
 OP_SAMPLE = os.environ.get("LTX25_PIPELINE_OP_SAMPLE", "1") == "1"
+# Research-only multi-forward sampling. Default unchanged: second forward only.
+SAMPLE_FORWARD_INDEXES = tuple(int(x) for x in os.environ.get(
+    "LTX25_PIPELINE_SAMPLE_FORWARD_INDEXES", "2").split(",") if x.strip())
+if not SAMPLE_FORWARD_INDEXES or any(x < 1 or x > 16 for x in SAMPLE_FORWARD_INDEXES):
+    raise ValueError("Invalid LTX25_PIPELINE_SAMPLE_FORWARD_INDEXES")
 GEMM_CENSUS = os.environ.get("LTX25_PIPELINE_GEMM_CENSUS", "0") == "1"
 TRACE_ATTRIBUTION = os.environ.get("LTX25_PIPELINE_TRACE_ATTRIBUTION", "0") == "1"
 PATH = Path(os.environ.get("LTX25_PIPELINE_PROFILE_PATH", "/tmp/ltx25-pipeline-profile.json"))
@@ -239,7 +244,7 @@ def maybe_sample_forward(module, *args, **kwargs):
     phase = _FORWARD_PHASE
     _FORWARD_CALLS[phase] += 1
     call = _FORWARD_CALLS[phase]
-    if call != 2:
+    if call not in SAMPLE_FORWARD_INDEXES:
         return module(*args, **kwargs)
     try:
         from torch.profiler import ProfilerActivity, profile
@@ -284,7 +289,7 @@ def maybe_sample_forward(module, *args, **kwargs):
                 _capture_gemm_census(context, phase, call)
             if TRACE_ATTRIBUTION:
                 from shared.kernels.ltx25_cuda_trace_attribution import summarize_chrome_trace
-                trace_path = PATH.parent / f"{PATH.stem}-{phase}-cuda-trace.json"
+                trace_path = PATH.parent / f"{PATH.stem}-{phase}-forward{call}-cuda-trace.json"
                 trace_path.parent.mkdir(parents=True, exist_ok=True)
                 context.export_chrome_trace(str(trace_path))
                 trace_report = summarize_chrome_trace(trace_path)
@@ -337,6 +342,7 @@ def _summary() -> None:
         "phases": phases,
         "transformer_by_phase": _TRANSFORMER,
         "forward_counts": dict(_FORWARD_CALLS),
+        "sample_forward_indexes": SAMPLE_FORWARD_INDEXES,
         "sampled_operator_forwards": _FORWARD_SAMPLES,
         "gemm_census_enabled": GEMM_CENSUS,
         "gemm_census_samples": _GEMM_CENSUS_SAMPLES,
@@ -348,7 +354,7 @@ def _summary() -> None:
             "Pipeline phases exclude model initial loading, CLI setup, file encoding and output saving.",
             "CUDA stream and memory-transfer overlap may change with boundary fences.",
             "Transformer forward events include transfer waits/enqueue gaps and cannot independently isolate pure compute.",
-            "Only the second transformer forward of each phase is sampled by torch.profiler.",
+            "Sampled transformer forwards are configurable; timestamps include profiling overhead.",
             "Native ctypes Candidate E kernels and MMGP cross-stream transfers may not be fully attributed to PyTorch operations.",
             "Do not subtract accumulated profiler operator times from whole-pipeline wall time.",
         ],

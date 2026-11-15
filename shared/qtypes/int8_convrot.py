@@ -481,10 +481,13 @@ class QLinearInt8ConvRot(QModuleMixin, torch.nn.Linear):
         fusion = getattr(self, '_wangp_linear_fusion', None)
         if fusion is not None:
             return int8_backend.linear_fused(input, qweight, self.bias, self._convrot_group_size, *fusion)
-        # Default on V100 (SM70) for only the previously validated INT8
-        # ConvRot matrix families. The adapter performs shape, device, dtype,
-        # stream and GPU range checks, and falls back to native WanGP R0 when
-        # native code is unavailable or the operation is ineligible.
+        # Default on V100 (SM70) for the approved ConvRot matrix families,
+        # plus the explicitly user-selected (N=4096,K=2048) family. The latter
+        # failed a strict checkpoint-backed GEMM precision gate; it can be
+        # disabled for either denoising stage with the corresponding
+        # WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE{1,2}=1 opt-out flag.
+        # The adapter checks shape, device, dtype, stream, and numeric range,
+        # falling back to native WanGP when the operation is ineligible.
         # WAN2GP_LTX25_CUBLAS_E_MODE=off restores the original dispatch.
         if (os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "fp32rot").strip().lower()
                 == "fp32rot"

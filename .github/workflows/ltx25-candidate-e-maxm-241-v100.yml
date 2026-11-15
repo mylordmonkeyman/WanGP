@@ -1,0 +1,66 @@
+name: V100 241-frame Candidate E upper cutoff 8192 vs 16384 live census
+on:
+  push:
+    branches: [perf/ltx25-candidate-e-cutoff-sweep-20261114]
+    paths:
+      - benchmarks/ltx25_convrot/cutoff_maxm_241_census.py
+      - .github/workflows/ltx25-candidate-e-maxm-241-v100.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  upper_census:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 60
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_MAXM_VIDEO_OUT: /cache/ltx25/results/maxm-video-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout experimental row threshold branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Verify code and idle V100
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+          "$LTX25_PYTHON" -m py_compile benchmarks/ltx25_convrot/cutoff_maxm_241_census.py
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test ! -e "$LTX25_MAXM_VIDEO_OUT"
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::error::V100 busy: $busy"; exit 1; fi
+      - name: 241-frame real workload cutoff census and optional maxM 16384 trial
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/cutoff_maxm_241_census.py 2>&1 | tee cutoff-maxm-241.log
+          grep -Fq 'LTX25_MAXM_241_CENSUS_PASS' cutoff-maxm-241.log
+      - name: Upload full-run live shape census, selection and timings
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-candidate-e-maxm-241-results
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            cutoff-maxm-241.log
+            /cache/ltx25/results/maxm-video-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.json
+            /cache/ltx25/results/maxm-video-${{ github.run_id }}-attempt${{ github.run_attempt }}/partial-results.json
+            /cache/ltx25/results/maxm-video-${{ github.run_id }}-attempt${{ github.run_attempt }}/results/*.json
+            /cache/ltx25/results/maxm-video-${{ github.run_id }}-attempt${{ github.run_attempt }}/logs/*.log
+      - name: Upload 241-frame video(s) for perceptual comparison
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-candidate-e-maxm-241-videos
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: /cache/ltx25/results/maxm-video-${{ github.run_id }}-attempt${{ github.run_attempt }}/clips/*.mp4

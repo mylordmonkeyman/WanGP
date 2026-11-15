@@ -20,7 +20,7 @@ When Stage 2 falls back, it may pass through the existing, separately configured
 Examples:
 
 ```bash
-# Both stages ON (default): unset old research flags and new opt-outs.
+# Both stages ON (default): remove obsolete experiment flags and opt-outs.
 unset WAN2GP_LTX25_E_TEST_4096X2048
 unset WAN2GP_LTX25_E_TEST_4096X2048_PHASES
 unset WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1
@@ -42,16 +42,20 @@ WAN2GP_LTX25_CUBLAS_E_MODE=off python wgp.py ...
 
 Both new opt-out flags only accept the values `0` and `1`. Invalid values raise `ValueError` immediately rather than silently ignoring the request.
 
-## Backward compatibility
+## Retired experiment flags
 
-Old benchmark controls retain their prior explicit behavior:
+The duplicate research controls `WAN2GP_LTX25_E_TEST_4096X2048` and
+`WAN2GP_LTX25_E_TEST_4096X2048_PHASES` are **no longer supported**.
+If an older launch script exports either one, the kernel raises a
+`ValueError` explaining the two canonical per-stage opt-outs, instead of
+silently selecting the wrong path. The `WAN2GP_LTX25_DEFAULT_ON` environment
+flag is also unnecessary: `WAN2GP_LTX25_CUBLAS_E_MODE` alone controls
+Candidate E. Use the settings in the table above.
 
-- `WAN2GP_LTX25_E_TEST_4096X2048=0` disables the family in both stages.
-- `WAN2GP_LTX25_E_TEST_4096X2048=1` enables both stages.
-- `WAN2GP_LTX25_E_TEST_4096X2048_PHASES=none` disables both; `stage1`, `stage2`, or `stage1,stage2` selectively enables those stages.
-- **The new opt-out flags always win** over both old overrides.
-
-**Important:** Old scripts exporting the old experimental flag with `=0` will NOT get the new default until that flag is removed.
+Retired per-GEMM stage profiling and the Distilled pipeline event profiler
+have been detached from the normal inference path. Historical benchmark
+scripts/workflows are retained for provenance; the currently maintained
+regression scripts have been migrated to the canonical controls.
 
 ## Existing evidence and caution
 

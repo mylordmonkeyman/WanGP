@@ -179,6 +179,42 @@ __global__ void finish_rows_low(float* __restrict__ c32,
   }
 }
 
+// Research-only tiled variant of the EXISTING, validated FP32-corrected
+// fused-output epilogue. One CTA handles one 256-column tile of one row.
+// Every output uses exactly the original sum=fmaf(...) order, FP32 row scale,
+// FP32 bias and round-to-nearest BF16/FP16 conversion. No extra allocations,
+// device synchronizations or persistent weight copies. Existing symbol and
+// kernel remain entirely untouched when the opt-in flag is absent.
+template <typename OutT>
+__global__ void finish_rows_low_tiled(
+    const float* __restrict__ c32, OutT* __restrict__ output,
+    const float* __restrict__ x32, const signed char* __restrict__ q,
+    const float* __restrict__ scale, const float* __restrict__ bias,
+    const int* __restrict__ exponents, const int* __restrict__ slow_rows,
+    int m, int n, int k) {
+  const int row = blockIdx.x;
+  const int col = static_cast<int>(blockIdx.y) * blockDim.x + threadIdx.x;
+  if (row >= m || col >= n) return;
+  const int slow = slow_rows[row];
+  const int exponent = exponents[row];
+  const size_t xstart = static_cast<size_t>(row) * k;
+  const size_t outstart = static_cast<size_t>(row) * n;
+  float value;
+  if (slow) {
+    const size_t qstart = static_cast<size_t>(col) * k;
+    float sum = 0.0f;
+    for (int i = 0; i < k; ++i) {
+      sum = fmaf(x32[xstart + i], static_cast<float>(q[qstart + i]), sum);
+    }
+    value = sum;
+  } else {
+    value = ldexpf(c32[outstart + col], -exponent);
+  }
+  value = __fmul_rn(value, scale[col]);
+  if (bias) value = __fadd_rn(value, bias[col]);
+  output[outstart + col] = narrow_output<OutT>(value);
+}
+
 // Experimental 256-point Kronecker Hadamard, exact H4 sign/order.
 // FP32 rounding differs slightly from torch.matmul; only opt-in.
 // One block per 256-element activation group. No persistent state.
@@ -464,4 +500,41 @@ extern "C" int ltx25_cublas_epilogue_f32_to_f16(
   return launch_epilogue_low<__half>(
       c32, output, x32, q, scale, bias, exponents, slow_rows,
       m, n, k, stream_ptr);
+}
+
+template <typename OutT>
+static int launch_epilogue_low_tiled(
+    void* c32, void* output, const void* x32, const void* q,
+    const void* scale, const void* bias, const void* exponents,
+    const void* slow_rows, int m, int n, int k, void* stream_ptr) {
+  if (!c32 || !output || !x32 || !q || !scale || !exponents ||
+      !slow_rows || m <= 0 || n <= 0 || k <= 0)
+    return -1;
+  const auto stream = reinterpret_cast<cudaStream_t>(stream_ptr);
+  const dim3 grid(static_cast<unsigned>(m),
+                  static_cast<unsigned>((n + THREADS - 1) / THREADS));
+  finish_rows_low_tiled<OutT><<<grid, THREADS, 0, stream>>>(
+      static_cast<const float*>(c32), static_cast<OutT*>(output),
+      static_cast<const float*>(x32), static_cast<const signed char*>(q),
+      static_cast<const float*>(scale), static_cast<const float*>(bias),
+      static_cast<const int*>(exponents), static_cast<const int*>(slow_rows),
+      m, n, k);
+  const auto err = cudaPeekAtLastError();
+  return err == cudaSuccess ? 0 : 9000 + int(err);
+}
+
+extern "C" int ltx25_cublas_epilogue_f32_to_bf16_tiled(
+    void* c32, void* output, const void* x32, const void* q,
+    const void* scale, const void* bias, const void* exponents,
+    const void* slow_rows, int m, int n, int k, void* stream_ptr) {
+  return launch_epilogue_low_tiled<__nv_bfloat16>(
+      c32, output, x32, q, scale, bias, exponents, slow_rows, m, n, k, stream_ptr);
+}
+
+extern "C" int ltx25_cublas_epilogue_f32_to_f16_tiled(
+    void* c32, void* output, const void* x32, const void* q,
+    const void* scale, const void* bias, const void* exponents,
+    const void* slow_rows, int m, int n, int k, void* stream_ptr) {
+  return launch_epilogue_low_tiled<__half>(
+      c32, output, x32, q, scale, bias, exponents, slow_rows, m, n, k, stream_ptr);
 }

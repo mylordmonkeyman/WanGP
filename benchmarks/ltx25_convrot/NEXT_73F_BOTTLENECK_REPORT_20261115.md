@@ -64,3 +64,17 @@ The *screening calculations* below multiply second-forward GPU device event time
 GEMM remains a large GPU-work category, but prior cuBLAS/cublasLt heuristic tuning was unsuccessful. Do not repeat without new evidence. Attention is substantial in stage2 (~0.51–1.11 s/sample), but alternative arithmetic risks visual fidelity and should not displace lower-risk measured opportunities first. Radix-4 itself is not the primary current hotspot.
 
 **Promotion rule:** the next experiment is not eligible for default or `main` until targeted CUDA microbench accuracy tests, whole-video A–B–B–A, hashes/PSNR/SSIM/audio metrics, repeatability and VRAM/regression gates pass. Any performance improvement inferred from this report alone is a hypothesis.
+
+
+## Experimental candidate 1 result — tiled Candidate E epilogue
+
+**Result:** rejected for promotion on these workloads. See [V100 full-process 73f T2V/I2V A–B–B–A run 43749888611](https://github.com/mylordmonkeyman/WanGP/actions/runs/43749888611) and [V100 bit-parity microbenchmark run 43749614759](https://github.com/mylordmonkeyman/WanGP/actions/runs/43749614759). Development implementation is guarded by `WAN2GP_LTX25_E_EPILOGUE_TILED=1`; default remains off. The tiled kernel only dispatches for `M<=128, N>=2048`; existing kernel is the fallback.
+
+| Mode | Baseline A1 | Tiled B1 | Tiled B2 | Baseline A2 | A mean | B mean | End-to-end B improvement |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| T2V | 111.913 s | 111.384 s | 111.928 s | 112.075 s | 111.994 s | 111.656 s | +0.302% |
+| I2V | 113.577 s | 113.537 s | 113.618 s | 113.326 s | 113.452 s | 113.578 s | -0.111% |
+
+All **eight videos and their decoded audio** were bit-identical to the pinned stable baseline. Candidate E executed 27,360 calls per run, of which exactly 9,216 were tiled in B runs; no extra persistent weight copies. The same exception count per mode was observed across all arms (8,898 T2V and 7,103 I2V FP32 exceptional rows). GPU-only BF16 epilogue microbenchmarks passed strict `torch.equal`, including exceptional-row cases, and showed up to 2.95× faster typical narrow-row wide-N execution and 18–27× on contrived exceptional-row inputs. These did **not** translate into a reliable full-process benefit. Do not merge, enable by default, or claim recoverable wall time.
+
+**Updated priorities:** (1) quantify memory transfer and model residency critical-path wait vs GPU execution; (2) investigate exact transient INT8→FP16 conversion scheduling, without another persistent weight set; (3) revisit fused Candidate E pipeline only if a controlled full-video result shows a larger recoverable fraction. The tiled epilogue can remain as a reversible diagnostic option.

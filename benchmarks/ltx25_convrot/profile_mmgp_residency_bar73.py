@@ -63,6 +63,25 @@ def temporary_mmgp_overlay():
             '                buffer[:nbytes].copy_(self.ring.buffer[region[0]:region[0] + nbytes], non_blocking=True)\n'
             '            mmgp_probe.copy_stop(stream, mmgp_copy_start, entry_name, nbytes)\n')
         o=splice(o,
+            'moved = self._move_block(stream, entry_name, staged if staged is not None and staged[1] else None)',
+            'moved = mmgp_probe.timed_call("move_block_allocate_and_copy_enqueue", self._move_block, stream, entry_name, staged if staged is not None and staged[1] else None)')
+        o=splice(o,
+            '        self.wait_prefetch() # the staging thread must not allocate memory freed below while it may still be read',
+            '        mmgp_probe.timed_call("wait_prefetch_all", self.wait_prefetch) # diagnostic host wall, no GPU wait inserted')
+        o=splice(o,
+            '            self._load_pipelined(model_id, entry_name, cpu_to_gpu)',
+            '            mmgp_probe.timed_call("load_pipelined", self._load_pipelined, model_id, entry_name, cpu_to_gpu)')
+        o=splice(o,
+            '            return copy_block(stream_to_use, blocks_params, parallel_staging, moved)',
+            '            return mmgp_probe.timed_call("copy_block_params_and_lora", copy_block, stream_to_use, blocks_params, parallel_staging, moved)')
+        o=splice(o,
+            '            self.gpu_unload_blocks(model_id, loaded_block)\\n'
+            '            if self.ready_to_check_mem():\\n'
+            '                self.empty_cache_if_needed()',
+            '            mmgp_probe.timed_call("unload_prior_block", self.gpu_unload_blocks, model_id, loaded_block)\\n'
+            '            if self.ready_to_check_mem():\\n'
+            '                mmgp_probe.timed_call("empty_cache_check", self.empty_cache_if_needed)')
+        o=splice(o,
             '    def gpu_load_blocks(self, model_id, blocks_name, preload = False):\n'
             '        # cl = clock.start()',
             '    def gpu_load_blocks(self, model_id, blocks_name, preload = False):\n'

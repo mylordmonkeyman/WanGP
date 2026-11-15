@@ -61,9 +61,7 @@ def main():
     case_stage2=False
     def config_env(arm,name):
         env=old_env(arm,name)
-        for k in ("WAN2GP_LTX25_E_TEST_4096X2048",
-                  "WAN2GP_LTX25_E_TEST_4096X2048_PHASES",
-                  "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1",
+        for k in ("WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1",
                   "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2"):
             env.pop(k,None)
         # The default case does not specify either flag. The other cases
@@ -103,13 +101,11 @@ def main():
         if disable_stage2:expected.remove("stage2")
         require(e.get("active_4096x2048_phases")==expected,
                 "Effective default/opt-out phases differ")
-        require(e.get("experimental_failed_shape_phases")==expected,
-                "Legacy reporting compatibility regressed")
         expected_disabled=[a for a,v in (("stage1",disable_stage1),
                                         ("stage2",disable_stage2)) if v]
         require(e.get("disabled_4096x2048_stages")==expected_disabled,
                 "Opt-out stage list differs from actual env flags")
-        target=e.get("experimental_shape_by_phase",{})
+        target=e.get("shape_4096x2048_by_phase",{})
         require(set(target)=={"stage1","stage2"},"Stage counters absent")
         for stage,total,off in (("stage1",384,disable_stage1),
                                 ("stage2",144,disable_stage2)):

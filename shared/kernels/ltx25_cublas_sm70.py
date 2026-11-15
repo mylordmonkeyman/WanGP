@@ -52,7 +52,7 @@ CAST_MODE = os.environ.get("WAN2GP_LTX25_E_CAST", "vector8").strip().lower()
 ROT_MODE = os.environ.get("WAN2GP_LTX25_HADAMARD", "radix4").strip().lower()
 ROT_INPUT = os.environ.get("WAN2GP_LTX25_ROT_INPUT", "direct").strip().lower()
 OUTPUT_MODE = os.environ.get("WAN2GP_LTX25_E_OUTPUT", "fused").strip().lower()
-# Experiment only: split narrow-M, wide-N FP32/BF16 epilogue across CTAs.
+# Experiment only: split narrow-M (<=128), wide-N FP32/BF16 epilogue across CTAs.
 # Default is unchanged; no second weight copies or host/device synchronization.
 EPILOGUE_TILED = os.environ.get("WAN2GP_LTX25_E_EPILOGUE_TILED", "0") == "1"
 GEMM_TUNE = os.environ.get("WAN2GP_LTX25_GEMM_TUNE", "off").strip().lower()
@@ -395,7 +395,7 @@ def maybe_linear(x, weight, bias, group):
             else:
                 raise ValueError(f"Unknown WAN2GP_LTX25_ROT_INPUT={ROT_INPUT!r}")
         if OUTPUT_MODE == "fused":
-            _fused_output_fn(x.dtype, tiled=EPILOGUE_TILED and m <= 512 and n >= 2048)
+            _fused_output_fn(x.dtype, tiled=EPILOGUE_TILED and m <= 128 and n >= 2048)
         elif OUTPUT_MODE not in ("torch", ""):
             raise ValueError(f"Unknown WAN2GP_LTX25_E_OUTPUT={OUTPUT_MODE!r}")
         if GEMM_TUNE == "algo2_m64" and (n, k, m) == (16384, 4096, 64):
@@ -508,7 +508,7 @@ def maybe_linear(x, weight, bias, group):
             # FP32 row-scale/exception-correction pass. No permanent weight
             # copy and no changes to cuBLAS or safe-row numerics.
             out = torch.empty((*x.shape[:-1], n), dtype=x.dtype, device=x.device)
-            tiled_epilogue = EPILOGUE_TILED and m <= 512 and n >= 2048
+            tiled_epilogue = EPILOGUE_TILED and m <= 128 and n >= 2048
             status = _fused_output_fn(x.dtype, tiled=tiled_epilogue)(
                 ptr(c32.data_ptr()), ptr(out.data_ptr()),
                 ptr(x32.data_ptr()), ptr(q.data_ptr()),

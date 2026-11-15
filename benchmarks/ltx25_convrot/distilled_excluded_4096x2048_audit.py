@@ -72,8 +72,9 @@ def main():
     require(e.MODE=="fp32rot" and e.ROT_MODE=="radix4" and e.CAST_MODE=="vector8",
             "unexpected Candidate E implementation")
     require(e.MIN_M==64 and e.MAX_M==8192,"source defaults not unmodified")
-    require(os.getenv("WAN2GP_LTX25_E_TEST_4096X2048")=="1"
-            and SHAPE in e.PASS_SHAPES,"excluded shape research opt-in not active")
+    require(SHAPE in e.PASS_SHAPES and
+            set(e.ENABLED_4096X2048_PHASES)=={"stage1","stage2"},
+            "Candidate E test family not enabled in both stages")
     require(selector.ENABLED and selector.BACKEND=="direct"
             and "qbytes_mm" in selector.OPS,"FP16 competitor not configured")
     # Load tensor *slices*, not the entire 19GB model. Three independent

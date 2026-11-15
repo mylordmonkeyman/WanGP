@@ -1,0 +1,41 @@
+name: Inventory untested Candidate E weight-shape families in Dev and Distilled
+on:
+  push:
+    branches: [perf/ltx25-candidate-e-cutoff-sweep-20261114]
+    paths:
+      - benchmarks/ltx25_convrot/candidate_e_weight_shape_inventory.py
+      - .github/workflows/ltx25-candidate-e-weight-inventory-v100.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  inventory:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 8
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_SHAPE_INVENTORY_OUT: /cache/ltx25/results/candidate-e-weight-inventory-${{ github.run_id }}.json
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Read Dev and Distilled safetensors headers (no GPU memory)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -m py_compile benchmarks/ltx25_convrot/candidate_e_weight_shape_inventory.py
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/candidate_e_weight_shape_inventory.py | tee weight-family-inventory.log
+          grep -Fq 'CANDIDATE_E_WEIGHT_SHAPE_INVENTORY_PASS' weight-family-inventory.log
+      - name: Publish full shape family inventory
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-e-dev-distilled-weight-family-inventory
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            weight-family-inventory.log
+            /cache/ltx25/results/candidate-e-weight-inventory-${{ github.run_id }}.json

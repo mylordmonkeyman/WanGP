@@ -75,11 +75,11 @@ def temporary_mmgp_overlay():
             '            return copy_block(stream_to_use, blocks_params, parallel_staging, moved)',
             '            return mmgp_probe.timed_call("copy_block_params_and_lora", copy_block, stream_to_use, blocks_params, parallel_staging, moved)')
         o=splice(o,
-            '            self.gpu_unload_blocks(model_id, loaded_block)\\n'
-            '            if self.ready_to_check_mem():\\n'
+            '            self.gpu_unload_blocks(model_id, loaded_block)\n'
+            '            if self.ready_to_check_mem():\n'
             '                self.empty_cache_if_needed()',
-            '            mmgp_probe.timed_call("unload_prior_block", self.gpu_unload_blocks, model_id, loaded_block)\\n'
-            '            if self.ready_to_check_mem():\\n'
+            '            mmgp_probe.timed_call("unload_prior_block", self.gpu_unload_blocks, model_id, loaded_block)\n'
+            '            if self.ready_to_check_mem():\n'
             '                mmgp_probe.timed_call("empty_cache_check", self.empty_cache_if_needed)')
         o=splice(o,
             '    def gpu_load_blocks(self, model_id, blocks_name, preload = False):\n'

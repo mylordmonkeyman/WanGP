@@ -17,6 +17,7 @@ import traceback
 
 import selective_fp16_t2v_smoke as base
 import t2v73_241_original_stock_fourway as four
+import distilled_bar73_stage_shape_fourway as stage_shape
 from profile_gemm_t2v_i2v import PROMPT, INPUT_IMAGE, check_png
 from verify_cleanup_bar73_bitexact import KNOWN
 
@@ -125,7 +126,7 @@ def run(mode: str, instrumented: bool, template: dict):
             and candidate.get("active_4096x2048_phases") == ["stage1", "stage2"],
             f"{name}: Candidate E coverage changed: {candidate}")
     fp16_file = OUT / "results" / (name + "-fp16.json")
-    fp16 = four.verify_fp16(fp16_file, "stage2_fp16")
+    fp16 = stage_shape.audit_stage2(fp16_file, "stage2_fp16")
     require(fp16.get("persistent_fp16_weight_copies") == 0, "Persistent FP16 weights")
     require(fp16.get("guard_fallbacks") == 0, f"{name}: FP16 guard fallback")
     clips = [path for path in target.rglob("*.mp4") if path.stat().st_size > 1024]

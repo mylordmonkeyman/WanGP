@@ -4,6 +4,7 @@ on:
     branches: [perf/ltx25-dev-lora8-73f-20261114]
     paths:
       - benchmarks/ltx25_convrot/dev_lora8_t2v73.py
+      - .github/workflows/ltx25-dev-lora8-t2v73.yml
   workflow_dispatch:
 permissions:
   contents: read

@@ -289,11 +289,6 @@ def _direct_quanto_scope(phase: str):
     selector = _SelectiveMode(phase)
 
     def quanto_proxy(a, b, scales):
-        # Profiling-only CPU scope tags nested aten.mm/BLAS dispatch from native
-        # Quanto. This deliberately has NO effect on non-profiling runs.
-        if os.environ.get("LTX25_GEMM_PROFILE_QUANTO_SCOPE", "0") == "1":
-            with torch.profiler.record_function("LTX25::quanto_qbytes_mm"):
-                return selector.__torch_dispatch__(overload, (), (a, b, scales), {})
         return selector.__torch_dispatch__(overload, (), (a, b, scales), {})
 
     # Calling the saved overload invokes original Quanto CUDA registration,

@@ -67,6 +67,13 @@ PASS_SHAPES = {
     (2048, 2048), (4096, 4096), (2048, 4096), (4096, 16384),
     (16384, 4096), (2048, 8192), (8192, 2048),
 }
+# Strictly experimental. NEVER enable merely by increasing the M range:
+# this (N,K) family was rejected by an earlier checkpoint-based accuracy gate.
+# Research comparison runs must opt in separately and verify actual dispatch.
+_TEST_FAILED_SHAPE = os.environ.get("WAN2GP_LTX25_E_TEST_4096X2048", "0") == "1"
+if _TEST_FAILED_SHAPE:
+    PASS_SHAPES.add((4096, 2048))
+
 _FN = None
 _CAST_FN = None
 _CAST8_FN = None
@@ -90,6 +97,7 @@ _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
           "rotation_mode": ROT_MODE, "rotation_input": ROT_INPUT, "output_mode": OUTPUT_MODE,
           "gemm_tune": GEMM_TUNE, "gemm_algo2_calls": 0,
           "min_m": MIN_M, "max_m": MAX_M, "row_census_enabled": ROW_CENSUS,
+          "experimental_failed_shape_enabled": _TEST_FAILED_SHAPE,
           "row_census": {}}
 
 

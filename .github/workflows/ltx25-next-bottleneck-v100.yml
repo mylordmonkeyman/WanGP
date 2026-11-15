@@ -61,6 +61,7 @@ jobs:
       LTX25_NEXT_PROFILE_ROOT: /cache/ltx25/results/next-profile-${{ github.run_id }}-attempt${{ github.run_attempt }}
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
+      LTX25_NEXT_PROFILE_ONLY: '1'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with: {persist-credentials: false}

@@ -132,13 +132,15 @@ def main():
         require(family,"Model contains no observed excluded family GEMMs")
         family_used=sum(x["used"] for x in family.values())
         family_fallback=sum(x["fallback"] for x in family.values())
-        # M<64 must always fall back even when the family is allowed;
-        # the >=64 eligible rows must switch from fallback to Candidate E.
+        # The actual 49-frame excluded family shapes are M=1008 and M=4032,
+        # both above the unchanged 64-row minimum. There are no M<64
+        # operations for this N,K family in this workload. Switching the
+        # research-only allowlist must route *all* 528 calls to Candidate E.
         if enabled:
-            require(family_used>0 and family_fallback>0,
-                    f"B: large shapes not switched or small-M override leaked: {family}")
+            require(family_used==528 and family_fallback==0,
+                    f"B: excluded shape was not routed as measured: {family}")
         else:
-            require(family_used==0 and family_fallback>0,
+            require(family_used==0 and family_fallback==528,
                     f"A: excluded shape was used despite opt-out: {family}")
         require(row["fp16"]["converted_per_stage"]["stage1"]==0
                 and row["fp16"]["converted_per_stage"]["stage2"]>0,

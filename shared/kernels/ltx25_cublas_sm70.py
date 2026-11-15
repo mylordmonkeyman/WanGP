@@ -53,6 +53,14 @@ OUTPUT_MODE = os.environ.get("WAN2GP_LTX25_E_OUTPUT", "fused").strip().lower()
 GEMM_TUNE = os.environ.get("WAN2GP_LTX25_GEMM_TUNE", "off").strip().lower()
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
 WEIGHT_CAP = 128 * 1024 * 1024
+# Research controls: route eligible ConvRot GEMMs below/above these M cutoffs
+# to the existing native fallback (then Stage 2's selective FP16, if enabled).
+# No change without an explicit environment override.
+MIN_M = int(os.environ.get("WAN2GP_LTX25_E_MIN_M", "64"))
+MAX_M = int(os.environ.get("WAN2GP_LTX25_E_MAX_M", "8192"))
+ROW_CENSUS = os.environ.get("WAN2GP_LTX25_E_ROW_CENSUS", "0") == "1"
+if not (1 <= MIN_M <= MAX_M <= 65536):
+    raise ValueError(f"Invalid Candidate E row thresholds: min={MIN_M}, max={MAX_M}")
 # Synthetic checkpoint-backed FP32-rotation gate passed these shapes.
 # The (N=4096,K=2048) shape failed and must remain native.
 PASS_SHAPES = {
@@ -80,7 +88,9 @@ _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
           "range_fallback_units": "rows (device-side FP32 dot)",
           "row_range_policy": "power_of_two_nonzero_fp16_else_fp32_dot",
           "rotation_mode": ROT_MODE, "rotation_input": ROT_INPUT, "output_mode": OUTPUT_MODE,
-          "gemm_tune": GEMM_TUNE, "gemm_algo2_calls": 0}
+          "gemm_tune": GEMM_TUNE, "gemm_algo2_calls": 0,
+          "min_m": MIN_M, "max_m": MAX_M, "row_census_enabled": ROW_CENSUS,
+          "row_census": {}}
 
 
 def _native_library():
@@ -249,6 +259,10 @@ def _record(reason, n, k, m):
     key = f"{n}x{k}"
     row = _STATS["sizes"].setdefault(key, {"calls": 0, "eligible_calls": 0})
     row["calls"] += 1
+    if ROW_CENSUS:
+        signature = f"M={m},N={n},K={k}"
+        tracked = _STATS["row_census"].setdefault(signature, {"used": 0, "fallback": 0})
+        tracked["used" if reason == "used" else "fallback"] += 1
     if reason == "used":
         _STATS["used"] += 1
         row["eligible_calls"] += 1
@@ -273,7 +287,7 @@ def maybe_linear(x, weight, bias, group):
         return None
     n, k = q.shape
     m = x.numel() // x.shape[-1]
-    if (n, k) not in PASS_SHAPES or group != 256 or m < 64 or m > 8192:
+    if (n, k) not in PASS_SHAPES or group != 256 or m < MIN_M or m > MAX_M:
         _record("shape", n, k, m)
         return None
     if (type(x) is not torch.Tensor or x.dtype not in (torch.bfloat16, torch.float16)

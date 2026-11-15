@@ -45,7 +45,8 @@ def main():
             "WAN2GP_LTX25_E_MIN_M":"16",
             "WAN2GP_LTX25_E_MAX_M":"8192",
             "WAN2GP_LTX25_E_ROW_CENSUS":"1",
-            "WAN2GP_LTX25_E_TEST_4096X2048":"1" if enable else "0",
+            "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1":"0" if enable else "1",
+            "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2":"0" if enable else "1",
         })
         return env
 
@@ -101,7 +102,7 @@ def main():
         require(CHECKPOINT.name in logs and "Loading NAD Diffusion Decoder" not in logs,
                 "Incorrect model or VAE")
         audit=four.read_candidate_stats(logs)
-        require(audit and audit.get("experimental_failed_shape_enabled")==flag,
+        require(audit and audit.get("active_4096x2048_phases")==(["stage1","stage2"] if flag else []),
                 "Experimental shape selection wrong")
         require(audit.get("min_m")==16 and audit.get("max_m")==8192,
                 "Unexpected Candidate E cutoffs")

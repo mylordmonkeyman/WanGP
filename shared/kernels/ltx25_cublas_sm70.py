@@ -55,6 +55,11 @@ OUTPUT_MODE = os.environ.get("WAN2GP_LTX25_E_OUTPUT", "fused").strip().lower()
 # Experiment only: split narrow-M (<=128), wide-N FP32/BF16 epilogue across CTAs.
 # Default is unchanged; no second weight copies or host/device synchronization.
 EPILOGUE_TILED = os.environ.get("WAN2GP_LTX25_E_EPILOGUE_TILED", "0") == "1"
+# Narrow-row gate defaults to validated 73f threshold (128). An explicit,
+# experiment-only override permits 241f audio lengths (~251 rows), capped at 512.
+EPILOGUE_TILED_MAX_M = int(os.environ.get("WAN2GP_LTX25_E_EPILOGUE_TILED_MAX_M", "128"))
+if not 1 <= EPILOGUE_TILED_MAX_M <= 512:
+    raise ValueError("WAN2GP_LTX25_E_EPILOGUE_TILED_MAX_M must be in [1, 512]")
 GEMM_TUNE = os.environ.get("WAN2GP_LTX25_GEMM_TUNE", "off").strip().lower()
 LIB = os.environ.get("LTX25_CUBLAS_E_LIB", "")
 WEIGHT_CAP = 128 * 1024 * 1024
@@ -140,7 +145,9 @@ _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
           "range_fallback_units": "rows (device-side FP32 dot)",
           "row_range_policy": "power_of_two_nonzero_fp16_else_fp32_dot",
           "rotation_mode": ROT_MODE, "rotation_input": ROT_INPUT, "output_mode": OUTPUT_MODE,
-          "epilogue_tiled_enabled": EPILOGUE_TILED, "epilogue_tiled_calls": 0,
+          "epilogue_tiled_enabled": EPILOGUE_TILED,
+          "epilogue_tiled_max_m": EPILOGUE_TILED_MAX_M,
+          "epilogue_tiled_calls": 0,
           "gemm_tune": GEMM_TUNE, "gemm_algo2_calls": 0,
           "min_m": MIN_M, "max_m": MAX_M, "row_census_enabled": ROW_CENSUS,
           "active_4096x2048_phases": sorted(ENABLED_4096X2048_PHASES),
@@ -395,7 +402,7 @@ def maybe_linear(x, weight, bias, group):
             else:
                 raise ValueError(f"Unknown WAN2GP_LTX25_ROT_INPUT={ROT_INPUT!r}")
         if OUTPUT_MODE == "fused":
-            _fused_output_fn(x.dtype, tiled=EPILOGUE_TILED and m <= 128 and n >= 2048)
+            _fused_output_fn(x.dtype, tiled=EPILOGUE_TILED and m <= EPILOGUE_TILED_MAX_M and n >= 2048)
         elif OUTPUT_MODE not in ("torch", ""):
             raise ValueError(f"Unknown WAN2GP_LTX25_E_OUTPUT={OUTPUT_MODE!r}")
         if GEMM_TUNE == "algo2_m64" and (n, k, m) == (16384, 4096, 64):

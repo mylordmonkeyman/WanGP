@@ -515,7 +515,7 @@ def maybe_linear(x, weight, bias, group):
             # FP32 row-scale/exception-correction pass. No permanent weight
             # copy and no changes to cuBLAS or safe-row numerics.
             out = torch.empty((*x.shape[:-1], n), dtype=x.dtype, device=x.device)
-            tiled_epilogue = EPILOGUE_TILED and m <= 128 and n >= 2048
+            tiled_epilogue = EPILOGUE_TILED and m <= EPILOGUE_TILED_MAX_M and n >= 2048
             status = _fused_output_fn(x.dtype, tiled=tiled_epilogue)(
                 ptr(c32.data_ptr()), ptr(out.data_ptr()),
                 ptr(x32.data_ptr()), ptr(q.data_ptr()),

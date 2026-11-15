@@ -1,0 +1,88 @@
+name: LTX-2.5 V100 241-frame T2V four-way recovery clean output
+on:
+  push:
+    branches: [perf/ltx25-release-walltime-ab-20261114]
+    paths:
+      - .github/workflows/ltx25-t2v241-fourway-recovery-v100.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  benchmark241:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 100
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_T2V_4WAY_OUT: /cache/ltx25/results/t2v4way241-recovery-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout optimized WanGP and four-way benchmark
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - name: Checkout unmodified historical WanGP stock fork source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: deepbeepmeep/WanGP
+          ref: c8d47da27023476777a0874300bbc9a4126acca6
+          path: stock-wangp-original
+          persist-credentials: false
+      - name: Link legacy LoRAs without mutating image checkpoint files
+        shell: bash
+        run: |
+          set -euo pipefail
+          dst="stock-wangp-original/loras/ltx2"
+          mkdir -p "$dst"
+          while IFS= read -r -d '' file; do
+            target="$dst/$(basename "$file")"
+            if [[ ! -e "$target" ]]; then ln -s "$file" "$target"; fi
+          done < <(find /opt/ltx25/checkpoints -type f -iname '*lora*.safetensors' -print0)
+          test -L "$dst/ltx-2.5-22b-ic-lora-sdr-to-hdr-1.0.safetensors"
+      - name: Verify V100 idle, Python syntax, output isolation and baked checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -m py_compile benchmarks/ltx25_convrot/t2v73_241_original_stock_fourway.py
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          test "$(git -C stock-wangp-original rev-parse HEAD)" = c8d47da27023476777a0874300bbc9a4126acca6
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          if [[ -d "$LTX25_T2V_4WAY_OUT" ]] && [[ -n "$(ls -A "$LTX25_T2V_4WAY_OUT")" ]]; then
+            echo "::error::Unique run/attempt output already occupied"; exit 1
+          fi
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::error::V100 in use: $busy"; exit 1; fi
+          nvidia-smi -L
+      - name: Run 241-frame original stock, Candidate E, Stage 2 FP16, Stage 1 and 2 FP16
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/t2v73_241_original_stock_fourway.py --frames 241 2>&1 | tee "t2v-fourway-241-recovery.log"
+          grep -Fq 'LTX25_T2V_4WAY_ALL_PASS' "t2v-fourway-241-recovery.log"
+      - name: Upload all completed or partial measurements, profiles and error logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-t2v241-recovery-times-and-logs-attempt-${{ github.run_attempt }}
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            t2v-fourway-241-recovery.log
+            /cache/ltx25/results/t2v4way241-recovery-${{ github.run_id }}-attempt${{ github.run_attempt }}/manifest.json
+            /cache/ltx25/results/t2v4way241-recovery-${{ github.run_id }}-attempt${{ github.run_attempt }}/input.json
+            /cache/ltx25/results/t2v4way241-recovery-${{ github.run_id }}-attempt${{ github.run_attempt }}/partial-results.json
+            /cache/ltx25/results/t2v4way241-recovery-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.json
+            /cache/ltx25/results/t2v4way241-recovery-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.csv
+            /cache/ltx25/results/t2v4way241-recovery-${{ github.run_id }}-attempt${{ github.run_attempt }}/results/*.json
+            /cache/ltx25/results/t2v4way241-recovery-${{ github.run_id }}-attempt${{ github.run_attempt }}/logs/*.log
+      - name: Upload all completed T2V MP4 comparison clips
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ltx25-t2v241-recovery-videos-attempt-${{ github.run_attempt }}
+          retention-days: 21
+          if-no-files-found: warn
+          compression-level: 0
+          path: /cache/ltx25/results/t2v4way241-recovery-${{ github.run_id }}-attempt${{ github.run_attempt }}/clips/*.mp4

@@ -49,7 +49,8 @@ jobs:
           "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
           "$LTX25_PYTHON" -m py_compile benchmarks/ltx25_convrot/profile_next_cycle_bar73.py
           nvidia-smi -L
-          nvidia-smi --query-gpu=name,clocks.gr,clocks.mem,temperature.gpu,power.draw,pstate,pci.link.gen.current,pci.link.width.current --format=csv
+          nvidia-smi --query-gpu=name,clocks.gr,clocks.mem,temperature.gpu,power.draw,pstate --format=csv || true
+          nvidia-smi -q -d PCI | head -70 || true
           busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
           if [[ -n "$busy" ]]; then
             echo "::error::V100 busy: $busy"

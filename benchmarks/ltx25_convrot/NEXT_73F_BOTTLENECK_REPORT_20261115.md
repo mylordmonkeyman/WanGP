@@ -32,6 +32,25 @@ Only the separately instrumented pipeline supplies phase boundaries. Observed ap
 
 Offload / H2D GPU events occurred in both sampled stages. Exact transfer bytes, true copy/compute overlap, CPU dispatch time and MMGP wait time remain unmeasured. These are **open attribution gaps**, not zero-time categories.
 
+
+## First reversible implementation: N-tiled epilogue
+
+Prototype: `finish_rows_low_tiled` in `benchmarks/ltx25_convrot/ltx25_cublas_e.cu`, exposed only by `WAN2GP_LTX25_E_EPILOGUE_TILED=1` in `shared/kernels/ltx25_cublas_sm70.py`. With the default `0`, the original kernel is used. The experimental dispatch is deliberately restricted to `M<=128, N>=2048`, after the SM70 microbench found regressions for `M=512` and `M=1440`. No persistent expanded weights, per-GEMM host sync, new precision policy or second FP16 storage is introduced.
+
+[Microbenchmark 43749614759](https://github.com/mylordmonkeyman/WanGP/actions/runs/43749614759) **PASS**: real observed video/audio shape families with synthetic representative inputs. BF16 output is **bit-identical** to original epilogue with and without bias, including two exceptional-row fallback scenarios. Median GPU-event latency ratios (original / tiled):
+
+| Shape M×N×K | Row case | Measured ratio |
+| --- | --- | ---: |
+| 76×2048×2048 | all safe | 1.17× |
+| 76×4096×2048 | all safe | 1.30× |
+| 76×16384×4096 | all safe | 2.95× |
+| 76×16384×4096 | one FP32 exception | 27.16× |
+| 76×16384×4096 | two FP32 exceptions | 18.18× |
+| 1440×4096×2048 | all safe | 0.96× (regression; **not selected**) |
+| 512×8192×4096 | all safe | 0.97× (regression; **not selected**) |
+
+This is *not yet* an end-to-end improvement or independent R0/R1 numerical validation; the exact baseline epilogue is preserved and compared directly. Full 73f T2V/I2V A–B–B–A is [Actions run 43749888611](https://github.com/mylordmonkeyman/WanGP/actions/runs/43749888611); no claim is made from that run until complete.
+
 ## Amdahl-aware experimental ranking
 
 The *screening calculations* below multiply second-forward GPU device event time by 8 Stage1 and 3 Stage2 calls, assuming representativeness and **excluding H2D**. They are hypothetical GPU-work exposure, **not** recovered elapsed time. They need matched whole-video timing to establish actual benefit.

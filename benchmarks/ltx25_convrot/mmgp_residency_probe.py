@@ -23,6 +23,7 @@ _waits = []
 _forwards = []
 _plans = []
 _block_loads = []
+_host_sections = []
 _errors = []
 _clock = time.perf_counter_ns
 _forward_indices = defaultdict(int)
@@ -76,6 +77,17 @@ def consumer_wait(consumer, transfer, entry_name, future_resolver):
         after = _event(consumer)
     with _lock:
         _waits.append((entry_name, _phase(), host_future_ms, before, after, _active_forward))
+
+
+def timed_call(section, fn, *args, **kwargs):
+    """CPU time spent enqueuing work; no CUDA synchronization."""
+    t0 = _clock()
+    try:
+        return fn(*args, **kwargs)
+    finally:
+        duration_ms = (_clock() - t0) / 1e6
+        with _lock:
+            _host_sections.append((section, _active_forward, duration_ms))
 
 
 def block_load_start():
@@ -170,6 +182,7 @@ def _report():
             z["prefetch_future_host_ms_sum"] += host_ms
             waits.append({"entry":entry,"phase":phase,"future_host_ms":round(host_ms,6),
                           "consumer_wait_gpu_ms":gpu_ms})
+        longest_block_loads = []
         for model_id, block_name, preload, phase, ms, forward in _block_loads:
             x = buckets[phase]
             x["block_load_count"] += 1
@@ -177,6 +190,19 @@ def _report():
             z=by_forward[forward_id(forward)]
             z["block_load_count"] += 1
             z["block_load_host_ms_sum"] += ms
+            longest_block_loads.append({"model":model_id,"block":block_name,
+                "preload":preload,"phase":phase,"forward":forward_id(forward),
+                "host_ms":round(ms,6)})
+        sections = defaultdict(lambda: {"calls":0,"host_ms_sum":0.0,"host_ms_max":0.0})
+        for name, fwd, ms in _host_sections:
+            key = (forward_id(fwd), name)
+            x = sections[key]
+            x["calls"] += 1
+            x["host_ms_sum"] += ms
+            x["host_ms_max"] = max(x["host_ms_max"], ms)
+        sections_by_forward = defaultdict(dict)
+        for (forward, section), values in sections.items():
+            sections_by_forward[forward][section] = values
         forwards = [{"phase":phase, "number":nth, "host_call_ms":round(ms,5),
                      "gpu_span_ms":_gpu_ms(a,b)}
                     for phase,nth,ms,a,b in _forwards]
@@ -194,6 +220,9 @@ def _report():
             ],
             "by_phase": dict(buckets),
             "by_forward_host_enqueue": dict(by_forward),
+            "host_sections_by_forward": dict(sections_by_forward),
+            "longest_block_loads": sorted(longest_block_loads,
+                key=lambda x:x["host_ms"],reverse=True)[:80],
             "preload_plans": _plans,
             "transformer_forwards": forwards,
             "longest_consumer_gpu_waits": sorted(

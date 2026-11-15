@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ltx25-runtime-baseline-once
+  group: ltx25-distilled-extra-shape-v100
   cancel-in-progress: false
 jobs:
   extra_shape:

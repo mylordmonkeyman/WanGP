@@ -389,3 +389,32 @@ avoid uncontrolled production rollout. The original BF16 path remains
 available with `WAN2GP_LTX25_FP16_GEMM=0`. Update the actual server checkout
 to this branch and restart any long-running WanGP Python process to pick up
 new defaults; a GitHub Actions runner checkout alone does not deploy them.
+
+### V100 real-model acceptance, November 14, 2026
+
+GitHub Actions [run 43675507724](https://github.com/mylordmonkeyman/WanGP/actions/runs/43675507724)
+passed explicit flag preflights (default, off, Stage 1 only, both) and
+three separate whole-process video generations with the standard Conv VAE.
+The runner loaded the official 8.9 GB rank-450 distillation LoRA dynamically
+at +1.0 on Dev and used the original distilled INT8 ConvRot checkpoint for
+the Distilled regression. All three clips decoded with audio and correct
+frame/dimension checks.
+
+| Case | Frames | Stage 1 converted GEMMs | Stage 2 converted GEMMs | Wall-clock |
+|---|---:|---:|---:|---:|
+| Dev +1.0 LoRA, no FP16 env flags | 73 | 0 | 144 | 166.595 s |
+| Dev +1.0 LoRA, both groups explicit | 17 | 4,992 | 1,872 | 104.250 s |
+| Standalone Distilled, no FP16 env flags | 17 | 0 | 1,872 | 82.374 s |
+
+Candidate E/radix4 was active in all runs (26,832/11,088/11,088
+calls respectively), and FP16 returned no finite-range guard fallbacks and
+no persistent FP16 weight copies. The prior 73-frame Dev + LoRA with no
+active Stage 2 FP16 was 168.640 s; the 166.595 s result is only a *single*
+unpaired observation, not an established speed gain. Stage 1 may alter
+video appearance substantially; don't promote it by default without
+quality evaluation. The documented direct-backend concurrency caveat still
+applies.
+
+Reproduction script:
+`benchmarks/ltx25_convrot/dev_fp16_stage_regression.py`, workflow
+`.github/workflows/ltx25-dev-fp16-stage-default-v100.yml`.

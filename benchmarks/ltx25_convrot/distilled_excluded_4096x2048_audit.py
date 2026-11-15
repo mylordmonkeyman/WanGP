@@ -38,10 +38,16 @@ def stats(output,ref):
     delta=got-ref.float()
     abs_diff=delta.abs()
     denom=ref.float().abs().clamp_min(1.0)
+    normalized=(abs_diff/denom).reshape(-1)
+    # PyTorch quantile has an upper input element limit on large M x N.
+    # Use identical deterministic strided samples for all three methods,
+    # retaining the exact global maximum over every element.
+    stride=max(1, (normalized.numel()+2_097_151)//2_097_152)
     return {
         "normalized_rms":float((delta.square().mean().sqrt()/ref.float().square().mean().sqrt().clamp_min(1e-12)).item()),
-        "p99_normalized":float(torch.quantile((abs_diff/denom).reshape(-1),.99).item()),
-        "max_normalized":float((abs_diff/denom).max().item()),
+        "p99_normalized":float(torch.quantile(normalized[::stride],.99).item()),
+        "p99_sample_stride":stride,
+        "max_normalized":float(normalized.max().item()),
         "max_abs":float(abs_diff.max().item()),
         "nonfinite":int((~torch.isfinite(got)).sum().item()),
     }

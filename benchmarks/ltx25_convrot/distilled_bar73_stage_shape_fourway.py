@@ -153,8 +153,8 @@ def run_mode(mode):
             "WAN2GP_LTX25_E_MIN_M":"64",
             "WAN2GP_LTX25_E_MAX_M":"8192",
             "WAN2GP_LTX25_E_ROW_CENSUS":"1",
-            "WAN2GP_LTX25_E_TEST_4096X2048":"0",
-            "WAN2GP_LTX25_E_TEST_4096X2048_PHASES":phase_mode,
+            "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1":"0" if "stage1" in phase_mode.split(",") else "1",
+            "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2":"0" if "stage2" in phase_mode.split(",") else "1",
         })
         return env
     def checked_fp16(path,arm):
@@ -212,16 +212,16 @@ def run_mode(mode):
             require(row["source"]=="optimized","Optimized run did not use custom fork")
             metadata=four.read_candidate_stats(log)
             require(metadata is not None,"Candidate E report missing")
-            require(metadata.get("experimental_failed_shape_phases")==
+            require(metadata.get("active_4096x2048_phases")==
                     ([] if label=="off" else ["stage2"] if label=="stage2" else ["stage1","stage2"]),
-                    f"Wrong Candidate E staged opt-in: {metadata.get('experimental_failed_shape_phases')}")
+                    f"Wrong Candidate E stage opt-outs: {metadata.get('active_4096x2048_phases')}")
             require(metadata.get("min_m")==64 and metadata.get("max_m")==8192,
                     "Candidate E threshold unexpectedly changed")
             require(metadata.get("mode")=="fp32rot"
                     and metadata.get("rotation_mode")=="radix4"
                     and metadata.get("row_census_enabled") is True,
                     "Candidate E kernel configuration or row census incorrect")
-            stage_usage=metadata.get("experimental_shape_by_phase")
+            stage_usage=metadata.get("shape_4096x2048_by_phase")
             require(isinstance(stage_usage,dict) and set(stage_usage)=={"stage1","stage2"},
                     "Missing independent Stage1/Stage2 target shape counters")
             stage1=stage_usage["stage1"]

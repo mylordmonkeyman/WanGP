@@ -145,8 +145,8 @@ def benchmark(mode):
             "WAN2GP_LTX25_E_MIN_M":"64",
             "WAN2GP_LTX25_E_MAX_M":"8192",
             "WAN2GP_LTX25_E_ROW_CENSUS":"1",
-            "WAN2GP_LTX25_E_TEST_4096X2048":"0",
-            "WAN2GP_LTX25_E_TEST_4096X2048_PHASES":phase_setting,
+            "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1":"1" if phase_setting=="stage2" else "0",
+            "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2":"0",
         })
         return env
 
@@ -172,7 +172,7 @@ def benchmark(mode):
         "candidate_e":"fp32rot radix4 vector8 fused, validated seven families always",
         "min_m":64,"max_m":8192,
         "stage1_selective_fp16":False,"stage2_selective_fp16":True,
-        "only_change":"WAN2GP_LTX25_E_TEST_4096X2048_PHASES",
+        "only_change":"WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1",
         "order":list(CASES),
         "timing":"fresh process startup through output-save/exit; no dry-run or metrics in timer",
         "run_sha":os.environ.get("GITHUB_SHA","manual"),
@@ -203,9 +203,9 @@ def benchmark(mode):
                 and candidate.get("row_census_enabled") is True,
                 "Candidate E dispatch/source mismatched")
         expected_phases=["stage2"] if phases=="stage2" else ["stage1","stage2"]
-        require(candidate.get("experimental_failed_shape_phases")==expected_phases,
+        require(candidate.get("active_4096x2048_phases")==expected_phases,
                 "Failed to set experimental Candidate E stage allowlist")
-        per_stage=candidate.get("experimental_shape_by_phase",{})
+        per_stage=candidate.get("shape_4096x2048_by_phase",{})
         require(set(per_stage)=={"stage1","stage2"},
                 "Missing per-stage routing counts")
         for stage in ("stage1","stage2"):

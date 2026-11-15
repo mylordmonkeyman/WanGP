@@ -42,6 +42,101 @@ def require(value, message):
         raise RuntimeError(message)
 
 
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def temporary_inference_profile_overlay(enabled: bool):
+    """Wire the existing profiler into a disposable runner checkout only.
+
+    GitHub production source is never committed with profiling hot-path
+    instrumentation. The original bytes are restored after the subprocess.
+    Every insertion matches an exact pinned-main source anchor or fails.
+    """
+    if not enabled:
+        yield
+        return
+    path = ROOT / "models/ltx2/ltx_pipelines/distilled.py"
+    original = path.read_text()
+    source = original
+
+    def replace_one(old, new):
+        nonlocal source
+        if source.count(old) != 1:
+            raise RuntimeError(f"Profiling overlay source drift: {old[:90]!r}, count={source.count(old)}")
+        source = source.replace(old, new, 1)
+
+    def replace_last(old, new, expected=2):
+        nonlocal source
+        if source.count(old) != expected:
+            raise RuntimeError(f"Profiling overlay last-source drift: {old[:90]!r}, count={source.count(old)}")
+        source = new.join(source.rsplit(old, 1)) if False else source.rsplit(old, 1)[0] + new + source.rsplit(old, 1)[1]
+
+    replace_one(
+        "from shared.kernels import ltx25_cublas_sm70 as candidate_e\\n",
+        "from shared.kernels import ltx25_cublas_sm70 as candidate_e\\n"
+        "from shared.kernels import ltx25_pipeline_profile as pipeline_profiler\\n")
+    replace_one(
+        "        return fp16_gemm_experiment.call_transformer(self._module, *args, **kwargs)",
+        "        return pipeline_profiler.maybe_sample_forward("
+        "fp16_gemm_experiment.call_transformer, self._module, *args, **kwargs)")
+    replace_one(
+        "        dtype = torch.bfloat16\\n\\n        enable_audio_text_nag",
+        "        pipeline_profiler.boundary(\\\"text_encoding\\\")\\n"
+        "        dtype = torch.bfloat16\\n\\n        enable_audio_text_nag")
+    replace_one(
+        "        # Stage 1: Initial low resolution video generation.\\n",
+        "        pipeline_profiler.boundary(\\\"stage1_conditioning\\\")\\n"
+        "        pipeline_profiler.set_transformer_phase(\\\"stage1\\\")\\n"
+        "        # Stage 1: Initial low resolution video generation.\\n")
+    replace_one(
+        "        video_state, audio_state = denoise_audio_video(\\n"
+        "            output_shape=stage_1_output_shape,",
+        "        pipeline_profiler.boundary(\\\"stage1_denoising\\\")\\n"
+        "        video_state, audio_state = denoise_audio_video(\\n"
+        "            output_shape=stage_1_output_shape,")
+    common = "        if video_state is None or (not skip_audio and audio_state is None):"
+    if source.count(common) != 2:
+        raise RuntimeError("Unexpected number of stage completion anchors")
+    source = source.replace(common,
+        "        pipeline_profiler.boundary(\\\"stage1_postprocessing\\\")\\n" + common, 1)
+    replace_one(
+        "        upscaled_video_latent = upsample_video(",
+        "        pipeline_profiler.boundary(\\\"spatial_upsampling\\\")\\n"
+        "        upscaled_video_latent = upsample_video(")
+    replace_one(
+        "        pass_no = 2\\n        stage_2_ref_context",
+        "        pipeline_profiler.boundary(\\\"stage2_conditioning\\\")\\n"
+        "        pass_no = 2\\n        stage_2_ref_context")
+    replace_one(
+        '        fp16_gemm_experiment.set_phase("stage2")',
+        '        pipeline_profiler.boundary("stage2_denoising")\\n'
+        '        pipeline_profiler.set_transformer_phase("stage2")\\n'
+        '        fp16_gemm_experiment.set_phase("stage2")')
+    replace_one(common,
+        '        pipeline_profiler.boundary("stage2_postprocessing")\\n' + common)
+    replace_last(
+        "            decoded_video = vae_decode_video_to_tensor(",
+        '            pipeline_profiler.boundary("video_vae_decoding")\\n'
+        "            decoded_video = vae_decode_video_to_tensor(")
+    replace_last(
+        "            decoded_audio = vae_decode_audio(",
+        '            pipeline_profiler.boundary("audio_vae_decoding")\\n'
+        "            decoded_audio = vae_decode_audio(")
+    replace_last(
+        "        return decoded_video, decoded_audio\\n",
+        '        pipeline_profiler.boundary("finished")\\n'
+        "        return decoded_video, decoded_audio\\n")
+    try:
+        path.write_text(source)
+        yield
+    finally:
+        path.write_text(original)
+        if path.read_text() != original:
+            raise RuntimeError("Failed to restore original transformer source after one-off instrumentation")
+
+
 def phase_summary(report: dict) -> dict:
     stage_forward = report.get("transformer_by_phase", {})
     return {
@@ -113,9 +208,10 @@ def run(mode: str, instrumented: bool, template: dict):
     require(dry["returncode"] == 0, f"{name} dry run failed")
     base.gpu_free()
     print("NEXT_PROFILE_BEGIN", name, flush=True)
-    timed = base.command_run(cmd, env=env, timeout=3600,
-                             log=OUT / "logs" / (name + "-generation.log"),
-                             check=False)
+    with temporary_inference_profile_overlay(instrumented):
+        timed = base.command_run(cmd, env=env, timeout=3600,
+                                 log=OUT / "logs" / (name + "-generation.log"),
+                                 check=False)
     require(timed["returncode"] == 0,
             f"{name}: generation failed: {timed['log_tail']}")
     log = Path(timed["log"]).read_text(errors="replace")

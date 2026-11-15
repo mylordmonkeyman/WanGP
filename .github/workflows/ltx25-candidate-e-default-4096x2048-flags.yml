@@ -1,0 +1,80 @@
+name: LTX2.5 V100 Candidate E default N4096 K2048 stage opt-out validation
+on:
+  push:
+    branches: [perf/ltx25-distilled-shape-stage-i2v-t2v73-20261114]
+    paths:
+      - .github/workflows/ltx25-candidate-e-default-4096x2048-flags.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-candidate-e-default-4096x2048-flags
+  cancel-in-progress: false
+jobs:
+  verify:
+    name: Four 49f Distilled video generations + flag contract
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 35
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_E_DEFAULT_FLAGS_OUT: /cache/ltx25/results/default-e4096x2048-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout fork with updated Candidate E defaults
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Verify Python and existing genuine 49f stock reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -m py_compile \
+            shared/kernels/ltx25_cublas_sm70.py \
+            shared/qtypes/int8_convrot.py \
+            models/ltx2/ltx_pipelines/distilled.py \
+            models/ltx2/ltx_pipelines/ti2vid_two_stages.py \
+            benchmarks/ltx25_convrot/verify_candidate_e_4096x2048_default_flags.py \
+            benchmarks/ltx25_convrot/test_candidate_e_4096x2048_stage_flags.py
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          test -s /cache/ltx25/results/distilled-stock49-43681488566-attempt1/clips/t2v49-01-stock_upstream.mp4
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test ! -e "$LTX25_E_DEFAULT_FLAGS_OUT"
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::error::V100 busy: $busy"; exit 1; fi
+      - name: Validate default-on, each independent opt-out, legacy and invalid flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/test_candidate_e_4096x2048_stage_flags.py 2>&1 | tee default-flags-contract.log
+          grep -Fq LTX25_CANDIDATE_E_FLAG_CONTRACT_ALL_PASS default-flags-contract.log
+      - name: Generate four full matched 49f videos using real default and two opt-outs
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/verify_candidate_e_4096x2048_default_flags.py 2>&1 | tee default-flags-49f-video.log
+          grep -Fq LTX25_E_DEFAULT_FLAGS49_PASS default-flags-49f-video.log
+      - name: Upload flag contract, quality, routing counters, logs and settings
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-e4096-default-stage-optouts-verified-results
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            default-flags-contract.log
+            default-flags-49f-video.log
+            /cache/ltx25/results/default-e4096x2048-${{ github.run_id }}-attempt${{ github.run_attempt }}/input.json
+            /cache/ltx25/results/default-e4096x2048-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.json
+            /cache/ltx25/results/default-e4096x2048-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.csv
+            /cache/ltx25/results/default-e4096x2048-${{ github.run_id }}-attempt${{ github.run_attempt }}/partial-results.json
+            /cache/ltx25/results/default-e4096x2048-${{ github.run_id }}-attempt${{ github.run_attempt }}/results/*.json
+            /cache/ltx25/results/default-e4096x2048-${{ github.run_id }}-attempt${{ github.run_attempt }}/logs/*.log
+      - name: Upload all four opt-out validation MP4 videos
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-e4096-default-stage-optouts-verified-videos
+          compression-level: 0
+          retention-days: 21
+          if-no-files-found: warn
+          path: /cache/ltx25/results/default-e4096x2048-${{ github.run_id }}-attempt${{ github.run_attempt }}/clips/*.mp4

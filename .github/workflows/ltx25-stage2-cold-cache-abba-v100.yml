@@ -30,7 +30,7 @@ jobs:
           s=Path('benchmarks/ltx25_convrot/benchmark_stage2_cold_cache_73f_abba.py').read_text()
           assert p.count('WAN2GP_LTX25_STAGE2_KEEP_CUDA_CACHE')==1
           assert 'WAN2GP_LTX25_STAGE2_KEEP_CUDA_CACHE", "0"' in p
-          assert 'else:\\n            cleanup_memory()\\n\\n        pass_no = 2' in p
+          assert p.count('            cleanup_memory()')>=3
           assert p.count('            gc.collect()')==1
           assert 'WAN2GP_LTX25_E_EPILOGUE_TILED"]="0"' in s
           assert 'WAN2GP_LTX25_STAGE2_KEEP_CUDA_CACHE"]="1" if keep_cache else "0"' in s

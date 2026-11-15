@@ -28,6 +28,7 @@ jobs:
           grep -Fq 'WAN2GP_LTX25_E_EPILOGUE_TILED", "0"' shared/kernels/ltx25_cublas_sm70.py
           grep -Fq 'WAN2GP_LTX25_E_EPILOGUE_TILED_MAX_M", "128"' shared/kernels/ltx25_cublas_sm70.py
           grep -Fq 'four.settings(241)' benchmarks/ltx25_convrot/benchmark_tiled_epilogue_241f_abba.py
+          grep -Fq 'tiled_epilogue = EPILOGUE_TILED and m <= EPILOGUE_TILED_MAX_M and n >= 2048' shared/kernels/ltx25_cublas_sm70.py
           echo EPILOGUE_TILED_241F_STATIC_PASS
   benchmark:
     needs: syntax

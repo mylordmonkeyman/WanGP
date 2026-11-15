@@ -3,15 +3,9 @@ import ast
 import json
 import math
 import os
-# Resolve the SM70 default before the quantized module is registered. The
-# previously tested 'auto' string changed actual model execution counts;
-# the validated path uses the concrete 'fp32rot' selector instead.
-if "WAN2GP_LTX25_CUBLAS_E_MODE" not in os.environ:
-    os.environ["WAN2GP_LTX25_CUBLAS_E_MODE"] = "fp32rot"
-    os.environ["WAN2GP_LTX25_DEFAULT_ON"] = "1"
-elif os.environ["WAN2GP_LTX25_CUBLAS_E_MODE"].strip().lower() == "auto":
-    os.environ["WAN2GP_LTX25_CUBLAS_E_MODE"] = "fp32rot"
-    os.environ["WAN2GP_LTX25_DEFAULT_ON"] = "1"
+# Candidate E handles an unset mode as the implicit V100 default. Do not
+# mutate the environment here: the kernel needs to distinguish implicit
+# fallback (missing native extension) from explicitly selected fp32rot.
 from types import MethodType
 
 import torch
@@ -490,7 +484,7 @@ class QLinearInt8ConvRot(QModuleMixin, torch.nn.Linear):
         # falling back to native WanGP when the operation is ineligible.
         # WAN2GP_LTX25_CUBLAS_E_MODE=off restores the original dispatch.
         if (os.environ.get("WAN2GP_LTX25_CUBLAS_E_MODE", "fp32rot").strip().lower()
-                == "fp32rot"
+                in ("fp32rot", "auto")
                 and self.weight_qtype == _QINT8_CONVROT_QTYPE
                 and input.is_cuda
                 and not _is_fake_tensor(input)):

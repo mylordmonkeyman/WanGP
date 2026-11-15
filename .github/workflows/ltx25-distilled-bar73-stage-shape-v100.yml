@@ -1,10 +1,6 @@
 name: Distilled bar 73f T2V/I2V Candidate E 4096x2048 staged four-way
 on:
-  push:
-    branches: [perf/ltx25-distilled-shape-stage-i2v-t2v73-20261114]
-    paths:
-      - .github/workflows/ltx25-distilled-bar73-stage-shape-v100.yml
-  workflow_dispatch:
+  workflow_dispatch:  # Historical four-way benchmark, manually invoked only
 permissions:
   contents: read
 concurrency:
@@ -65,24 +61,30 @@ jobs:
           busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
           if [[ -n "$busy" ]]; then echo "::error::V100 busy: $busy"; exit 1; fi
           nvidia-smi -L
-      - name: Preflight independent experimental stage-selection states
+      - name: Preflight canonical independent disable-stage flags
         shell: bash
         run: |
           set -euo pipefail
-          for phases in none stage2 stage1,stage2; do
+          for config in both stage2 none; do
+            if [[ "$config" == both ]]; then dis1=0; dis2=0; fi
+            if [[ "$config" == stage2 ]]; then dis1=1; dis2=0; fi
+            if [[ "$config" == none ]]; then dis1=1; dis2=1; fi
             WAN2GP_LTX25_CUBLAS_E_MODE=fp32rot \
-            WAN2GP_LTX25_E_TEST_4096X2048_PHASES="$phases" \
+            WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1="$dis1" \
+            WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2="$dis2" \
             "$LTX25_PYTHON" - <<'PY'
           import os
           from shared.kernels import ltx25_cublas_sm70 as e
-          v=os.environ["WAN2GP_LTX25_E_TEST_4096X2048_PHASES"]
-          expected=set() if v=="none" else set(v.split(","))
-          assert set(e._TEST_PHASES)==expected,(e._TEST_PHASES,expected)
+          wanted=set()
+          for phase,n in (("stage1","1"),("stage2","2")):
+              if os.environ[f"WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE{n}"]=="0":
+                  wanted.add(phase)
+          assert set(e.ENABLED_4096X2048_PHASES)==wanted
           e.set_phase("stage1");assert e._CURRENT_PHASE=="stage1"
           e.set_phase("stage2");assert e._CURRENT_PHASE=="stage2"
           assert e.MIN_M==64 and e.MAX_M==8192
-          assert (4096,2048) in e.PASS_SHAPES if expected else (4096,2048) not in e.PASS_SHAPES
-          print("STAGE_SELECTION_PREFLIGHT_PASS",v,flush=True)
+          assert (4096,2048) in e.PASS_SHAPES
+          print("STAGE_SELECTION_PREFLIGHT_PASS",sorted(wanted),flush=True)
           PY
           done
       - name: Run stock/off/stage2/both 73f ${{ matrix.mode }} with stock quality metrics

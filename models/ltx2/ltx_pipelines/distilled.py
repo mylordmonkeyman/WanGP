@@ -1,8 +1,6 @@
 from shared.utils.phase_progress import control_video_encoding
 from shared.utils.tiled_fusion import TiledFusionPlan
 import logging
-import os
-import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import replace
@@ -59,12 +57,10 @@ from ..editanything import build_editanything_reference_conditioning
 from shared.utils.loras_mutipliers import update_loras_slists
 from shared.utils.self_refiner import create_self_refiner_handler, normalize_self_refiner_plan
 from shared.utils.text_encoder_cache import TextEncoderCache
-from shared.kernels import ltx25_pipeline_profile as pipeline_profiler
 from shared.kernels import ltx25_selective_fp16_gemm as fp16_gemm_experiment
-from shared.kernels import ltx25_cublas_sm70 as candidate_e_research
+from shared.kernels import ltx25_cublas_sm70 as candidate_e
 
 device = get_device()
-_BENCH_TRANSFORMER_ENV = "WAN2GP_LTX2_BENCH_TRANSFORMER"
 LTX25_UPSAMPLER_INJECT_FIRST_FRAME = False
 # Tiles evaluated per transformer call (joint pass): each block's weights are streamed once per group.
 # The group only adds one hidden state per tile, bounded by this share of free VRAM; outputs are identical.
@@ -115,11 +111,6 @@ def _indexed_noise_tokens(shape: torch.Size, seed: int, latent_frame_offset: int
     return noise.permute(0, 2, 3, 4, 1).reshape(batch, -1, channels)
 
 
-def _env_flag(name: str, default: str = "0") -> bool:
-    val = os.environ.get(name, default)
-    return str(val).strip().lower() in ("1", "true", "yes", "on")
-
-
 def _align_seq_len(tensor: torch.Tensor | None, target_len: int) -> torch.Tensor | None:
     if tensor is None:
         return tensor
@@ -137,56 +128,21 @@ def _align_seq_len(tensor: torch.Tensor | None, target_len: int) -> torch.Tensor
     return tensor.narrow(seq_dim, 0, target_len)
 
 
-class _TransformerBenchWrapper:
-    def __init__(self, module, enabled: bool = False) -> None:
+class _TransformerForward:
+    """Keep the MMGP transformer object stable while dispatching Stage2 FP16.
+
+    This delegates only the transformer's __call__ to the existing selective
+    FP16 scope; no CUDA events, per-forward profiler, or extra weight copies.
+    """
+
+    def __init__(self, module):
         self._module = module
-        self._enabled = bool(enabled)
-        self._cuda_events: list[tuple[torch.cuda.Event, torch.cuda.Event]] = []
-        self._cpu_total_ms = 0.0
-        self._cpu_calls = 0
 
     def __getattr__(self, name):
         return getattr(self._module, name)
 
     def __call__(self, *args, **kwargs):
-        # Only the explicitly instrumented pipeline samples torch.profiler
-        # operator activity; normal production calls remain unchanged.
-        if not self._enabled:
-            return fp16_gemm_experiment.call_transformer(self._module, *args, **kwargs)
-        if torch.cuda.is_available():
-            start = torch.cuda.Event(enable_timing=True)
-            end = torch.cuda.Event(enable_timing=True)
-            start.record()
-            out = pipeline_profiler.maybe_sample_forward(fp16_gemm_experiment.call_transformer, self._module, *args, **kwargs)
-            end.record()
-            self._cuda_events.append((start, end))
-            return out
-
-        t0 = time.perf_counter()
-        out = pipeline_profiler.maybe_sample_forward(fp16_gemm_experiment.call_transformer, self._module, *args, **kwargs)
-        self._cpu_total_ms += (time.perf_counter() - t0) * 1000.0
-        self._cpu_calls += 1
-        return out
-
-    def consume(self) -> tuple[float, int]:
-        if not self._enabled:
-            return 0.0, 0
-        if torch.cuda.is_available():
-            if not self._cuda_events:
-                return 0.0, 0
-            torch.cuda.synchronize()
-            total_ms = 0.0
-            for start, end in self._cuda_events:
-                total_ms += float(start.elapsed_time(end))
-            calls = len(self._cuda_events)
-            self._cuda_events.clear()
-            return total_ms, calls
-
-        total_ms = self._cpu_total_ms
-        calls = self._cpu_calls
-        self._cpu_total_ms = 0.0
-        self._cpu_calls = 0
-        return total_ms, calls
+        return fp16_gemm_experiment.call_transformer(self._module, *args, **kwargs)
 
 
 class DistilledPipeline:
@@ -669,7 +625,6 @@ class DistilledPipeline:
                     channel_dim=-1,
                 )
         dtype = torch.bfloat16
-        pipeline_profiler.boundary("text_encoding")
 
         enable_audio_text_nag = False
         video_NAG = None
@@ -760,11 +715,8 @@ class DistilledPipeline:
             video_context, audio_context = contexts[0]
 
         # Stage 1: Initial low resolution video generation.
-        pipeline_profiler.boundary("stage1_conditioning")
-        pipeline_profiler.set_transformer_phase("stage1")
         fp16_gemm_experiment.set_phase("stage1")
-        candidate_e_research.set_phase("stage1")
-        bench_transformer = _env_flag(_BENCH_TRANSFORMER_ENV, "0") or pipeline_profiler.ENABLED
+        candidate_e.set_phase("stage1")
         skip_stage_2 = bool(skip_stage_2)
         stage_1_pass_no = 0 if skip_stage_2 else 1
         if interrupt_check is not None and interrupt_check():
@@ -778,7 +730,7 @@ class DistilledPipeline:
         )
         memory_video_conditionings, memory_audio_conditionings, cross_attention_mask_builder = self._joyai_echo_reference_conditionings(joyai_echo, "", dtype)
         video_encoder = self._get_model("video_encoder")
-        transformer = _TransformerBenchWrapper(self._get_model("transformer"), enabled=bench_transformer)
+        transformer = _TransformerForward(self._get_model("transformer"))
         bind_interrupt_check(transformer, interrupt_check)
         stage_1_ref_conditionings, stage_1_ref_context, stage_1_ref_adaln = build_editanything_reference_conditioning(
             transformer,
@@ -914,7 +866,6 @@ class DistilledPipeline:
         )
         if callback is not None:
             callback(-1, None, True, override_num_inference_steps=len(stage_1_sigmas) - 1, pass_no=pass_no)
-        pipeline_profiler.boundary("stage1_denoising")
         video_state, audio_state = denoise_audio_video(
             output_shape=stage_1_output_shape,
             conditionings=stage_1_conditionings,
@@ -930,16 +881,6 @@ class DistilledPipeline:
             mask_context=mask_context,
             skip_audio=skip_audio,
         )
-        pipeline_profiler.boundary("stage1_postprocessing")
-        stage1_transformer_ms = 0.0
-        stage1_transformer_calls = 0
-        if bench_transformer:
-            stage1_transformer_ms, stage1_transformer_calls = transformer.consume()
-            pipeline_profiler.record_transformer("stage1", stage1_transformer_ms, stage1_transformer_calls)
-            print(
-                "[WAN2GP][LTX2][bench] transformer pass1: "
-                f"{stage1_transformer_ms / 1000.0:.3f}s ({stage1_transformer_calls} calls)"
-            )
         if video_state is None or (not skip_audio and audio_state is None):
             return None, None
         if interrupt_check is not None and interrupt_check():
@@ -951,11 +892,6 @@ class DistilledPipeline:
                 "audio": audio_state.latent.detach().cpu() if audio_state is not None else None,
             }
         if skip_stage_2:
-            if bench_transformer:
-                print(
-                    "[WAN2GP][LTX2][bench] transformer total: "
-                    f"{stage1_transformer_ms / 1000.0:.3f}s ({stage1_transformer_calls} calls)"
-                )
             torch.cuda.synchronize()
             del transformer
             del video_encoder
@@ -996,7 +932,6 @@ class DistilledPipeline:
         stage_2_sigmas = torch.Tensor(stage_2_sigma_values).to(self.device)
         if custom_sigmas and len(custom_sigmas) > 1 and custom_sigmas[1] is not None:
             stage_2_sigmas = torch.tensor([*custom_sigmas[1], 0.0], dtype=torch.float32, device=self.device)
-        pipeline_profiler.boundary("spatial_upsampling")
         upscaled_video_latent = upsample_video(
             latent=video_state.latent[:1],
             video_encoder=video_encoder,
@@ -1005,7 +940,6 @@ class DistilledPipeline:
 
         torch.cuda.synchronize()
         cleanup_memory()
-        pipeline_profiler.boundary("stage2_conditioning")
 
         pass_no = 2
         stage_2_ref_context = stage_2_ref_adaln = None
@@ -1151,10 +1085,8 @@ class DistilledPipeline:
         )
         if callback is not None:
             callback(-1, None, True, override_num_inference_steps=len(stage_2_sigmas) - 1, pass_no=pass_no)
-        pipeline_profiler.boundary("stage2_denoising")
-        pipeline_profiler.set_transformer_phase("stage2")
         fp16_gemm_experiment.set_phase("stage2")
-        candidate_e_research.set_phase("stage2")
+        candidate_e.set_phase("stage2")
         freeze_audio_stage2 = audio_identity_guidance_scale > 0.0 or bool(joyai_echo.get("freeze_stage2_audio", False))
         stage_2_audio_conditionings = audio_conditionings if audio_conditionings_stage2 is None else audio_conditionings_stage2
         stage_2_audio_conditionings = list(stage_2_audio_conditionings or []) + stage_2_memory_audio_conditionings
@@ -1177,20 +1109,6 @@ class DistilledPipeline:
             freeze_audio=freeze_audio_stage2,
             skip_audio=skip_audio,
         )
-        pipeline_profiler.boundary("stage2_postprocessing")
-        if bench_transformer:
-            stage2_transformer_ms, stage2_transformer_calls = transformer.consume()
-            pipeline_profiler.record_transformer("stage2", stage2_transformer_ms, stage2_transformer_calls)
-            total_transformer_ms = stage1_transformer_ms + stage2_transformer_ms
-            total_transformer_calls = stage1_transformer_calls + stage2_transformer_calls
-            print(
-                "[WAN2GP][LTX2][bench] transformer pass2: "
-                f"{stage2_transformer_ms / 1000.0:.3f}s ({stage2_transformer_calls} calls)"
-            )
-            print(
-                "[WAN2GP][LTX2][bench] transformer total: "
-                f"{total_transformer_ms / 1000.0:.3f}s ({total_transformer_calls} calls)"
-            )
         if video_state is None or (not skip_audio and audio_state is None):
             return None, None
         if interrupt_check is not None and interrupt_check():
@@ -1210,7 +1128,6 @@ class DistilledPipeline:
                 "video": video_state.latent.detach().cpu(),
                 "audio": audio_state.latent.detach().cpu() if audio_state is not None else None,
             }
-        pipeline_profiler.boundary("video_vae_decoding")
         if frozen_output_video is None:
             video_latent = [video_state.latent]
             video_state = None
@@ -1228,13 +1145,11 @@ class DistilledPipeline:
             )
         else:
             decoded_video = frozen_output_video[:, :num_frames, :height, :width].permute(1, 2, 3, 0)
-        pipeline_profiler.boundary("audio_vae_decoding")
         decoded_audio = None
         if audio_state is not None:
             decoded_audio = vae_decode_audio(
                 audio_state.latent, self._get_model("audio_decoder"), self._get_model("vocoder")
             )
-        pipeline_profiler.boundary("finished")
         if return_joyai_memory:
             memory_latents = {
                 "phase1": stage_1_memory_latents,

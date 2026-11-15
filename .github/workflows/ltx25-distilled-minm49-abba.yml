@@ -1,0 +1,65 @@
+name: Distilled 49f Candidate E minM 64 vs 16 full-video ABBA
+on:
+  push:
+    branches: [perf/ltx25-distilled-candidate-e-expansion-20261114]
+    paths:
+      - benchmarks/ltx25_convrot/distilled_minm49_abba.py
+      - .github/workflows/ltx25-distilled-minm49-abba.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-runtime-baseline-once
+  cancel-in-progress: false
+jobs:
+  distilled_minm:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 40
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_DISTILLED_MINM_OUT: /cache/ltx25/results/distilled-minm49-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Check V100 and prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -m py_compile benchmarks/ltx25_convrot/distilled_minm49_abba.py shared/kernels/ltx25_cublas_sm70.py
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test ! -e "$LTX25_DISTILLED_MINM_OUT"
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::error::V100 busy: $busy"; exit 1; fi
+      - name: A1/B1/B2/A2 full-video Distilled minM cutoff test
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/distilled_minm49_abba.py 2>&1 | tee distilled-minm49-abba.log
+          grep -Fq LTX25_DISTILLED_MINM_ABBA_PASS distilled-minm49-abba.log
+      - name: Save numerical and wall-clock reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: distilled-minm49-abba-measurements
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            distilled-minm49-abba.log
+            /cache/ltx25/results/distilled-minm49-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.json
+            /cache/ltx25/results/distilled-minm49-${{ github.run_id }}-attempt${{ github.run_attempt }}/manifest.json
+            /cache/ltx25/results/distilled-minm49-${{ github.run_id }}-attempt${{ github.run_attempt }}/partial-results.json
+            /cache/ltx25/results/distilled-minm49-${{ github.run_id }}-attempt${{ github.run_attempt }}/results/*.json
+            /cache/ltx25/results/distilled-minm49-${{ github.run_id }}-attempt${{ github.run_attempt }}/logs/*.log
+      - name: Save 4 videos for visual quality review
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: distilled-minm49-abba-videos
+          retention-days: 21
+          if-no-files-found: warn
+          compression-level: 0
+          path: /cache/ltx25/results/distilled-minm49-${{ github.run_id }}-attempt${{ github.run_attempt }}/clips/*.mp4

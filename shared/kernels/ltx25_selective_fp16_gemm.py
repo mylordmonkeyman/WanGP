@@ -1,8 +1,10 @@
 # Copyright (c) 2026. Experimental V100 BF16 GEMM mixed-precision selector.
-"""Opt-in temporary FP16 Tensor Core GEMMs for selected dense BF16 operations.
+"""Selective FP16 Tensor Core GEMMs for LTX-2.5 Distilled and Dev stages.
 
-Opt-in only: WAN2GP_LTX25_FP16_GEMM=1 and LTX25_FP16_GEMM_GROUPS=... .
-Scope is one DistilledPipeline transformer forward at a time. Implements a
+Default on SM70 (V100): Stage 2, direct Quanto qbytes_mm, minimum M=1/N,K=64.
+WAN2GP_LTX25_FP16_GEMM=0 disables; =1 explicitly enables; the existing
+LTX25_FP16_GEMM_GROUPS selects stage1/stage2 groups independently.
+Scope is one transformer forward at a time, in either pipeline. Implements a
 TorchDispatchMode for native aten.mm/aten.addmm and live Quanto qbytes_mm.
 
 Controls: group selectors stage1:wide, stage1:tall, stage1:balanced,
@@ -36,16 +38,28 @@ from typing import Callable
 import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
-ENABLED = os.environ.get("WAN2GP_LTX25_FP16_GEMM", "0") == "1"
-GROUPS = frozenset(x.strip() for x in os.environ.get("LTX25_FP16_GEMM_GROUPS", "").split(",") if x.strip())
-OPS = frozenset(x.strip() for x in os.environ.get("LTX25_FP16_GEMM_OPS", "mm,addmm,qbytes_mm").split(",") if x.strip())
+def _sm70_default() -> bool:
+    # Only enable experimental temporary FP16 math by default on the V100.
+    # Explicit =1 retains the previous opt-in behavior on other CUDA devices.
+    try:
+        return torch.cuda.is_available() and torch.cuda.get_device_capability() == (7, 0)
+    except (AssertionError, RuntimeError):
+        return False
+
+
+_switch = os.environ.get("WAN2GP_LTX25_FP16_GEMM")
+ENABLED = (_switch == "1") if _switch is not None else _sm70_default()
+GROUPS = frozenset(x.strip() for x in os.environ.get(
+    "LTX25_FP16_GEMM_GROUPS", "stage2:wide,stage2:tall,stage2:balanced"
+).split(",") if x.strip())
+OPS = frozenset(x.strip() for x in os.environ.get("LTX25_FP16_GEMM_OPS", "qbytes_mm").split(",") if x.strip())
 GUARD = os.environ.get("LTX25_FP16_GEMM_GUARD", "first").strip()
 SHAM = os.environ.get("LTX25_FP16_GEMM_SHAM", "0") == "1"
-BACKEND = os.environ.get("LTX25_FP16_GEMM_BACKEND", "dispatch").strip().lower()
+BACKEND = os.environ.get("LTX25_FP16_GEMM_BACKEND", "direct").strip().lower()
 TRACE_DISPATCH = os.environ.get("LTX25_FP16_GEMM_TRACE", "0") == "1"
 AUDIT_PER_SHAPE = int(os.environ.get("LTX25_FP16_GEMM_AUDIT_PER_SHAPE", "0"))
-MIN_M = int(os.environ.get("LTX25_FP16_GEMM_MIN_M", "128"))
-MIN_DIM = int(os.environ.get("LTX25_FP16_GEMM_MIN_DIM", "512"))
+MIN_M = int(os.environ.get("LTX25_FP16_GEMM_MIN_M", "1"))
+MIN_DIM = int(os.environ.get("LTX25_FP16_GEMM_MIN_DIM", "64"))
 SHAPE_CENSUS = os.environ.get("LTX25_FP16_GEMM_SHAPE_CENSUS", "0") == "1"
 # Optional per-stage exact (M,N,K) allowlist, e.g. stage2:4032:4096:2048.
 # A measured fast-shape whitelist is safer than broad shape heuristics.
@@ -315,6 +329,28 @@ def call_transformer(module: Callable, *args, **kwargs):
 
 
 _CURRENT_PHASE = "stage1"
+
+
+class _ForwardOnlyTransformer:
+    """Delegate every attribute to the MMGP model and intercept __call__ only.
+
+    The actual module remains the object used for LoRA step updates and memory
+    management. Never replace or register its quantized weights with a copy.
+    """
+
+    def __init__(self, module: Callable):
+        self._module = module
+
+    def __getattr__(self, name):
+        return getattr(self._module, name)
+
+    def __call__(self, *args, **kwargs):
+        return call_transformer(self._module, *args, **kwargs)
+
+
+def forward_only(module: Callable):
+    """Return an FP16-aware callable for denoising; preserve raw model if off."""
+    return _ForwardOnlyTransformer(module) if ENABLED else module
 
 
 def set_phase(phase: str) -> None:

@@ -70,9 +70,33 @@ PASS_SHAPES = {
 # Strictly experimental. NEVER enable merely by increasing the M range:
 # this (N,K) family was rejected by an earlier checkpoint-based accuracy gate.
 # Research comparison runs must opt in separately and verify actual dispatch.
-_TEST_FAILED_SHAPE = os.environ.get("WAN2GP_LTX25_E_TEST_4096X2048", "0") == "1"
+# Explicitly staged opt-in for the historically rejected shape. Legacy
+# WAN2GP_LTX25_E_TEST_4096X2048=1 continues to mean both stages, with no
+# behavior change for any non-experimental WanGP installation.
+# Values: "none", "stage2", or "stage1,stage2".
+_TEST_PHASES_ENV = os.environ.get("WAN2GP_LTX25_E_TEST_4096X2048_PHASES")
+if _TEST_PHASES_ENV is None:
+    _TEST_PHASES = frozenset(("stage1", "stage2")) if os.environ.get(
+        "WAN2GP_LTX25_E_TEST_4096X2048", "0") == "1" else frozenset()
+else:
+    _TEST_PHASES = frozenset(x.strip() for x in _TEST_PHASES_ENV.split(",") if x.strip() and x.strip() != "none")
+if _TEST_PHASES - {"stage1", "stage2"}:
+    raise ValueError(f"Invalid research-only 4096x2048 phases: {sorted(_TEST_PHASES)}")
+_TEST_FAILED_SHAPE = bool(_TEST_PHASES)
 if _TEST_FAILED_SHAPE:
     PASS_SHAPES.add((4096, 2048))
+_CURRENT_PHASE = "stage1"
+def set_phase(phase: str) -> None:
+    """Set Candidate E's independent pipeline phase before denoising.
+
+    Called even if Stage1/2 selective FP16 is disabled so the experiment does
+    not depend on that other backend's per-stage state.
+    """
+    global _CURRENT_PHASE
+    if phase not in ("stage1", "stage2"):
+        raise ValueError(f"Unsupported Candidate E phase {phase!r}")
+    _CURRENT_PHASE = phase
+
 
 _FN = None
 _CAST_FN = None
@@ -98,6 +122,11 @@ _STATS = {"used": 0, "fallback": 0, "range_fallback": 0,
           "gemm_tune": GEMM_TUNE, "gemm_algo2_calls": 0,
           "min_m": MIN_M, "max_m": MAX_M, "row_census_enabled": ROW_CENSUS,
           "experimental_failed_shape_enabled": _TEST_FAILED_SHAPE,
+          "experimental_failed_shape_phases": sorted(_TEST_PHASES),
+          "experimental_shape_by_phase": {
+              "stage1": {"used": 0, "fallback": 0},
+              "stage2": {"used": 0, "fallback": 0},
+          },
           "row_census": {}}
 
 
@@ -267,6 +296,9 @@ def _record(reason, n, k, m):
     key = f"{n}x{k}"
     row = _STATS["sizes"].setdefault(key, {"calls": 0, "eligible_calls": 0})
     row["calls"] += 1
+    if (n, k) == (4096, 2048):
+        phase_counts = _STATS["experimental_shape_by_phase"][_CURRENT_PHASE]
+        phase_counts["used" if reason == "used" else "fallback"] += 1
     if ROW_CENSUS:
         signature = f"M={m},N={n},K={k}"
         tracked = _STATS["row_census"].setdefault(signature, {"used": 0, "fallback": 0})
@@ -295,7 +327,9 @@ def maybe_linear(x, weight, bias, group):
         return None
     n, k = q.shape
     m = x.numel() // x.shape[-1]
-    if (n, k) not in PASS_SHAPES or group != 256 or m < MIN_M or m > MAX_M:
+    if ((n, k) not in PASS_SHAPES
+            or ((n, k) == (4096, 2048) and _CURRENT_PHASE not in _TEST_PHASES)
+            or group != 256 or m < MIN_M or m > MAX_M):
         _record("shape", n, k, m)
         return None
     if (type(x) is not torch.Tensor or x.dtype not in (torch.bfloat16, torch.float16)

@@ -2,7 +2,8 @@
 """Environment/phase contract for default-on Candidate E (4096,2048).
 
 Runs isolated child Python interpreters to reset all import-time env flags.
-Supports old experimental overrides while independently honoring new opt-outs.
+The only supported per-stage controls are the two independent opt-out flags.
+Previously duplicated experiment switches are rejected with an actionable error.
 """
 import json
 import os
@@ -21,8 +22,8 @@ from shared.kernels import ltx25_cublas_sm70 as mod
 result={}
 for phase in ('stage1','stage2'):
     mod.set_phase(phase)
-    result[phase]=(4096,2048) in mod.PASS_SHAPES and phase in mod._TEST_PHASES
-result['active']=sorted(mod._TEST_PHASES)
+    result[phase]=(4096,2048) in mod.PASS_SHAPES and phase in mod.ENABLED_4096X2048_PHASES
+result['active']=sorted(mod.ENABLED_4096X2048_PHASES)
 result['stat_active']=mod._STATS['active_4096x2048_phases']
 result['stat_disabled']=mod._STATS['disabled_4096x2048_stages']
 result['base_shape']=(2048,2048) in mod.PASS_SHAPES
@@ -39,21 +40,17 @@ CASES=[
                      "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2":"1"},[]),
     ("explicit_zeros",{"WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1":"0",
                        "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2":"0"},["stage1","stage2"]),
-    ("old_legacy_zero",{"WAN2GP_LTX25_E_TEST_4096X2048":"0"},[]),
-    ("old_legacy_one",{"WAN2GP_LTX25_E_TEST_4096X2048":"1"},["stage1","stage2"]),
-    ("old_legacy_phases_none",{"WAN2GP_LTX25_E_TEST_4096X2048_PHASES":"none"},[]),
-    ("old_legacy_phases_stage2",{"WAN2GP_LTX25_E_TEST_4096X2048_PHASES":"stage2"},["stage2"]),
-    ("old_legacy_phases_both",{"WAN2GP_LTX25_E_TEST_4096X2048_PHASES":"stage1,stage2"},["stage1","stage2"]),
-    ("optout_precedence",{"WAN2GP_LTX25_E_TEST_4096X2048_PHASES":"stage1,stage2",
-                         "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2":"1"},["stage1"]),
-    ("optout_precedence_legacy",{"WAN2GP_LTX25_E_TEST_4096X2048":"1",
-                                "WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1":"1"},["stage2"]),
+
 ]
 BAD=[
     {"WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE1":"YES"},
     {"WAN2GP_LTX25_E_DISABLE_4096X2048_STAGE2":""},
     {"WAN2GP_LTX25_E_TEST_4096X2048_PHASES":"foo"},
     {"WAN2GP_LTX25_E_TEST_4096X2048":"true"},
+    {"WAN2GP_LTX25_E_TEST_4096X2048":"0"},
+    {"WAN2GP_LTX25_E_TEST_4096X2048":"1"},
+    {"WAN2GP_LTX25_E_TEST_4096X2048_PHASES":"stage2"},
+    {"WAN2GP_LTX25_E_TEST_4096X2048_PHASES":"stage1,stage2"},
     {"WAN2GP_LTX25_E_TEST_4096X2048_PHASES":"none,stage2"},
 ]
 

@@ -119,8 +119,14 @@ def main():
                     f"{label} {stage}: expected dispatch {want}, got {observed}")
         require(row["fp16"]["converted_per_stage"]["stage1"]==0,
                 "Stage1 selective FP16 unexpectedly enabled")
-        require(row["fp16"]["converted_per_stage"]["stage2"]==(144 if disable_stage2 else 0),
-                "Stage2 selector conversion count differs")
+        # M_MIN=64 leaves other, non-eligible fallback GEMMs routed
+        # through Stage2 transient FP16: 1728 regardless of Stage1 flag.
+        # Disabling the target family in Stage2 adds exactly 144 Quanto
+        # GEMMs to the 1728 baseline, for 1872 total.
+        expected_stage2_converted=1872 if disable_stage2 else 1728
+        require(row["fp16"]["converted_per_stage"]["stage2"]==expected_stage2_converted,
+                f"Stage2 selector expected {expected_stage2_converted}, got "
+                f"{row['fp16']['converted_per_stage']['stage2']}")
         require(row["fp16"]["persistent_fp16_weight_copies"]==0
                 and row["fp16"]["guard_fallbacks"]==0,
                 "Unsafe FP16 fallback or persistent weight copy")

@@ -24,7 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile benchmarks/ltx25_convrot/mmgp_residency_probe.py benchmarks/ltx25_convrot/profile_mmgp_residency_bar73.py
-          git diff --exit-code 8788b0479362c34e6423d331f115767ad9fe6fdc HEAD -- models/ mmgp/ shared/ wgp.py
+          git diff --exit-code 8788b0479362c34e6423d331f115767ad9fe6fdc HEAD -- mmgp/ wgp.py shared/qtypes/ shared/kernels/ltx25_cublas_sm70.py
           python3 - <<'PY'
           import ast
           from pathlib import Path
@@ -55,6 +55,7 @@ jobs:
     env:
       PYTHONPATH: .
       LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_MMGP_PROBE_MODES: t2v
       LTX25_MMGP_PROBE_ROOT: /cache/ltx25/results/mmgp-residency-${{ github.run_id }}-attempt${{ github.run_attempt }}
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'

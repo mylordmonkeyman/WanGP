@@ -1,6 +1,8 @@
 from shared.utils.phase_progress import control_video_encoding
 from shared.utils.tiled_fusion import TiledFusionPlan
 import logging
+import os
+import gc
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import replace
@@ -939,7 +941,15 @@ class DistilledPipeline:
         )
 
         torch.cuda.synchronize()
-        cleanup_memory()
+        # Experimental Stage 2 cold-start allocator reuse. Keep both existing
+        # GC and synchronization semantics; skip ONLY this cache purge when
+        # explicitly enabled. CUDA OOM handling remains active. No extra
+        # persistent model/FP16 weight set is created; default is unchanged.
+        if os.environ.get("WAN2GP_LTX25_STAGE2_KEEP_CUDA_CACHE", "0") == "1":
+            gc.collect()
+            torch.cuda.synchronize()
+        else:
+            cleanup_memory()
 
         pass_no = 2
         stage_2_ref_context = stage_2_ref_adaln = None

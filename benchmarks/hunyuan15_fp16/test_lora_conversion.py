@@ -69,6 +69,10 @@ class HunyuanLoraConversionTests(unittest.TestCase):
         self.assertEqual(target_modules("txt_in.individual_token_refiner.blocks.0.self_attn.qkv"), (
             "txt_in.individual_token_refiner.blocks.0.self_attn_qkv",))
         self.assertEqual(target_modules("byt5_in.layernorm"), ("byt5_in.layernorm",))
+        self.assertEqual(target_modules("time_in.in_layer"), ("time_in.mlp.0",))
+        self.assertEqual(target_modules("time_in.out_layer"), ("time_in.mlp.2",))
+        self.assertEqual(target_modules("time_r_in.in_layer"), ("time_r_in.mlp.0",))
+        self.assertEqual(target_modules("vector_in.in_layer"), ("vector_in.in_layer",))
 
     def test_reject_missing_model_target(self):
         source = self.source()

@@ -91,3 +91,16 @@ The cold Stage 2 forward executes many **preload=True** parameter installations 
 **Experiment:** [V100 73-frame T2V+I2V full-process ABBA run 43779437456](https://github.com/mylordmonkeyman/WanGP/actions/runs/43779437456), 8 separate processes, identical original 1024×576 bar prompt/image, seed 20261112, 8 steps, same model, Candidate E+radix4 and Stage2 FP16, tiled epilogue off, Stage2 CUDA cache toggle off. Every arm must match pinned decoded video/audio reference and maintain zero persistent FP16 weight copies; B must report `packed_blocks>0` to demonstrate that the code executed. **No claim of speedup until the run completes.**
 
 **Decision gate:** Significant repeatable whole-process gain and exact fidelity before considering promotion, with 241-frame ABBA validation afterward. If pinned RAM is refused or performance is worse, keep the flag off, preserve the negative result, and investigate alternative bounded staging or prefetch placement. Stable `main` untouched.
+
+## P1 73-frame qualification result — PASS, modest but reproducible within this ABBA
+
+[Run 43779437456](https://github.com/mylordmonkeyman/WanGP/actions/runs/43779437456), commit `f4bf5e0e`, completed 2026-11-16 UTC. Eight whole-process runs, 1024×576, 73 frames, 8 steps, same bar prompt/image, checkpoint and seed. Both B arms packed **48** cold transformer preload blocks totaling **18,549,947,392 bytes** T2V (18.55 GB), with no bounded/pinned-budget skips. Note this is **cumulative bytes copied**, not peak additional memory: only two bounded reusable pinned CPU scratch buffers are allocated and no second persistent GPU weight set is created.
+
+| Mode | A1 baseline | B1 packed | B2 packed | A2 baseline | A mean | B mean | improvement |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| T2V | 112.656s | 111.023s | 110.967s | 111.631s | 112.1435s | 110.995s | **+1.0241%** |
+| I2V | 114.791s | 112.975s | 113.337s | 114.232s | 114.5115s | 113.156s | **+1.1837%** |
+
+**Fidelity:** All eight arms have identical decoded video **and** audio hashes to the pinned stable-main reference; Candidate E 27,360 calls, 384 native fallbacks, tiled epilogue zero, and same exceptional-row counts in each mode. No persistent FP16 weight copies. This is a small but encouraging measured wall-clock gain; **do not promote** on 73-frame results alone. It may include run noise; 241-frame validation and additional memory/VRAM measurement are required.
+
+**Next:** 241-frame T2V+I2V ABBA automatically launched at [run 43784862151](https://github.com/mylordmonkeyman/WanGP/actions/runs/43784862151), commit `48a1c162`, following this success. Review fidelity, absolute times and VRAM behavior before further changes. If gains remain marginal, pursue targeted CPU timing of packed `_copy_runs` vs original `_move_block`, and test 1-vs-2 staging slots or asynchronous prepack scheduling; do not increase VRAM residency or change math.

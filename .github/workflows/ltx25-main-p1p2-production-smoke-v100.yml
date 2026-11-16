@@ -1,0 +1,99 @@
+name: LTX-2.5 V100 clean main P1+P2 production smoke (73f T2V I2V)
+on:
+  push:
+    branches: [perf/ltx25-v100-mmgp-transfer-20261115]
+    paths:
+      - .github/workflows/ltx25-main-p1p2-production-smoke-v100.yml
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-v100-single-main-production-smoke
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false, ref: "57cf1c4eec3bcba4d20a32a9161cbc94eb2de5c1"}
+      - name: Verify exact merged main and clean production defaults
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "57cf1c4eec3bcba4d20a32a9161cbc94eb2de5c1"
+          python3 -m py_compile mmgp/offload.py benchmarks/ltx25_convrot/verify_cleanup_bar73_bitexact.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('mmgp/offload.py').read_text()
+          assert 'os.environ.get("WAN2GP_LTX25_MMGP_PACKED_PRELOAD", "1") == "1"' in s
+          assert 'os.environ.get("WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8", "1") == "1"' in s
+          assert 'nbytes > (512 << 20)' in s and 'range(2)' in s
+          assert 'final_gpu_bytes.copy_(slot[:nbytes], non_blocking=True)' in s
+          assert 'self._ltx25_packed_preload_block(stream_to_use, entry_name)' in s
+          assert '_ltx25_packed_profile' not in s and '_ltx25_packed_stats' not in s
+          print('LTX25_MAIN_P1P2_STATIC_PASS')
+          PY
+  gpu:
+    needs: static
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 35
+    env:
+      PYTHONPATH: .
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false, ref: "57cf1c4eec3bcba4d20a32a9161cbc94eb2de5c1"}
+      - name: Confirm production checkout and uncontested V100
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "57cf1c4eec3bcba4d20a32a9161cbc94eb2de5c1"
+          test -x "$LTX25_PYTHON"
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test -s benchmarks/ltx25_convrot/inputs/profile_i2v_1024x576.png.png
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          busy="$(nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+[[:space:]]*,' || true)"
+          if [[ -n "$busy" ]]; then echo "::error::V100 occupied: $busy"; exit 1; fi
+          unset WAN2GP_LTX25_MMGP_PACKED_PRELOAD WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8
+          "$LTX25_PYTHON" - <<'PY'
+          import os
+          from pathlib import Path
+          s=Path('mmgp/offload.py').read_text()
+          assert not os.getenv('WAN2GP_LTX25_MMGP_PACKED_PRELOAD')
+          assert not os.getenv('WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8')
+          assert 'WAN2GP_LTX25_MMGP_PACKED_PRELOAD", "1"' in s
+          assert 'WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8", "1"' in s
+          print('LTX25_MAIN_DEFAULT_FLAGS_CONFIRMED')
+          PY
+          nvidia-smi --query-gpu=name,memory.total --format=csv
+      - name: Smoke T2V 73f - main checkout with P1+P2 automatic defaults, exact video/audio
+        shell: bash
+        env:
+          LTX25_CLEAN_REGRESSION_OUT: /cache/ltx25/results/main-p1p2-smoke-t2v-${{ github.run_id }}-attempt${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          unset WAN2GP_LTX25_MMGP_PACKED_PRELOAD WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/verify_cleanup_bar73_bitexact.py --mode t2v 2>&1 | tee main-smoke-t2v.log
+          grep -Fq 'LTX25_CLEANUP_BAR73_BITEXACT_PASS' main-smoke-t2v.log
+      - name: Smoke I2V 73f - main checkout with P1+P2 automatic defaults, exact video/audio
+        shell: bash
+        env:
+          LTX25_CLEAN_REGRESSION_OUT: /cache/ltx25/results/main-p1p2-smoke-i2v-${{ github.run_id }}-attempt${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          unset WAN2GP_LTX25_MMGP_PACKED_PRELOAD WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/verify_cleanup_bar73_bitexact.py --mode i2v 2>&1 | tee main-smoke-i2v.log
+          grep -Fq 'LTX25_CLEANUP_BAR73_BITEXACT_PASS' main-smoke-i2v.log
+      - name: Upload smoke output hashes, logs and diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-main-p1p2-production-smoke-73f
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            main-smoke-*.log
+            /cache/ltx25/results/main-p1p2-smoke-*-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.json
+            /cache/ltx25/results/main-p1p2-smoke-*-${{ github.run_id }}-attempt${{ github.run_attempt }}/logs/*.log

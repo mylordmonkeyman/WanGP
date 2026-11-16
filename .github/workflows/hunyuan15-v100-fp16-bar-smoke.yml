@@ -6,6 +6,9 @@ on:
     branches: [research/hunyuan15-v100-native-fp16-20261116]
     paths:
       - .github/workflows/hunyuan15-v100-fp16-bar-smoke.yml
+      - benchmarks/hunyuan15_fp16/v100_bar_video_smoke.py
+      - models/hyvideo/**
+      - finetunes/hunyuan15_v100_*.json
   workflow_dispatch:
 
 permissions:

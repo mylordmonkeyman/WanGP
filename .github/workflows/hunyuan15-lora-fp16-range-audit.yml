@@ -1,0 +1,60 @@
+name: Hunyuan 1.5 BF16 LoRA FP16 numeric range audit
+
+# One-off CPU-only scan on the runner hosting existing checkpoint files.
+on:
+  push:
+    branches: [research/hunyuan15-v100-native-fp16-20261116]
+    paths:
+      - .github/workflows/hunyuan15-lora-fp16-range-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hunyuan15-lora-fp16-range-audit
+  cancel-in-progress: false
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Check script syntax
+        run: python3 -m py_compile scripts/hunyuan15_lora_fp16_range_audit.py
+
+  audit:
+    needs: lint
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 15
+    env:
+      HF_HUB_OFFLINE: '1'
+      OMP_NUM_THREADS: '8'
+      MKL_NUM_THREADS: '8'
+      AUDIT_REPORT: hunyuan15-lora-fp16-range-audit.json
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Exhaustively scan original BF16 and converted BF16 LoRAs
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHON=/opt/venvs/ltx25-cu128/bin/python
+          test -x "$PYTHON"
+          "$PYTHON" -u scripts/hunyuan15_lora_fp16_range_audit.py \
+            --output "$AUDIT_REPORT" 2>&1 | tee hunyuan15-lora-fp16-range-audit.log
+          grep -Fq HUNYUAN15_LORA_FP16_RANGE_AUDIT_COMPLETE hunyuan15-lora-fp16-range-audit.log
+      - name: Publish per-tensor range and cast audit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-lora-fp16-range-audit
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            hunyuan15-lora-fp16-range-audit.json
+            hunyuan15-lora-fp16-range-audit.log

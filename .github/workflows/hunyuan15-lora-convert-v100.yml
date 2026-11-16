@@ -1,4 +1,4 @@
-name: Hunyuan 1.5 Comfy-Org 4-step LoRA format inventory
+name: Hunyuan 1.5 V100 converted Comfy-Org LightX2V rank32 4-step T2V
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/hunyuan15_lora_convert.py
+          python3 -m py_compile scripts/hunyuan15_lora_convert.py benchmarks/hunyuan15_fp16/v100_t2v_converted_lora_4step.py
           python3 -m unittest discover -s benchmarks/hunyuan15_fp16 -p test_lora_conversion.py -v
 
   inventory:
@@ -87,3 +87,53 @@ jobs:
           _,_,stats=plan(source,ref)
           print('HUNYUAN15_LORA_PLAN_PASS',json.dumps(stats,sort_keys=True))
           PY
+      - name: Convert original Comfy LoRA to WanGP and generate 4-step FP16 bar T2V
+        shell: bash
+        env:
+          HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+          HUNYUAN15_TEST_MODE: t2v
+          HUNYUAN15_TEST_OUT: /cache/ltx25/results/hunyuan15-converted-lora-${{ github.run_id }}-attempt${{ github.run_attempt }}
+          PYTHONPATH: .
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+          HF_DATASETS_OFFLINE: '1'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          GRADIO_ANALYTICS_ENABLED: 'False'
+        run: |
+          set -euo pipefail
+          test -x "$HUNYUAN15_PYTHON"
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/v100_t2v_converted_lora_4step.py \
+            2>&1 | tee hunyuan15-converted-lora-4step.log
+          grep -Fq HUNYUAN15_CONVERTED_LORA_T2V_PASS hunyuan15-converted-lora-4step.log
+      - name: Publish converter report, config, timings and diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-converted-lora-4step-logs
+          if-no-files-found: warn
+          retention-days: 21
+          path: |
+            hunyuan15-converted-lora-4step.log
+            /cache/ltx25/results/hunyuan15-converted-lora-${{ github.run_id }}-attempt${{ github.run_attempt }}/converted_lora_report.json
+            /cache/ltx25/results/hunyuan15-converted-lora-${{ github.run_id }}-attempt${{ github.run_attempt }}/t2v/settings.json
+            /cache/ltx25/results/hunyuan15-converted-lora-${{ github.run_id }}-attempt${{ github.run_attempt }}/t2v/summary.json
+            /cache/ltx25/results/hunyuan15-converted-lora-${{ github.run_id }}-attempt${{ github.run_attempt }}/t2v/converted_lora_comparison.json
+            /cache/ltx25/results/hunyuan15-converted-lora-${{ github.run_id }}-attempt${{ github.run_attempt }}/t2v/logs/*.log
+      - name: Publish converted WanGP-compatible LoRA
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-lightx2v-rank32-wangp-converted-lora
+          retention-days: 21
+          if-no-files-found: warn
+          compression-level: 0
+          path: /cache/ltx25/results/hunyuan15-converted-lora-${{ github.run_id }}-attempt${{ github.run_attempt }}/converted_loras/*.safetensors
+      - name: Publish video with every frame decoded
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-converted-lora-t2v-bar-video
+          retention-days: 21
+          if-no-files-found: warn
+          compression-level: 0
+          path: /cache/ltx25/results/hunyuan15-converted-lora-${{ github.run_id }}-attempt${{ github.run_attempt }}/t2v/clips/*.mp4

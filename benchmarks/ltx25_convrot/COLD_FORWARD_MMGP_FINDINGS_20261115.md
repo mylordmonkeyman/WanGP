@@ -74,3 +74,20 @@ The first forward has essentially the same main math kernel duration as the seco
 The cold Stage 2 forward executes many **preload=True** parameter installations in addition to ordinary recurrent block loads: this is the dominant measured CPU-side section. The stage2 first cold 99 `copy_block` calls incur 5.02 seconds vs 27 milliseconds for 46 warm calls. Largest individual 64-block and base-weight loads are ~100–338 ms. The 5.02 seconds is not necessarily recoverable, since some work overlaps GPU compute and weights must be transferred/installed somewhere.
 
 **Revised next target:** Profile or change the cold `copy_block` parameter-installation/preload path, not a generic global allocator cache purge. Test whether the cold passes create many small unpinned per-tensor copies and whether grouping/staging or first-pass preload placement can cut launch and CPU dispatch overhead without a second persistent weight set or increased peak VRAM. Start with a strictly opt-in, bounded change and repeat end-to-end A–B–B–A before default promotion.
+
+## Candidate P1 — bounded packed MMGP transformer cold preloads
+
+**Date:** 2026-11-15. **Branch:** `perf/ltx25-v100-mmgp-transfer-20261115`. **Code commit:** `bc6ea56fd2f85131a2fef96867fc57ba052dfcac`. **Default: OFF**, enabled only by `WAN2GP_LTX25_MMGP_PACKED_PRELOAD=1`.
+
+**Rationale:** Earlier detailed T2V Stage2 first forward spent ~5.018 seconds in 99 `copy_block` calls, compared with 0.027 seconds and 46 calls in the second; I2V CUDA Stage2 cold trace counted 8,174 copy events versus 46 warm. Instead of altering CUDA math or extending GPU weight residence, P1 targets the per-tensor pageable loading path used when MMGP bulk pinned sources are unavailable.
+
+**Implementation:** In `mmgp/offload.py`, for `model_id=="transformer"`, `preload=True` and a non-base block only, P1:
+- Prefers unmodified MMGP bulk source runs when already pinned; never replaces those.
+- Reuses the existing MMGP `_block_items` / `_ring_layout` / `_ring_view` machinery to flatten eligible pageable tensor subclass leaves with existing GPU alignment/metadata.
+- Packs at most 512 MiB per block into two alternating, capacity-governed pinned **CPU** buffers; exact bytes are copied via the already-used `_copy_runs` routine, then a **single** asynchronous host-to-GPU copy fills the *final* GPU allocation whose views become the block's installed weight tensors. No additional persistent GPU weight set or FP16-expanded weights.
+- Uses CUDA transfer-completion events to protect pinned scratch reuse; may introduce CPU waits, so measured wall time is required. If layout is unsupported, source is already pinned, block exceeds cap, or pinned budget refuses a slot, original parameter-loading code is used.
+- Leaves all other models, ordinary streamed blocks, math/attention kernels, quantization, existing flag defaults, Stage2 cache cleanup, and current MMGP VRAM preload policy untouched.
+
+**Experiment:** [V100 73-frame T2V+I2V full-process ABBA run 43779437456](https://github.com/mylordmonkeyman/WanGP/actions/runs/43779437456), 8 separate processes, identical original 1024×576 bar prompt/image, seed 20261112, 8 steps, same model, Candidate E+radix4 and Stage2 FP16, tiled epilogue off, Stage2 CUDA cache toggle off. Every arm must match pinned decoded video/audio reference and maintain zero persistent FP16 weight copies; B must report `packed_blocks>0` to demonstrate that the code executed. **No claim of speedup until the run completes.**
+
+**Decision gate:** Significant repeatable whole-process gain and exact fidelity before considering promotion, with 241-frame ABBA validation afterward. If pinned RAM is refused or performance is worse, keep the flag off, preserve the negative result, and investigate alternative bounded staging or prefetch placement. Stable `main` untouched.

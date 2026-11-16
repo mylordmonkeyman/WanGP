@@ -1,0 +1,89 @@
+name: LTX-2.5 V100 MMGP packed CPU phase profile 73f T2V I2V ABBA
+on:
+  push:
+    branches: [perf/ltx25-v100-mmgp-transfer-20261115]
+    paths:
+      - .github/workflows/ltx25-mmgp-packed-profile-73f-v100.yml
+      - benchmarks/ltx25_convrot/benchmark_mmgp_packed_profile_73f_abba.py
+      - mmgp/offload.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-v100-mmgp-packed-profile-73f
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false, fetch-depth: 0}
+      - name: Validate disabled-by-default packed preload and unchanged math path
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile mmgp/offload.py benchmarks/ltx25_convrot/benchmark_mmgp_packed_profile_73f_abba.py
+          git diff --exit-code 8788b0479362c34e6423d331f115767ad9fe6fdc HEAD -- shared/qtypes/ benchmarks/ltx25_convrot/ltx25_cublas_e.cu shared/kernels/ltx25_cublas_sm70.py
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('mmgp/offload.py').read_text()
+          b=Path('benchmarks/ltx25_convrot/benchmark_mmgp_packed_profile_73f_abba.py').read_text()
+          assert 'os.environ.get("WAN2GP_LTX25_MMGP_PACKED_PRELOAD", "0") == "1"' in m
+          assert 'model_id == "transformer" and self._ltx25_packed_preload_enabled' in m
+          assert 'nbytes > (512 << 20)' in m
+          assert 'pinned.Buffer("staging", STAGING_CHUNK_SIZE)' in m
+          assert 'final_gpu_bytes.copy_(slot[:nbytes], non_blocking=True)' in m
+          assert 'self._ltx25_packed_preload_block(stream_to_use, entry_name)' in m
+          assert 'WAN2GP_LTX25_MMGP_PACKED_PRELOAD"]="1" if pack_preload else "0"' in b
+          assert 'WAN2GP_LTX25_MMGP_PACKED_PROFILE"]="1" if pack_preload else "0"' in b
+          assert 'packed_phase_profile' in b
+          assert 'WAN2GP_LTX25_E_EPILOGUE_TILED"]="0"' in b
+          assert 'WAN2GP_LTX25_STAGE2_KEEP_CUDA_CACHE"]="0"' in b
+          assert 'KNOWN[mode]["audio"]' in b and 'KNOWN[mode]["video"]' in b
+          assert 'LTX25_MMGP_PACKED_PROFILE_73F_ABBA_PASS' in b
+          print('LTX25_MMGP_PACKED_STATIC_PASS')
+          PY
+  benchmark:
+    needs: static
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 75
+    env:
+      PYTHONPATH: .
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_MMGP_PACKED_PROFILE_ROOT: /cache/ltx25/results/mmgp-packed-profile-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Validate V100 capacity and pinned model
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$LTX25_PYTHON"
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test -s benchmarks/ltx25_convrot/inputs/profile_i2v_1024x576.png.png
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          test -z "$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '[0-9]' || true)"
+          nvidia-smi --query-gpu=name,memory.total,temperature.gpu --format=csv
+      - name: Whole-process T2V and I2V ABBA plus output bit fidelity
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/benchmark_mmgp_packed_profile_73f_abba.py 2>&1 | tee mmgp-packed-profile.log
+          grep -Fq LTX25_MMGP_PACKED_PROFILE_73F_ABBA_PASS mmgp-packed-profile.log
+      - name: Upload ABBA wall, loading diagnostics and decoded hashes
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-mmgp-packed-profile-73f-abba
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            mmgp-packed-profile.log
+            /cache/ltx25/results/mmgp-packed-profile-${{ github.run_id }}-attempt${{ github.run_attempt }}/manifest.json
+            /cache/ltx25/results/mmgp-packed-profile-${{ github.run_id }}-attempt${{ github.run_attempt }}/partial.json
+            /cache/ltx25/results/mmgp-packed-profile-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.json
+            /cache/ltx25/results/mmgp-packed-profile-${{ github.run_id }}-attempt${{ github.run_attempt }}/results/*.json
+            /cache/ltx25/results/mmgp-packed-profile-${{ github.run_id }}-attempt${{ github.run_attempt }}/logs/*.log

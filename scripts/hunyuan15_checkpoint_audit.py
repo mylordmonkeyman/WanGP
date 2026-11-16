@@ -77,6 +77,35 @@ def summarize(path, catalog):
     }
 
 
+def expand_fused_qkv_metadata(catalog):
+    """Expand Comfy QKV header entries into WanGP's separate Q/K/V metadata.
+
+    This is a *shape-only* check. Live tensors must be split on output axis 0
+    with Q,K,V ordering, independently validated before numerical inference.
+    """
+    expanded = {}
+    conversions = 0
+    for key, value in catalog.items():
+        if "_attn_qkv." not in key:
+            if key in expanded:
+                raise ValueError(f"Duplicate key: {key}")
+            expanded[key] = value
+            continue
+        shape = value["shape"]
+        if not shape or shape[0] % 3:
+            raise ValueError(f"{key}: QKV first dimension is not a multiple of 3")
+        for which in ("q", "k", "v"):
+            new_name = key.replace("_attn_qkv.", f"_attn_{which}.")
+            if new_name in expanded or new_name in catalog:
+                raise ValueError(f"{key}: QKV expansion conflicts with {new_name}")
+            expanded[new_name] = {
+                "dtype": value["dtype"],
+                "shape": [shape[0] // 3, *shape[1:]],
+            }
+        conversions += 1
+    return expanded, conversions
+
+
 def compare(candidate, reference):
     cand = normalize(candidate)
     ref = normalize(reference)

@@ -73,6 +73,10 @@ class HunyuanLoraConversionTests(unittest.TestCase):
         self.assertEqual(target_modules("time_in.out_layer"), ("time_in.mlp.2",))
         self.assertEqual(target_modules("time_r_in.in_layer"), ("time_r_in.mlp.0",))
         self.assertEqual(target_modules("vector_in.in_layer"), ("vector_in.in_layer",))
+        self.assertEqual(target_modules("txt_in.t_embedder.in_layer"), ("txt_in.t_embedder.mlp.0",))
+        self.assertEqual(target_modules("txt_in.t_embedder.out_layer"), ("txt_in.t_embedder.mlp.2",))
+        self.assertEqual(target_modules("txt_in.c_embedder.in_layer"), ("txt_in.c_embedder.linear_1",))
+        self.assertEqual(target_modules("txt_in.c_embedder.out_layer"), ("txt_in.c_embedder.linear_2",))
 
     def test_reject_missing_model_target(self):
         source = self.source()

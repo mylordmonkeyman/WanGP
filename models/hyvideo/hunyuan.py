@@ -179,8 +179,11 @@ class Inference(object):
         torch.set_grad_enabled(False)
         text_len = 512
         latent_channels = 16
+        # Preserve the legacy BF16 path unless the experimental Hunyuan 1.5
+        # native-FP16 mode is explicitly enabled in a model definition.
+        requested_dtype = dtype
         precision = "bf16"
-        dtype =torch.bfloat16
+        dtype = torch.bfloat16
         vae_precision = "fp32" if VAE_dtype == torch.float32 else "bf16" 
         embedded_cfg_scale = 6
         filepath = model_filepath[0]
@@ -241,6 +244,17 @@ class Inference(object):
         else:
             in_channels = latent_channels
             image_embed_interleave = 1
+        native_fp16_requested = bool(model_def.get("hunyuan15_native_fp16", False))
+        if native_fp16_requested and not hunyuan_1_5:
+            raise ValueError("hunyuan15_native_fp16 is only supported for Hunyuan 1.5")
+        if native_fp16_requested and requested_dtype != torch.float16:
+            raise ValueError("hunyuan15_native_fp16 requires transformer dtype FP16")
+        native_fp16 = native_fp16_requested
+        if native_fp16:
+            precision = "fp16"
+            dtype = torch.float16
+            print("EXPERIMENTAL Hunyuan 1.5 native FP16 enabled (not yet quality validated)")
+
         pinToMemory = kwargs.pop("pinToMemory", False)
         partialPinning = kwargs.pop("partialPinning", False)        
         factor_kwargs = kwargs | {"device": "meta", "dtype": PRECISION_TO_TYPE[precision]}
@@ -261,6 +275,9 @@ class Inference(object):
 
         source =  model_def.get("source", None)
         model.mixed_precision = mixed_precision_transformer
+        model.native_fp16 = native_fp16
+        for block in list(model.double_blocks) + list(model.single_blocks):
+            block.native_fp16 = native_fp16
         def pre_load_callback(model):
             model.lock_layers_dtypes(torch.float32 if model.mixed_precision else dtype)
         kwargs_light = dict(do_quantize= quantizeTransformer and not save_quantized, pinToMemory = pinToMemory, partialPinning = partialPinning, writable_tensors=False, default_dtype=dtype, pre_load_callback=pre_load_callback)

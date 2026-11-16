@@ -71,6 +71,30 @@ class DtypePathStaticTest(unittest.TestCase):
             path = ROOT / name
             compile(path.read_text(encoding="utf-8"), str(path), "exec")
 
+    def test_experimental_model_definitions(self):
+        for filename, expected_architecture in (
+            ("hunyuan15_v100_i2v_480_step_fp16_experiment.json", "hunyuan_1_5_i2v"),
+            ("hunyuan15_v100_t2v_480_fp16_experiment.json", "hunyuan_1_5_t2v"),
+        ):
+            data = json.loads((ROOT / "finetunes" / filename).read_text(encoding="utf-8"))
+            model = data["model"]
+            self.assertEqual(model["architecture"], expected_architecture)
+            self.assertEqual(model["dtype"], "fp16")
+            self.assertTrue(model["hunyuan15_native_fp16"])
+            self.assertFalse(model["auto_quantize"])
+            self.assertEqual(len(model["URLs"]), 1)
+            self.assertIn("Comfy-Org/Hunyuan-Video-1.5", model["URLs"][0])
+            self.assertTrue(model["URLs"][0].endswith("_fp16.safetensors"))
+
+    def test_selected_model_precision_route(self):
+        code = (ROOT / "wgp.py").read_text(encoding="utf-8")
+        compile(code, "wgp.py", "exec")
+        start = code.index("def get_transformer_dtype(")
+        section = code[start:code.index("\\ndef get_settings_file_name(", start)]
+        self.assertIn('get_model_def(model_type)', section)
+        self.assertIn('get("hunyuan15_native_fp16", False)', section)
+        self.assertIn("return torch.float16", section)
+
     def test_native_fp16_is_opt_in(self):
         loader = (ROOT / "models/hyvideo/hunyuan.py").read_text(encoding="utf-8")
         self.assertIn('model_def.get("hunyuan15_native_fp16", False)', loader)

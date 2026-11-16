@@ -1,0 +1,67 @@
+name: LTX25 V100 P4 single pinned slot 73f T2V I2V ABBA
+on:
+  push:
+    branches: [perf/ltx25-v100-mmgp-transfer-20261115]
+    paths: [.github/workflows/ltx25-mmgp-p4-single-73f-v100.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-v100-single-shared
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Syntax and opt-in isolation
+        run: |
+          python3 -m py_compile mmgp/offload.py benchmarks/ltx25_convrot/benchmark_mmgp_p4_single_73f_abba.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('mmgp/offload.py').read_text()
+          t=Path('benchmarks/ltx25_convrot/benchmark_mmgp_p4_single_73f_abba.py').read_text()
+          assert 'WAN2GP_LTX25_MMGP_PACKED_SINGLE_SLOT", "0"' in s
+          assert 'ready.synchronize()' in s and 'self._ltx25_packed_events[slot_no] = done' in s
+          assert 'for _ in range(1 if self._ltx25_packed_single_slot else 2)' in s
+          assert 'ORDER = ("A1", "B1", "B2", "A2")' in t
+          assert 'WAN2GP_LTX25_MMGP_PACKED_SINGLE_SLOT' in t
+          assert 'KNOWN[mode]["video"]' in t and 'KNOWN[mode]["audio"]' in t
+          print('P4_STATIC_PASS')
+          PY
+  benchmark:
+    needs: static
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 85
+    env:
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      LTX25_MMGP_COMBINED_73F_ROOT: /cache/ltx25/results/p4-single-73f-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Verify V100 idle and execute paired generations
+        shell: bash
+        run: |
+          set -euo pipefail
+          "${LTX25_PYTHON}" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          busy="$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '[0-9]' || true)"
+          test -z "$busy" || { echo "V100 busy: $busy"; exit 1; }
+          "${LTX25_PYTHON}" -u benchmarks/ltx25_convrot/benchmark_mmgp_p4_single_73f_abba.py 2>&1 | tee p4-single-73f.log
+          grep -Fq 'LTX25_MMGP_P4_SINGLE_73F_ABBA_PASS' p4-single-73f.log
+      - name: Archive results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-p4-single-73f
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            p4-single-73f.log
+            /cache/ltx25/results/p4-single-73f-${{ github.run_id }}/summary.json
+            /cache/ltx25/results/p4-single-73f-${{ github.run_id }}/partial.json
+            /cache/ltx25/results/p4-single-73f-${{ github.run_id }}/manifest.json
+            /cache/ltx25/results/p4-single-73f-${{ github.run_id }}/results/*-summary.json

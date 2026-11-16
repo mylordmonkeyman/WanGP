@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Inspect three public Hunyuan 1.5 safetensors headers via HTTP Range.
+
+Only the tiny JSON header is read. No 16-33 GB weight file is downloaded.
+This is a one-shot CPU-only research probe, not a video generation test.
+"""
+from collections import Counter
+import json
+import struct
+from urllib.request import Request, urlopen
+
+from hunyuan15_checkpoint_audit import MAX_HEADER_BYTES, compare
+
+
+URLS = {
+    "comfy_fp16": (
+        "https://huggingface.co/Comfy-Org/Hunyuan-Video-1.5/resolve/main/"
+        "split_files/diffusion_models/hunyuanvideo1.5_480p_i2v_step_distilled_fp16.safetensors"
+    ),
+    "wangp_bf16": (
+        "https://huggingface.co/DeepBeepMeep/HunyuanVideo1.5/resolve/main/"
+        "hunyuan_video_1.5_i2v_480_step_distilled_bf16.safetensors"
+    ),
+    "tencent_original": (
+        "https://huggingface.co/tencent/HunyuanVideo-1.5/resolve/main/"
+        "transformer/480p_i2v_step_distilled/diffusion_pytorch_model.safetensors"
+    ),
+}
+
+
+def fetch_range(url, start, end):
+    if end < start:
+        raise ValueError("Invalid byte range")
+    length = end - start + 1
+    request = Request(
+        url, headers={"Range": f"bytes={start}-{end}", "Accept-Encoding": "identity",
+                      "User-Agent": "WanGP-Hunyuan15-header-audit/1.0"}
+    )
+    with urlopen(request, timeout=90) as response:
+        status = response.status
+        if status not in (200, 206):
+            raise OSError(f"Unexpected HTTP status {status}")
+        if status == 206:
+            content_range = response.headers.get("Content-Range", "")
+            if not content_range.startswith(f"bytes {start}-"):
+                raise OSError(f"Unexpected Content-Range: {content_range}")
+        else:
+            # Range ignored: stream/discard only up to the requested position.
+            # We intentionally never consume the remainder of the weight file.
+            remaining = start
+            while remaining:
+                chunk = response.read(min(remaining, 65536))
+                if not chunk:
+                    raise OSError("Server closed response while skipping to requested offset")
+                remaining -= len(chunk)
+        result = response.read(length)
+        if len(result) != length:
+            raise OSError(f"Expected {length} bytes; got {len(result)}")
+        return result
+
+
+def header_from_url(url):
+    prefix = fetch_range(url, 0, 7)
+    header_len = struct.unpack("<Q", prefix)[0]
+    if not 2 <= header_len <= MAX_HEADER_BYTES:
+        raise ValueError(f"Suspicious header size {header_len}")
+    header = json.loads(fetch_range(url, 8, 7 + header_len))
+    weights = {}
+    for key, value in header.items():
+        if key == "__metadata__":
+            continue
+        if not isinstance(value, dict) or not {"dtype", "shape", "data_offsets"} <= set(value):
+            raise ValueError(f"Invalid tensor header for {key}")
+        weights[key] = {"dtype": value["dtype"], "shape": value["shape"]}
+    return weights, header_len
+
+
+def main():
+    catalogs = {}
+    result = {}
+    for label, url in URLS.items():
+        try:
+            weights, header_len = header_from_url(url)
+        except Exception as exc:
+            result[label] = {"url": url, "error": str(exc)}
+            continue
+        catalogs[label] = weights
+        result[label] = {
+            "url": url,
+            "header_bytes": header_len,
+            "tensor_count": len(weights),
+            "dtype_counts": dict(Counter(v["dtype"] for v in weights.values())),
+            "example_keys": sorted(weights)[:12],
+        }
+    if "wangp_bf16" in catalogs:
+        for label in ("comfy_fp16", "tencent_original"):
+            if label in catalogs:
+                result[label]["versus_wangp"] = compare(catalogs[label], catalogs["wangp_bf16"])
+    print(json.dumps(result, indent=2), flush=True)
+    return 1 if any("error" in entry for entry in result.values()) else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

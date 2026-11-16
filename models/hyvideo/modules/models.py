@@ -208,7 +208,7 @@ class MMDoubleStreamBlock(nn.Module):
 
         # Prepare image for attention.
         img_modulated = self.img_norm1(img)
-        img_modulated = img_modulated.to(torch.bfloat16)
+        img_modulated = img_modulated.to(torch.float16 if getattr(self, "native_fp16", False) else torch.bfloat16)
 
         if condition_type == "token_replace":
             modulate_(img_modulated[:, :frist_frame_token_num], shift=tr_img_mod1_shift, scale=tr_img_mod1_scale)
@@ -287,7 +287,7 @@ class MMDoubleStreamBlock(nn.Module):
             apply_gate_and_accumulate_(img[:, frist_frame_token_num:], img_attn[:, frist_frame_token_num:], gate=img_mod1_gate)
             del img_attn
             img_modulated = self.img_norm2(img)
-            img_modulated = img_modulated.to(torch.bfloat16)
+            img_modulated = img_modulated.to(torch.float16 if getattr(self, "native_fp16", False) else torch.bfloat16)
             modulate_( img_modulated[:, :frist_frame_token_num], shift=tr_img_mod2_shift, scale=tr_img_mod2_scale)
             modulate_( img_modulated[:, frist_frame_token_num:], shift=img_mod2_shift, scale=img_mod2_scale)
             self.img_mlp.apply_(img_modulated)        
@@ -299,7 +299,7 @@ class MMDoubleStreamBlock(nn.Module):
             apply_gate_and_accumulate_(img, img_attn, gate=img_mod1_gate)
             del img_attn
             img_modulated = self.img_norm2(img)
-            img_modulated = img_modulated.to(torch.bfloat16)
+            img_modulated = img_modulated.to(torch.float16 if getattr(self, "native_fp16", False) else torch.bfloat16)
             modulate_( img_modulated , shift=img_mod2_shift, scale=img_mod2_scale)
             self.img_mlp.apply_(img_modulated)        
             apply_gate_and_accumulate_(img, img_modulated, gate=img_mod2_gate)
@@ -310,7 +310,7 @@ class MMDoubleStreamBlock(nn.Module):
         apply_gate_and_accumulate_(txt, txt_attn, gate=txt_mod1_gate)
         del txt_attn
         txt_modulated = self.txt_norm2(txt)
-        txt_modulated = txt_modulated.to(torch.bfloat16)
+        txt_modulated = txt_modulated.to(torch.float16 if getattr(self, "native_fp16", False) else torch.bfloat16)
         modulate_(txt_modulated, shift=txt_mod2_shift, scale=txt_mod2_scale)
         txt_mlp = self.txt_mlp(txt_modulated)
         del txt_modulated 
@@ -421,14 +421,14 @@ class MMSingleStreamBlock(nn.Module):
             mod_shift, mod_scale, mod_gate = self.modulation(vec).chunk(3, dim=-1)
 
         img_mod = self.pre_norm(img)
-        img_mod = img_mod.to(torch.bfloat16)
+        img_mod = img_mod.to(torch.float16 if getattr(self, "native_fp16", False) else torch.bfloat16)
         if condition_type == "token_replace":
             modulate_(img_mod[:, :frist_frame_token_num], shift=tr_mod_shift, scale=tr_mod_scale)
             modulate_(img_mod[:, frist_frame_token_num:], shift=mod_shift, scale=mod_scale)
         else:
             modulate_(img_mod, shift=mod_shift, scale=mod_scale)
         txt_mod = self.pre_norm(txt)
-        txt_mod = txt_mod.to(torch.bfloat16)
+        txt_mod = txt_mod.to(torch.float16 if getattr(self, "native_fp16", False) else torch.bfloat16)
         modulate_(txt_mod, shift=mod_shift, scale=mod_scale)
 
         shape = (*img_mod.shape[:2], self.heads_num, int(img_mod.shape[-1] / self.heads_num) )
@@ -1117,7 +1117,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
                     vec_ = vec[0:1] 
                     ( img_mod1_shift, img_mod1_scale, _ , _ , _ , _ , ) = self.double_blocks[0].img_mod(vec_).chunk(6, dim=-1)
                     normed_inp = self.double_blocks[0].img_norm1(inp)
-                    normed_inp = normed_inp.to(torch.bfloat16)
+                    normed_inp = normed_inp.to(torch.float16 if getattr(self, "native_fp16", False) else torch.bfloat16)
                     modulated_inp = modulate( normed_inp, shift=img_mod1_shift, scale=img_mod1_scale )
                     del normed_inp, img_mod1_shift, img_mod1_scale
                     if step_no <= skip_steps_cache.start_step or step_no == skip_steps_cache.num_steps-1:

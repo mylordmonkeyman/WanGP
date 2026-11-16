@@ -65,7 +65,7 @@ def gpu_preflight():
     if not IMAGE.is_file():
         raise RuntimeError(f"Prior LTX bar image absent: {IMAGE}")
     header = IMAGE.read_bytes()[:24]
-    if header[:8] != b"\\x89PNG\\r\\n\\x1a\\n" or struct.unpack(">II", header[16:24]) != (1024, 576):
+    if header[:8] != b"\x89PNG\r\n\x1a\n" or struct.unpack(">II", header[16:24]) != (1024, 576):
         raise RuntimeError("Wrong bar input image (expected 1024x576 PNG)")
     p = subprocess.run(["nvidia-smi", "--query-gpu=name,compute_cap,memory.total",
         "--format=csv,noheader"], text=True, capture_output=True, check=True)
@@ -74,7 +74,7 @@ def gpu_preflight():
         raise RuntimeError("Not running on V100 runner")
     p = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,used_gpu_memory",
         "--format=csv,noheader"], text=True, capture_output=True, check=True)
-    apps = [x for x in p.stdout.splitlines() if re.search(r"^\\s*\\d+\\s*,", x)]
+    apps = [x for x in p.stdout.splitlines() if re.search(r"^\s*\d+\s*,", x)]
     if apps:
         raise RuntimeError("V100 occupied, preserve ongoing work: " + repr(apps))
     if not Path(PYTHON).is_file():

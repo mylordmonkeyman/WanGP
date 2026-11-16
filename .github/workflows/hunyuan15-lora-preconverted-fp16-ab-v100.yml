@@ -1,0 +1,112 @@
+name: Hunyuan 1.5 V100 LoRA BF16 runtime-cast vs FP16 preconverted paired benchmark
+
+on:
+  push:
+    branches: [research/hunyuan15-v100-native-fp16-20261116]
+    paths:
+      - .github/workflows/hunyuan15-lora-preconverted-fp16-ab-v100.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hunyuan15-lora-preconverted-fp16-ab-v100
+  cancel-in-progress: false
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Compile benchmark and assert timing exclusion
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            benchmarks/hunyuan15_fp16/v100_t2v_lora_disk_fp16_ab.py \
+            benchmarks/hunyuan15_fp16/v100_bar_video_smoke.py \
+            benchmarks/hunyuan15_fp16/v100_t2v_cached_steady_state.py
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('benchmarks/hunyuan15_fp16/v100_t2v_lora_disk_fp16_ab.py').read_text()
+          assert text.index('report = preconvert_and_verify()') < text.index('for index, dtype in enumerate(ORDER, 1):')
+          assert text.index('for index, dtype in enumerate(ORDER, 1):') < text.index('result = base.run_mode(MODE)')
+          assert 'ORDER = ("bf16", "fp16", "fp16", "bf16", "fp16", "bf16")' in text
+          assert "torch.equal(actual, expected)" in text
+          assert '"num_inference_steps": 4' in text
+          assert '"guidance_scale": 1.0' in text
+          assert '"flow_shift": 8.0' in text
+          print('HUNYUAN15_AB_STATIC_PASS')
+          PY
+
+  benchmark:
+    needs: lint
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 30
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      HUNYUAN15_TEST_MODE: t2v
+      HUNYUAN15_TEST_OUT: /cache/ltx25/results/hunyuan15-lora-fp16-ab-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      PYTHONPATH: .
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_DATASETS_OFFLINE: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      GRADIO_ANALYTICS_ENABLED: 'False'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Confirm V100 and both cached FP16 model and BF16 LoRA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$HUNYUAN15_PYTHON"
+          test -s /cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints/hunyuanvideo1.5_480p_t2v_fp16.safetensors
+          test -s /cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1/converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors
+          nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv,noheader
+      - name: Preconvert once, verify every tensor, then run six cold-process T2V trials
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/v100_t2v_lora_disk_fp16_ab.py \
+            2>&1 | tee hunyuan15-lora-fp16-ab.log
+          grep -Fq HUNYUAN15_FP16_ON_DISK_PARITY_PASS hunyuan15-lora-fp16-ab.log
+          grep -Fq HUNYUAN15_LORA_DISK_FP16_AB_PASS hunyuan15-lora-fp16-ab.log
+      - name: Publish comparison, per-run settings and logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-lora-fp16-ab-benchmark-results
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            hunyuan15-lora-fp16-ab.log
+            /cache/ltx25/results/hunyuan15-lora-fp16-ab-${{ github.run_id }}-attempt${{ github.run_attempt }}/preconversion_report.json
+            /cache/ltx25/results/hunyuan15-lora-fp16-ab-${{ github.run_id }}-attempt${{ github.run_attempt }}/partial_trials.json
+            /cache/ltx25/results/hunyuan15-lora-fp16-ab-${{ github.run_id }}-attempt${{ github.run_attempt }}/comparison.json
+            /cache/ltx25/results/hunyuan15-lora-fp16-ab-${{ github.run_id }}-attempt${{ github.run_attempt }}/trials/**/settings.json
+            /cache/ltx25/results/hunyuan15-lora-fp16-ab-${{ github.run_id }}-attempt${{ github.run_attempt }}/trials/**/summary.json
+            /cache/ltx25/results/hunyuan15-lora-fp16-ab-${{ github.run_id }}-attempt${{ github.run_attempt }}/trials/**/logs/*.log
+      - name: Publish representative 33-frame test clips
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-lora-fp16-ab-mp4
+          retention-days: 21
+          if-no-files-found: warn
+          compression-level: 0
+          path: /cache/ltx25/results/hunyuan15-lora-fp16-ab-${{ github.run_id }}-attempt${{ github.run_attempt }}/trials/**/clips/*.mp4
+      - name: Publish preconverted FP16 LoRA for reuse
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-lightx2v-rank32-wangp-preconverted-fp16-lora
+          retention-days: 21
+          if-no-files-found: warn
+          compression-level: 0
+          path: /cache/ltx25/results/hunyuan15-lora-fp16-ab-${{ github.run_id }}-attempt${{ github.run_attempt }}/prepared_fp16_lora/*.safetensors

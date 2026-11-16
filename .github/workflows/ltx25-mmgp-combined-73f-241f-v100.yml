@@ -1,0 +1,112 @@
+name: LTX-2.5 V100 P1P2 combined versus main-equivalent 73f and 241f T2V I2V ABBA
+on:
+  push:
+    branches: [perf/ltx25-v100-mmgp-transfer-20261115]
+    paths:
+      - .github/workflows/ltx25-mmgp-combined-73f-241f-v100.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-v100-combined-p1p2-main-abba
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false, fetch-depth: 0}
+      - name: Compile tests and enforce baseline vs combined isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile mmgp/offload.py \
+            benchmarks/ltx25_convrot/benchmark_mmgp_combined_73f_abba.py \
+            benchmarks/ltx25_convrot/benchmark_mmgp_combined_241f_abba.py
+          git diff --exit-code 8788b0479362c34e6423d331f115767ad9fe6fdc HEAD -- \
+            shared/qtypes/ benchmarks/ltx25_convrot/ltx25_cublas_e.cu shared/kernels/ltx25_cublas_sm70.py
+          python3 - <<'PY'
+          from pathlib import Path
+          mmgp=Path('mmgp/offload.py').read_text()
+          assert 'os.environ.get("WAN2GP_LTX25_MMGP_PACKED_PRELOAD", "0") == "1"' in mmgp
+          assert 'os.environ.get("WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8", "0") == "1"' in mmgp
+          assert 'adaptive_workers=self._ltx25_adaptive_pack' in mmgp
+          for frames in (73,241):
+              b=Path(f'benchmarks/ltx25_convrot/benchmark_mmgp_combined_{frames}f_abba.py').read_text()
+              assert f'four.settings({frames})' in b
+              assert f'base.FRAMES,base.STEPS,base.SEED={frames},8,20261112' in b
+              assert 'ORDER = ("A1", "B1", "B2", "A2")' in b
+              assert 'MODES = ("t2v", "i2v")' in b
+              assert 'WAN2GP_LTX25_MMGP_PACKED_PRELOAD"]="1" if pack_preload else "0"' in b
+              assert 'WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8"]="1" if pack_preload else "0"' in b
+              assert 'WAN2GP_LTX25_MMGP_PACKED_PROFILE"]="0"' in b
+              assert 'WAN2GP_LTX25_STAGE2_KEEP_CUDA_CACHE"]="0"' in b
+              assert 'WAN2GP_LTX25_E_EPILOGUE_TILED"]="0"' in b
+              assert 'stage_shape.audit_stage2' in b
+              assert 'persistent_fp16_weight_copies' in b
+              assert 'video_and_audio_bit_identical' in b
+              assert f'LTX25_MMGP_COMBINED_{frames}F_ABBA_PASS' in b
+              if frames==73:
+                  assert 'KNOWN[mode]["video"]' in b and 'KNOWN[mode]["audio"]' in b
+              else:
+                  assert 'if arm=="A1":' in b
+                  assert 'require(all(x["video_and_audio_bit_identical"] for x in out)' in b
+          print('LTX25_MMGP_COMBINED_STATIC_PASS')
+          PY
+  benchmark:
+    needs: static
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 105
+    env:
+      PYTHONPATH: .
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_MMGP_COMBINED_73F_ROOT: /cache/ltx25/results/mmgp-combined-73f-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      LTX25_MMGP_COMBINED_241F_ROOT: /cache/ltx25/results/mmgp-combined-241f-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Verify single idle V100, checkpoint, and source reference image
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$LTX25_PYTHON"
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test -s benchmarks/ltx25_convrot/inputs/profile_i2v_1024x576.png.png
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          test -z "$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '[0-9]' || true)"
+          nvidia-smi --query-gpu=name,memory.total,temperature.gpu --format=csv
+      - name: Uninstrumented 73f T2V/I2V A-B-B-A original versus combined P1+P2
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/benchmark_mmgp_combined_73f_abba.py 2>&1 | tee mmgp-combined-73f.log
+          grep -Fq LTX25_MMGP_COMBINED_73F_ABBA_PASS mmgp-combined-73f.log
+      - name: Uninstrumented 241f T2V/I2V A-B-B-A original versus combined P1+P2
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/benchmark_mmgp_combined_241f_abba.py 2>&1 | tee mmgp-combined-241f.log
+          grep -Fq LTX25_MMGP_COMBINED_241F_ABBA_PASS mmgp-combined-241f.log
+      - name: Upload elapsed times, video/audio hashes, log evidence, manifests
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-mmgp-combined-versus-main-73f-241f
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            mmgp-combined-73f.log
+            mmgp-combined-241f.log
+            /cache/ltx25/results/mmgp-combined-73f-${{ github.run_id }}-attempt${{ github.run_attempt }}/manifest.json
+            /cache/ltx25/results/mmgp-combined-73f-${{ github.run_id }}-attempt${{ github.run_attempt }}/partial.json
+            /cache/ltx25/results/mmgp-combined-73f-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.json
+            /cache/ltx25/results/mmgp-combined-73f-${{ github.run_id }}-attempt${{ github.run_attempt }}/results/*.json
+            /cache/ltx25/results/mmgp-combined-73f-${{ github.run_id }}-attempt${{ github.run_attempt }}/logs/*.log
+            /cache/ltx25/results/mmgp-combined-241f-${{ github.run_id }}-attempt${{ github.run_attempt }}/manifest.json
+            /cache/ltx25/results/mmgp-combined-241f-${{ github.run_id }}-attempt${{ github.run_attempt }}/partial.json
+            /cache/ltx25/results/mmgp-combined-241f-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.json
+            /cache/ltx25/results/mmgp-combined-241f-${{ github.run_id }}-attempt${{ github.run_attempt }}/results/*.json
+            /cache/ltx25/results/mmgp-combined-241f-${{ github.run_id }}-attempt${{ github.run_attempt }}/logs/*.log

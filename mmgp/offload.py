@@ -1042,8 +1042,8 @@ def _leaf_sizes(p):
     return [_block_aligned(t.numel() * t.element_size()) for _, t in sub_tensors] if sub_tensors else [_block_aligned(p.data.numel() * p.data.element_size())]
 
 def _copy_runs(base, runs, helpers, adaptive_workers=False):
-    # Default MMGP ring/pool packing is byte-for-byte unchanged. This optional
-    # policy is ONLY selected by the cold transformer preload experiment.
+    # Other MMGP ring/pool packing remains unchanged. Adaptive workers are
+    # selected only for the bounded cold transformer preload.
     # V100 pinned-host microbench: 1 MiB leaves should not fan out 8 jobs,
     # while 16/64 MiB leaves benefit from 8 workers.
     def split_workers(size):

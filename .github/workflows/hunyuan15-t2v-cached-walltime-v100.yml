@@ -1,0 +1,87 @@
+name: Hunyuan 1.5 V100 FP16 cached offline T2V wall-time
+
+on:
+  push:
+    branches: [research/hunyuan15-v100-native-fp16-20261116]
+    paths:
+      - .github/workflows/hunyuan15-t2v-cached-walltime-v100.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hunyuan15-t2v-cached-v100
+  cancel-in-progress: false
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Syntax validate cached benchmark
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            benchmarks/hunyuan15_fp16/v100_bar_video_smoke.py \
+            benchmarks/hunyuan15_fp16/v100_t2v_cached_steady_state.py
+
+  t2v:
+    needs: lint
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 90
+    env:
+      HUNYUAN15_TEST_MODE: t2v
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      HUNYUAN15_TEST_OUT: /cache/ltx25/results/hunyuan15-cached-t2v-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      PYTHONPATH: .
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_DATASETS_OFFLINE: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      GRADIO_ANALYTICS_ENABLED: 'False'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify actual T2V FP16 model already cached and V100 idle
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvidia-smi -L
+          test -x "$HUNYUAN15_PYTHON"
+          checkpoint=/cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints/hunyuanvideo1.5_480p_t2v_fp16.safetensors
+          test -s "$checkpoint"
+          du -h "$checkpoint"
+      - name: Measure full generation time with downloads disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/v100_t2v_cached_steady_state.py \
+            2>&1 | tee hunyuan15-cached-t2v.log
+          grep -Fq HUNYUAN15_T2V_CACHED_STEADY_STATE_PASS hunyuan15-cached-t2v.log
+      - name: Upload cached T2V settings, metrics, and runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-cached-t2v-walltime-results
+          if-no-files-found: warn
+          retention-days: 21
+          path: |
+            hunyuan15-cached-t2v.log
+            /cache/ltx25/results/hunyuan15-cached-t2v-${{ github.run_id }}-attempt${{ github.run_attempt }}/t2v/settings.json
+            /cache/ltx25/results/hunyuan15-cached-t2v-${{ github.run_id }}-attempt${{ github.run_attempt }}/t2v/summary.json
+            /cache/ltx25/results/hunyuan15-cached-t2v-${{ github.run_id }}-attempt${{ github.run_attempt }}/t2v/steady_state_comparison.json
+            /cache/ltx25/results/hunyuan15-cached-t2v-${{ github.run_id }}-attempt${{ github.run_attempt }}/t2v/logs/*.log
+      - name: Upload decoded and validated bar-scene MP4
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-cached-t2v-bar-mp4
+          if-no-files-found: warn
+          retention-days: 21
+          compression-level: 0
+          path: /cache/ltx25/results/hunyuan15-cached-t2v-${{ github.run_id }}-attempt${{ github.run_attempt }}/t2v/clips/*.mp4

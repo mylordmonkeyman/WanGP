@@ -4246,6 +4246,18 @@ class offload:
         self.parameters_ref  = {}
         self.max_reservable_memory = 0
         self.stager = _PinnedStager()
+        # Experimental only: pack pageable transformer preload block leaves in
+        # at most two bounded pinned CPU buffers, copying to their FINAL GPU
+        # weight storage as one H2D. No second persistent GPU weight set.
+        self._ltx25_packed_preload_enabled = os.environ.get("WAN2GP_LTX25_MMGP_PACKED_PRELOAD", "0") == "1"
+        self._ltx25_packed_buffers = None
+        self._ltx25_packed_events = [None, None]
+        self._ltx25_packed_slot = 0
+        self._ltx25_packed_lock = threading.Lock()
+        self._ltx25_packed_helpers = None
+        self._ltx25_packed_stats = {"packed_blocks": 0, "packed_bytes": 0,
+                                     "skip_pinned": 0, "skip_bounded": 0,
+                                     "skip_pin_budget": 0}
         self.staged_entries = {}
         self.state_records = {} # block entry -> [(state ring, block index)]: pageable state records staged in the ring with the block (mmgp.state_ring)
         self.state_rings = weakref.WeakSet() # the state rings that may keep state in VRAM (made with resident=True)
@@ -4525,6 +4537,58 @@ class offload:
         event.record(stream)
         self.ring.release(staged[0], event)
         return event
+
+
+    def _ltx25_packed_preload_block(self, stream, entry_name):
+        """Opt-in cold transformer preload from pageable RAM into final GPU storage.
+
+        Reuse two bounded pinned CPU scratch buffers; CUDA events protect reuse.
+        The resulting quantized tensor views point directly at a single final
+        GPU allocation, exactly as the existing _move_block bulk-copy path.
+        Never attempt to prepack if weights already admit existing pinned runs.
+        No global device synchronization and no persistent FP16 conversions.
+        """
+        if not self._ltx25_packed_preload_enabled:
+            return None
+        items, (runs, offsets, nbytes), sources = self._block_items(entry_name)
+        if sources is not None:
+            self._ltx25_packed_stats["skip_pinned"] += 1
+            return None  # existing faster pinned bulk transfer already works
+        if not items or nbytes < (1 << 20) or nbytes > (512 << 20):
+            self._ltx25_packed_stats["skip_bounded"] += 1
+            return None
+        # Only the 2 scratch slots stay pinned (not the whole model); if the
+        # configured RAM lock budget cannot fit, preserve original loading.
+        with self._ltx25_packed_lock:
+            if self._ltx25_packed_buffers is None:
+                self._ltx25_packed_buffers = [
+                    pinned.Buffer("staging", STAGING_CHUNK_SIZE)
+                    for _ in range(2)
+                ]
+            slot_no = self._ltx25_packed_slot = self._ltx25_packed_slot ^ 1
+            ready = self._ltx25_packed_events[slot_no]
+            if ready is not None:
+                ready.synchronize()  # ONLY the prior use of this CPU scratch
+                self._ltx25_packed_events[slot_no] = None
+            with torch.inference_mode(False):
+                slot = self._ltx25_packed_buffers[slot_no].get(
+                    nbytes, self.max_reservable_memory)
+            if slot is None:
+                self._ltx25_packed_stats["skip_pin_budget"] += 1
+                return None
+            if self._ltx25_packed_helpers is None:
+                self._ltx25_packed_helpers = ThreadPoolExecutor(
+                    max_workers=RING_COPY_THREADS, thread_name_prefix="ltx25_preload_pack")
+            _copy_runs(slot.data_ptr(), runs, self._ltx25_packed_helpers)
+            with torch.cuda.stream(stream):
+                final_gpu_bytes = torch.empty(nbytes, dtype=torch.uint8, device="cuda")
+                final_gpu_bytes.copy_(slot[:nbytes], non_blocking=True)
+                done = torch.cuda.Event()
+                done.record(stream)
+            self._ltx25_packed_events[slot_no] = done
+            self._ltx25_packed_stats["packed_blocks"] += 1
+            self._ltx25_packed_stats["packed_bytes"] += nbytes
+            return {i: _ring_view(t, final_gpu_bytes, offsets, 0) for i, t in items}
 
     def _move_block(self, stream, entry_name, staged):
         # One VRAM buffer for the parameters of a block, filled by a single copy from the region of the block in the staging ring or by one
@@ -5140,6 +5204,9 @@ class offload:
             else:
                 loras_model_data =  getattr(model, "_loras_model_data", None)
 
+            if (moved is None and preload and blocks_name is not None
+                    and model_id == "transformer" and self._ltx25_packed_preload_enabled):
+                moved = self._ltx25_packed_preload_block(stream_to_use, entry_name)
             with torch.cuda.stream(stream_to_use):
                 for i, param in enumerate(blocks_params):
                     parent_module, n, p, is_buffer, tied_param = param
@@ -5326,6 +5393,9 @@ class offload:
             if block_name is not None and block_name not in self.preloaded_blocks_per_model[model_id]:
                 self.gpu_unload_blocks(model_id, block_name)  # left out of the preload by an allocation of its own transfer
             report_progress("Moving Weights to GPU", index + 1, len(blocks))
+        if model_id == "transformer" and self._ltx25_packed_preload_enabled:
+            print("LTX25_MMGP_PACKED_PRELOAD " + json.dumps(
+                self._ltx25_packed_stats, sort_keys=True), flush=True)
 
     def unload_all(self, *, keep=()):
         with self.park_lock:
@@ -6441,6 +6511,16 @@ def {fname}(module, *args, **kwargs):
         self._release_ring()
         _pool.close(self)
         _managers.discard(self)
+        if self._ltx25_packed_helpers is not None:
+            self._ltx25_packed_helpers.shutdown(wait=True)
+            self._ltx25_packed_helpers = None
+        for event in self._ltx25_packed_events:
+            if event is not None:
+                event.synchronize()
+        if self._ltx25_packed_buffers is not None:
+            for buffer in self._ltx25_packed_buffers:
+                buffer.release()
+            self._ltx25_packed_buffers = None
         self.stager.release()
         self.stager = None
         self.block_items.clear() # cached tensors and bulk-copy views also own the registered RAM

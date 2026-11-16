@@ -4261,12 +4261,16 @@ class offload:
         # at most two bounded pinned CPU buffers, copying to their FINAL GPU
         # weight storage as one H2D. No second persistent GPU weight set.
         self._ltx25_packed_preload_enabled = os.environ.get("WAN2GP_LTX25_MMGP_PACKED_PRELOAD", "0") == "1"
+        # P4: optional single pinned scratch slot; prior DMA must complete before reuse.
+        # Applies only with packed preload, never changes the default two-slot path.
+        self._ltx25_packed_single_slot = self._ltx25_packed_preload_enabled and (
+            os.environ.get("WAN2GP_LTX25_MMGP_PACKED_SINGLE_SLOT", "0") == "1")
         # Opt-in on top of packed preload. Legacy three-worker policy is the
         # default; adaptive policy never affects other MMGP ring/pool copies.
         self._ltx25_adaptive_pack = self._ltx25_packed_preload_enabled and (
             os.environ.get("WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8", "0") == "1")
         self._ltx25_packed_buffers = None
-        self._ltx25_packed_events = [None, None]
+        self._ltx25_packed_events = [None, None]  # slot 1 remains unused in P4 single-slot mode
         self._ltx25_packed_slot = 0
         self._ltx25_packed_lock = threading.Lock()
         self._ltx25_packed_helpers = None
@@ -4584,9 +4588,11 @@ class offload:
             if self._ltx25_packed_buffers is None:
                 self._ltx25_packed_buffers = [
                     pinned.Buffer("staging", STAGING_CHUNK_SIZE)
-                    for _ in range(2)
+                    for _ in range(1 if self._ltx25_packed_single_slot else 2)
                 ]
-            slot_no = self._ltx25_packed_slot = self._ltx25_packed_slot ^ 1
+            slot_no = (0 if self._ltx25_packed_single_slot
+                       else self._ltx25_packed_slot ^ 1)
+            self._ltx25_packed_slot = slot_no
             prof = self._ltx25_packed_profile
             t0 = time.perf_counter() if prof else 0.
             ready = self._ltx25_packed_events[slot_no]

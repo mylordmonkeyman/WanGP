@@ -1,0 +1,105 @@
+name: LTX-2.5 V100 P3 MMGP per-block critical path and memory (73f T2V I2V)
+on:
+  push:
+    branches: [perf/ltx25-v100-mmgp-transfer-20261115]
+    paths:
+      - .github/workflows/ltx25-mmgp-p3-critical-v100.yml
+      - benchmarks/ltx25_convrot/mmgp_p3_critical_probe.py
+      - benchmarks/ltx25_convrot/profile_mmgp_p3_critical_bar73.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-v100-p3-critical-path
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false, fetch-depth: 0}
+      - name: Verify P3 source overlay, strict controls and source restoration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile benchmarks/ltx25_convrot/mmgp_p3_critical_probe.py benchmarks/ltx25_convrot/profile_mmgp_p3_critical_bar73.py
+          git diff --exit-code 8788b0479362c34e6423d331f115767ad9fe6fdc HEAD -- wgp.py shared/qtypes/ shared/kernels/ltx25_cublas_sm70.py
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          from contextlib import contextmanager
+          script=Path('benchmarks/ltx25_convrot/profile_mmgp_p3_critical_bar73.py')
+          source=script.read_text()
+          nodes=ast.parse(source).body
+          keep={'require','splice','temporary_mmgp_overlay'}
+          funcs=[node for node in nodes if isinstance(node,ast.FunctionDef) and node.name in keep]
+          assert len(funcs)==3
+          ns={'contextmanager':contextmanager,'Path':Path,'ROOT':Path.cwd(),
+              'SOURCES':('mmgp/offload.py','models/ltx2/ltx_pipelines/distilled.py')}
+          exec(compile(ast.Module(body=funcs,type_ignores=[]),str(script),'exec'),ns)
+          paths=ns['SOURCES']
+          originals={path:(Path.cwd()/path).read_bytes() for path in paths}
+          with ns['temporary_mmgp_overlay']():
+              for path in paths:
+                  patched=(Path.cwd()/path).read_text()
+                  compile(patched,path,'exec')
+                  assert 'mmgp_probe.' in patched
+              assert 'mmgp_p3_critical_probe' in (Path.cwd()/paths[0]).read_text()
+          assert all((Path.cwd()/path).read_bytes()==originals[path] for path in paths)
+          probe=Path('benchmarks/ltx25_convrot/mmgp_p3_critical_probe.py').read_text()
+          assert 'gpu_consumer_stream_gap_by_forward' in probe
+          assert 'pinned_host_peak_sampled' in probe
+          assert 'cuda_allocator_highwater_sampled' in probe
+          assert 'torch.cuda.is_current_stream_capturing()' in probe
+          assert 'for variant in ("baseline","p1p2"):' in source
+          assert 'WAN2GP_LTX25_MMGP_PACKED_PRELOAD"]="1" if variant=="p1p2" else "0"' in source
+          assert 'WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8"]="1" if variant=="p1p2" else "0"' in source
+          assert 'KNOWN[mode]["audio"]' in source and 'KNOWN[mode]["video"]' in source
+          assert 'LTX25_MMGP_P3_CRITICAL_PROBE_PASS' in source
+          print('LTX25_MMGP_P3_STATIC_PASS')
+          PY
+  measure:
+    needs: static
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 80
+    env:
+      PYTHONPATH: .
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_MMGP_PROBE_MODES: t2v,i2v
+      LTX25_MMGP_P3_ROOT: /cache/ltx25/results/mmgp-p3-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Validate V100 and reference files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$LTX25_PYTHON"
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test -s benchmarks/ltx25_convrot/inputs/profile_i2v_1024x576.png.png
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          test -z "$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '[0-9]' || true)"
+          nvidia-smi --query-gpu=name,memory.total,temperature.gpu --format=csv
+      - name: P3 baseline and P1+P2 paired 73f T2V/I2V critical-path traces
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/profile_mmgp_p3_critical_bar73.py 2>&1 | tee mmgp-p3.log
+          grep -Fq LTX25_MMGP_P3_CRITICAL_PROBE_PASS mmgp-p3.log
+      - name: Upload all block events, timings, sampled RAM/VRAM and fidelity
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-mmgp-p3-critical-73f
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            mmgp-p3.log
+            /cache/ltx25/results/mmgp-p3-${{ github.run_id }}-attempt${{ github.run_attempt }}/manifest.json
+            /cache/ltx25/results/mmgp-p3-${{ github.run_id }}-attempt${{ github.run_attempt }}/partial.json
+            /cache/ltx25/results/mmgp-p3-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.json
+            /cache/ltx25/results/mmgp-p3-${{ github.run_id }}-attempt${{ github.run_attempt }}/results/*.json
+            /cache/ltx25/results/mmgp-p3-${{ github.run_id }}-attempt${{ github.run_attempt }}/logs/*.log

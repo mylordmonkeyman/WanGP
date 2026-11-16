@@ -1,0 +1,28 @@
+name: Hunyuan 1.5 experimental FP16 static check
+
+# CPU-only; never downloads weights or starts the V100 runner.
+on:
+  push:
+    branches:
+      - research/hunyuan15-v100-native-fp16-20261116
+    paths:
+      - models/hyvideo/**
+      - scripts/hunyuan15_checkpoint_audit.py
+      - benchmarks/hunyuan15_fp16/**
+      - .github/workflows/hunyuan15-fp16-source-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact research branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Run stdlib-only Python source and checkpoint-header tests
+        run: python3 -m unittest discover -s benchmarks/hunyuan15_fp16 -p 'test_*.py' -v

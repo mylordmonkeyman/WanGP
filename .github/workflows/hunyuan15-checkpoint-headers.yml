@@ -1,0 +1,31 @@
+name: Hunyuan 1.5 checkpoint layout comparison (headers only)
+
+# CPU-only one-shot probe; uses HTTP Range, no multi-GB downloads or GPU.
+on:
+  push:
+    branches:
+      - research/hunyuan15-v100-native-fp16-20261116
+    paths:
+      - .github/workflows/hunyuan15-checkpoint-headers.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  remote-headers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Read safetensors headers using HTTP byte ranges
+        run: python3 scripts/hunyuan15_remote_header_probe.py | tee "${{ runner.temp }}/hunyuan15-headers.json"
+      - name: Upload metadata report only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-header-layout-report
+          path: ${{ runner.temp }}/hunyuan15-headers.json
+          if-no-files-found: ignore

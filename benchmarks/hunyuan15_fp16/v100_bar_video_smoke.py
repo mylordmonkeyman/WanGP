@@ -164,7 +164,12 @@ def run_mode(mode):
         (mode_dir/name).mkdir(parents=True, exist_ok=True)
     WRITABLE_CHECKPOINTS.mkdir(parents=True, exist_ok=True)
     if not os.access(WRITABLE_CHECKPOINTS, os.W_OK):
-        raise RuntimeError(f"No write access to download cache: {WRITABLE_CHECKPOINTS}")
+        # A staged, read-only source cache is valid for explicitly offline tests.
+        # Other benchmarks still require a writable cache for dependencies.
+        if not (os.environ.get("HUNYUAN15_ALLOW_READONLY_CACHE") == "1"
+                and os.environ.get("HF_HUB_OFFLINE") == "1"):
+            raise RuntimeError(f"No write access to download cache: {WRITABLE_CHECKPOINTS}")
+        print(f"HUNYUAN15_READONLY_OFFLINE_CACHE {WRITABLE_CHECKPOINTS}", flush=True)
     template = copy.deepcopy(select_template())
     template.update({
         "checkpoints_paths": [str(WRITABLE_CHECKPOINTS), str(MODEL_DIR), str(EXTRA_CHECKPOINTS)],

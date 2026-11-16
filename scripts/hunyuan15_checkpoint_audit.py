@@ -86,7 +86,9 @@ def expand_fused_qkv_metadata(catalog):
     expanded = {}
     conversions = 0
     for key, value in catalog.items():
-        if "_attn_qkv." not in key:
+        # The individual token refiner uses self_attn_qkv in *both* formats;
+        # only image/text stream QKV projections are fused differently.
+        if not (".img_attn_qkv." in key or ".txt_attn_qkv." in key):
             if key in expanded:
                 raise ValueError(f"Duplicate key: {key}")
             expanded[key] = value

@@ -3368,6 +3368,11 @@ def get_model_filename(model_type, quantization ="int8", dtype_policy = "", modu
 
 def get_transformer_dtype(model_type, transformer_dtype_policy):
     base_model_type = get_base_model_type(model_type)
+    # The native-FP16 spike is enabled by a *selected finetune*, not a base
+    # architecture. Resolve its explicit opt-in before the global dtype policy,
+    # leaving all ordinary Hunyuan and LTX paths unchanged.
+    if base_model_type in ("hunyuan_1_5_t2v", "hunyuan_1_5_i2v") and (get_model_def(model_type) or {}).get("hunyuan15_native_fp16", False):
+        return torch.float16
     model_def = get_model_def(base_model_type)
     dtype = model_def.get("dtype", None)
     if dtype is not None: 

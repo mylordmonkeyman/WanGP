@@ -1,0 +1,18 @@
+{
+  "model": {
+    "name": "Hunyuan 1.5 T2V 480p LightX2V 4-step - V100 native FP16 (EXPERIMENT)",
+    "architecture": "hunyuan_1_5_t2v",
+    "description": "Research-only native-FP16 V100 4-step experiment loading the full LightX2V distilled T2V transformer directly. No LoRA. Exact checkpoint compatibility and fidelity must be checked.",
+    "dtype": "fp16",
+    "hunyuan15_native_fp16": true,
+    "auto_quantize": false,
+    "URLs": [
+      "https://huggingface.co/lightx2v/Hy1.5-Distill-Models/resolve/main/hy1.5_t2v_480p_lightx2v_4step.safetensors"
+    ]
+  },
+  "resolution": "832x480",
+  "video_length": 33,
+  "num_inference_steps": 4,
+  "guidance_scale": 1,
+  "flow_shift": 8
+}

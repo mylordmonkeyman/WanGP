@@ -48,6 +48,13 @@ def target_modules(module):
         if module.endswith("." + stem + ".qkv"):
             base = module[: -len(".qkv") - len(stem) - 1]
             return tuple(base + "." + stem + "_" + part for part in "qkv")
+    # Comfy exports timestep embedding MLPs as in_layer/out_layer; WanGP
+    # TimestepEmbedder uses mlp.0/mlp.2. Vector MLPEmbedder does not.
+    for stem in ("time_in", "time_r_in", "guidance_in"):
+        if module == stem + ".in_layer":
+            return (stem + ".mlp.0",)
+        if module == stem + ".out_layer":
+            return (stem + ".mlp.2",)
     result = module
     for stem in ("img_attn", "txt_attn", "self_attn"):
         result = result.replace("." + stem + ".qkv", "." + stem + "_qkv")

@@ -39,7 +39,7 @@ jobs:
       LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
-      LTX25_MMGP_COMBINED_73F_ROOT: /cache/ltx25/results/p4-single-73f-${{ github.run_id }}
+      LTX25_MMGP_P4_SINGLE_73F_ROOT: /cache/ltx25/results/p4-single-73f-${{ github.run_id }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: {persist-credentials: false}

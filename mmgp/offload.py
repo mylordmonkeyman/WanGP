@@ -1041,7 +1041,16 @@ def _leaf_sizes(p):
     sub_tensors = _get_quantized_subtensors(p)
     return [_block_aligned(t.numel() * t.element_size()) for _, t in sub_tensors] if sub_tensors else [_block_aligned(p.data.numel() * p.data.element_size())]
 
-def _copy_runs(base, runs, helpers):
+def _copy_runs(base, runs, helpers, adaptive_workers=False):
+    # Other MMGP ring/pool packing remains unchanged. Adaptive workers are
+    # selected only for the bounded cold transformer preload.
+    # V100 pinned-host microbench: 1 MiB leaves should not fan out 8 jobs,
+    # while 16/64 MiB leaves benefit from 8 workers.
+    def split_workers(size):
+        if not adaptive_workers:
+            return RING_COPY_THREADS
+        return 8 if size >= (16 << 20) else 4 if size >= (4 << 20) else 1
+
     # copies the runs of a ring layout to base, a large run split evenly across the RING_COPY_THREADS helpers; weights that a drive must read
     # (RAM cannot keep the model) are read ahead in pieces, the next piece while the threads copy the current one from RAM, instead of being
     # faulted in 64 KiB reads by the threads
@@ -1052,7 +1061,8 @@ def _copy_runs(base, runs, helpers):
             if size < STAGING_PARALLEL_MIN_SIZE:
                 ctypes.memmove(base + offset, src, size)
             else:
-                part = (size + threads - 1) // threads
+                workers = split_workers(size)
+                part = (size + workers - 1) // workers
                 futures += [helpers.submit(ctypes.memmove, base + offset + start, src + start, min(part, size - start)) for start in range(0, size, part)]
         for future in futures:
             future.result()
@@ -1060,7 +1070,8 @@ def _copy_runs(base, runs, helpers):
     pieces = [(base + offset + start, src + start, min(COLD_PIECE, size - start)) for src, size, offset, _ in runs for start in range(0, size, COLD_PIECE)]
     prefetch_ranges([(pieces[0][1], pieces[0][1] + pieces[0][2])])
     for index, (dst, src, size) in enumerate(pieces):
-        part = size if size < STAGING_PARALLEL_MIN_SIZE else (size + threads - 1) // threads
+        workers = split_workers(size)
+        part = size if size < STAGING_PARALLEL_MIN_SIZE else (size + workers - 1) // workers
         futures = [helpers.submit(ctypes.memmove, dst + start, src + start, min(part, size - start)) for start in range(0, size, part)]
         if index + 1 < len(pieces):
             _, next_src, next_size = pieces[index + 1]
@@ -4246,6 +4257,19 @@ class offload:
         self.parameters_ref  = {}
         self.max_reservable_memory = 0
         self.stager = _PinnedStager()
+        # Default-on, bounded: pack pageable transformer preload block leaves in
+        # at most two bounded pinned CPU buffers, copying to their FINAL GPU
+        # weight storage as one H2D. No second persistent GPU weight set.
+        self._ltx25_packed_preload_enabled = os.environ.get("WAN2GP_LTX25_MMGP_PACKED_PRELOAD", "1") == "1"
+        # Adaptive host packing is enabled by default only for this preload path;
+        # other MMGP ring/pool copies retain their existing worker policy.
+        self._ltx25_adaptive_pack = self._ltx25_packed_preload_enabled and (
+            os.environ.get("WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8", "1") == "1")
+        self._ltx25_packed_buffers = None
+        self._ltx25_packed_events = [None, None]
+        self._ltx25_packed_slot = 0
+        self._ltx25_packed_lock = threading.Lock()
+        self._ltx25_packed_helpers = None
         self.staged_entries = {}
         self.state_records = {} # block entry -> [(state ring, block index)]: pageable state records staged in the ring with the block (mmgp.state_ring)
         self.state_rings = weakref.WeakSet() # the state rings that may keep state in VRAM (made with resident=True)
@@ -4525,6 +4549,56 @@ class offload:
         event.record(stream)
         self.ring.release(staged[0], event)
         return event
+
+
+    def _ltx25_packed_preload_block(self, stream, entry_name):
+        """Bounded cold transformer preload from pageable RAM into final GPU storage.
+
+        Reuse two bounded pinned CPU scratch buffers; CUDA events protect reuse.
+        The resulting quantized tensor views point directly at a single final
+        GPU allocation, exactly as the existing _move_block bulk-copy path.
+        Never attempt to prepack if weights already admit existing pinned runs.
+        No global device synchronization and no persistent FP16 conversions.
+        """
+        if not self._ltx25_packed_preload_enabled:
+            return None
+        items, (runs, offsets, nbytes), sources = self._block_items(entry_name)
+        if sources is not None:
+            return None  # existing faster pinned bulk transfer already works
+        if not items or nbytes < (1 << 20) or nbytes > (512 << 20):
+            return None
+        # Only the 2 scratch slots stay pinned (not the whole model); if the
+        # configured RAM lock budget cannot fit, preserve original loading.
+        with self._ltx25_packed_lock:
+            if self._ltx25_packed_buffers is None:
+                self._ltx25_packed_buffers = [
+                    pinned.Buffer("staging", STAGING_CHUNK_SIZE)
+                    for _ in range(2)
+                ]
+            slot_no = self._ltx25_packed_slot = self._ltx25_packed_slot ^ 1
+            ready = self._ltx25_packed_events[slot_no]
+            if ready is not None:
+                ready.synchronize()  # ONLY the prior use of this CPU scratch
+                self._ltx25_packed_events[slot_no] = None
+            with torch.inference_mode(False):
+                slot = self._ltx25_packed_buffers[slot_no].get(
+                    nbytes, self.max_reservable_memory)
+            if slot is None:
+                return None
+            if self._ltx25_packed_helpers is None:
+                self._ltx25_packed_helpers = ThreadPoolExecutor(
+                    max_workers=8 if self._ltx25_adaptive_pack else RING_COPY_THREADS,
+                    thread_name_prefix="ltx25_preload_pack")
+            _copy_runs(slot.data_ptr(), runs, self._ltx25_packed_helpers,
+                       adaptive_workers=self._ltx25_adaptive_pack)
+            with torch.cuda.stream(stream):
+                final_gpu_bytes = torch.empty(nbytes, dtype=torch.uint8, device="cuda")
+                final_gpu_bytes.copy_(slot[:nbytes], non_blocking=True)
+                done = torch.cuda.Event()
+                done.record(stream)
+            self._ltx25_packed_events[slot_no] = done
+            views = {i: _ring_view(t, final_gpu_bytes, offsets, 0) for i, t in items}
+            return views
 
     def _move_block(self, stream, entry_name, staged):
         # One VRAM buffer for the parameters of a block, filled by a single copy from the region of the block in the staging ring or by one
@@ -5140,6 +5214,9 @@ class offload:
             else:
                 loras_model_data =  getattr(model, "_loras_model_data", None)
 
+            if (moved is None and preload and blocks_name is not None
+                    and model_id == "transformer" and self._ltx25_packed_preload_enabled):
+                moved = self._ltx25_packed_preload_block(stream_to_use, entry_name)
             with torch.cuda.stream(stream_to_use):
                 for i, param in enumerate(blocks_params):
                     parent_module, n, p, is_buffer, tied_param = param
@@ -6441,6 +6518,16 @@ def {fname}(module, *args, **kwargs):
         self._release_ring()
         _pool.close(self)
         _managers.discard(self)
+        if self._ltx25_packed_helpers is not None:
+            self._ltx25_packed_helpers.shutdown(wait=True)
+            self._ltx25_packed_helpers = None
+        for event in self._ltx25_packed_events:
+            if event is not None:
+                event.synchronize()
+        if self._ltx25_packed_buffers is not None:
+            for buffer in self._ltx25_packed_buffers:
+                buffer.release()
+            self._ltx25_packed_buffers = None
         self.stager.release()
         self.stager = None
         self.block_items.clear() # cached tensors and bulk-copy views also own the registered RAM

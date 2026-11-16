@@ -1041,7 +1041,16 @@ def _leaf_sizes(p):
     sub_tensors = _get_quantized_subtensors(p)
     return [_block_aligned(t.numel() * t.element_size()) for _, t in sub_tensors] if sub_tensors else [_block_aligned(p.data.numel() * p.data.element_size())]
 
-def _copy_runs(base, runs, helpers):
+def _copy_runs(base, runs, helpers, adaptive_workers=False):
+    # Default MMGP ring/pool packing is byte-for-byte unchanged. This optional
+    # policy is ONLY selected by the cold transformer preload experiment.
+    # V100 pinned-host microbench: 1 MiB leaves should not fan out 8 jobs,
+    # while 16/64 MiB leaves benefit from 8 workers.
+    def split_workers(size):
+        if not adaptive_workers:
+            return RING_COPY_THREADS
+        return 8 if size >= (16 << 20) else 4 if size >= (4 << 20) else 1
+
     # copies the runs of a ring layout to base, a large run split evenly across the RING_COPY_THREADS helpers; weights that a drive must read
     # (RAM cannot keep the model) are read ahead in pieces, the next piece while the threads copy the current one from RAM, instead of being
     # faulted in 64 KiB reads by the threads
@@ -1052,7 +1061,8 @@ def _copy_runs(base, runs, helpers):
             if size < STAGING_PARALLEL_MIN_SIZE:
                 ctypes.memmove(base + offset, src, size)
             else:
-                part = (size + threads - 1) // threads
+                workers = split_workers(size)
+                part = (size + workers - 1) // workers
                 futures += [helpers.submit(ctypes.memmove, base + offset + start, src + start, min(part, size - start)) for start in range(0, size, part)]
         for future in futures:
             future.result()
@@ -1060,7 +1070,8 @@ def _copy_runs(base, runs, helpers):
     pieces = [(base + offset + start, src + start, min(COLD_PIECE, size - start)) for src, size, offset, _ in runs for start in range(0, size, COLD_PIECE)]
     prefetch_ranges([(pieces[0][1], pieces[0][1] + pieces[0][2])])
     for index, (dst, src, size) in enumerate(pieces):
-        part = size if size < STAGING_PARALLEL_MIN_SIZE else (size + threads - 1) // threads
+        workers = split_workers(size)
+        part = size if size < STAGING_PARALLEL_MIN_SIZE else (size + workers - 1) // workers
         futures = [helpers.submit(ctypes.memmove, dst + start, src + start, min(part, size - start)) for start in range(0, size, part)]
         if index + 1 < len(pieces):
             _, next_src, next_size = pieces[index + 1]
@@ -4250,6 +4261,10 @@ class offload:
         # at most two bounded pinned CPU buffers, copying to their FINAL GPU
         # weight storage as one H2D. No second persistent GPU weight set.
         self._ltx25_packed_preload_enabled = os.environ.get("WAN2GP_LTX25_MMGP_PACKED_PRELOAD", "0") == "1"
+        # Opt-in on top of packed preload. Legacy three-worker policy is the
+        # default; adaptive policy never affects other MMGP ring/pool copies.
+        self._ltx25_adaptive_pack = self._ltx25_packed_preload_enabled and (
+            os.environ.get("WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8", "0") == "1")
         self._ltx25_packed_buffers = None
         self._ltx25_packed_events = [None, None]
         self._ltx25_packed_slot = 0
@@ -4592,8 +4607,10 @@ class offload:
                 return None
             if self._ltx25_packed_helpers is None:
                 self._ltx25_packed_helpers = ThreadPoolExecutor(
-                    max_workers=RING_COPY_THREADS, thread_name_prefix="ltx25_preload_pack")
-            _copy_runs(slot.data_ptr(), runs, self._ltx25_packed_helpers)
+                    max_workers=8 if self._ltx25_adaptive_pack else RING_COPY_THREADS,
+                    thread_name_prefix="ltx25_preload_pack")
+            _copy_runs(slot.data_ptr(), runs, self._ltx25_packed_helpers,
+                       adaptive_workers=self._ltx25_adaptive_pack)
             if prof:
                 self._ltx25_packed_profile_stats["host_pack_ms"] += (time.perf_counter()-t0)*1000
                 t0 = time.perf_counter()

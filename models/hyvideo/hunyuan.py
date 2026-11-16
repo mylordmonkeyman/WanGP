@@ -281,6 +281,13 @@ class Inference(object):
         def pre_load_callback(model):
             model.lock_layers_dtypes(torch.float32 if model.mixed_precision else dtype)
         kwargs_light = dict(do_quantize= quantizeTransformer and not save_quantized, pinToMemory = pinToMemory, partialPinning = partialPinning, writable_tensors=False, default_dtype=dtype, pre_load_callback=pre_load_callback)
+        if native_fp16:
+            if quantizeTransformer or save_quantized:
+                raise ValueError("Experimental Hunyuan 1.5 native FP16 requires unquantized transformer weights")
+            if source is not None:
+                raise ValueError("FP16 source-model auto-export is not implemented; load the checkpoint via URLs instead")
+            from .checkpoint_formats import unfuse_hunyuan15_qkv
+            kwargs_light["preprocess_sd"] = unfuse_hunyuan15_qkv
         if source is not None:
             from wgp import save_model
             offload.load_model_data(model, fl.locate_file(source),  **kwargs_light)

@@ -222,3 +222,21 @@ Total staging is bounded by P1's two scratch slots and other MMGP staging reserv
 - Timing is per actual full-generation subprocess wall time, **not synthetic memcpy or CUDA profiling timing**. Required decoded video/audio SHA256: pinned main baseline for 73f, A1 and repeat A2 for 241f; unchanged Candidate E call counts and zero persistent expanded FP16 weight copies. Save each arm and aggregate A/B mean, percent gain, raw logs and quality status. No merging or default promotion based on unverified results.
 
 Await job completion to quantify whether combined P1+P2 is worthwhile.
+
+
+## Production promotion and verified combined results (2026-11-16)
+
+The uninstrumented [combined 73f/241f ABBA run 43903780497](https://github.com/mylordmonkeyman/WanGP/actions/runs/43903780497) completed **SUCCESS**. Full-process mean A (main-equivalent flags OFF) versus B (P1+P2 ON):
+
+| Mode | Frames | A mean wall s | B mean wall s | Improvement | Decoded video/audio |
+| --- | ---: | ---: | ---: | ---: | --- |
+| T2V | 73 | 112.2105 | 109.9820 | 1.9860% | 4/4 exact |
+| I2V | 73 | 113.3895 | 112.0235 | 1.2047% | 4/4 exact |
+| T2V | 241 | 222.6335 | 221.7650 | 0.3901% | 4/4 exact |
+| I2V | 241 | 225.1505 | 224.2965 | 0.3793% | 4/4 exact |
+
+All 16 arms matched decoded video and audio exactly. Each optimized run packed 48 cold Stage 2 blocks, ~18.55 GB cumulative bytes, zero pin-budget skips, with unchanged Candidate E call counts and zero tiled epilogue calls. The P3 critical-path run 43899122726 also passed; Stage2 first-forward consumer-stream gap sums fell 5.46→3.84 s (T2V), 5.59→3.82 s (I2V), but event spans include queued GPU work and are not directly recoverable wall time. Sampled peak GPU allocated was approximately equal, while pinned-host peak increased from ~1.33 to ~2.08 GB (decimal bytes).
+
+**Explicit user-approved promotion:** [PR #1](https://github.com/mylordmonkeyman/WanGP/pull/1) was squash-merged to stable `main` as [`57cf1c4eec3bcba4d20a32a9161cbc94eb2de5c1`](https://github.com/mylordmonkeyman/WanGP/commit/57cf1c4eec3bcba4d20a32a9161cbc94eb2de5c1). The clean production commit changes **only `mmgp/offload.py`** (+90/-3), enables P1 and P2 by default, removes experimental P1 profiling, and adds no workflows, instrumentation, benchmark scripts, or alternative persistent GPU weights. Both optimizations remain reversible: `WAN2GP_LTX25_MMGP_PACKED_PRELOAD=0` disables P1/P2; `WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8=0` retains P1 but disables P2. The original archival branch remains unchanged. The experimental development branch intentionally retains explicit opt-in flags and measurement harnesses for isolated P4 studies; **production main has the default-on behavior**.
+
+**Next research:** On this development branch, investigate a default-off P4 that reduces remaining cold Stage2 CPU install/preload cost and/or the ~720 MiB incremental pinned host memory without a second persistent GPU weight set. Gate on V100 microbench, memory and decoded fidelity, followed by matched 73f and 241f T2V/I2V ABBA; do not repeat the completed P1+P2 qualification.

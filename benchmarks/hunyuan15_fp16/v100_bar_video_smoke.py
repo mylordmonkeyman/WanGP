@@ -22,6 +22,10 @@ ROOT = Path(__file__).resolve().parents[2]
 CACHE = Path("/cache/ltx25")
 MODEL_DIR = CACHE / "models"
 EXTRA_CHECKPOINTS = Path("/opt/ltx25/checkpoints")
+# Runner user cannot write /cache/ltx25/models (host-owned). WanGP writes
+# dependency downloads to its FIRST checkpoints_paths entry: use shared
+# writable results storage while preserving the existing user checkpoint.
+WRITABLE_CHECKPOINTS = CACHE / "results" / "hunyuan15-fp16-downloaded-checkpoints"
 IMAGE = ROOT / "benchmarks/ltx25_convrot/inputs/profile_i2v_1024x576.png.png"
 PYTHON = os.environ.get("HUNYUAN15_PYTHON", "/opt/venvs/ltx25-cu128/bin/python")
 OUT = Path(os.environ.get("HUNYUAN15_TEST_OUT", str(CACHE / "results" /
@@ -158,9 +162,12 @@ def run_mode(mode):
     mode_dir = OUT/mode
     for name in ("config", "videos", "logs", "clips"):
         (mode_dir/name).mkdir(parents=True, exist_ok=True)
+    WRITABLE_CHECKPOINTS.mkdir(parents=True, exist_ok=True)
+    if not os.access(WRITABLE_CHECKPOINTS, os.W_OK):
+        raise RuntimeError(f"No write access to download cache: {WRITABLE_CHECKPOINTS}")
     template = copy.deepcopy(select_template())
     template.update({
-        "checkpoints_paths": [str(MODEL_DIR), str(EXTRA_CHECKPOINTS)],
+        "checkpoints_paths": [str(WRITABLE_CHECKPOINTS), str(MODEL_DIR), str(EXTRA_CHECKPOINTS)],
         "transformer_quantization": "bf16",  # WanGP selection token for unquantized
         "text_encoder_quantization": "int8",
         "transformer_types": [MODEL_TYPES[mode]],
@@ -178,6 +185,8 @@ def run_mode(mode):
     settings_file = mode_dir/"settings.json"
     settings_file.write_text(json.dumps(make_settings(mode), indent=2) + "\n")
     path = MODEL_DIR / MODEL_FILES[mode]
+    if not path.is_file() and (WRITABLE_CHECKPOINTS / MODEL_FILES[mode]).is_file():
+        path = WRITABLE_CHECKPOINTS / MODEL_FILES[mode]
     print(f"HUNYUAN15_CHECKPOINT mode={mode} path={path} exists={path.is_file()}",flush=True)
     if mode == "i2v" and not path.is_file():
         raise RuntimeError(f"User-provided I2V FP16 file not visible: {path}")

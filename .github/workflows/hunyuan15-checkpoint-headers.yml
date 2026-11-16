@@ -7,6 +7,8 @@ on:
       - research/hunyuan15-v100-native-fp16-20261116
     paths:
       - .github/workflows/hunyuan15-checkpoint-headers.yml
+      - scripts/hunyuan15_remote_header_probe.py
+      - scripts/hunyuan15_checkpoint_audit.py
   workflow_dispatch:
 
 permissions:

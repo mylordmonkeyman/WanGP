@@ -1,0 +1,41 @@
+name: LTX-2.5 V100 bounded MMGP host packing microbench
+on:
+  push:
+    branches: [perf/ltx25-v100-mmgp-transfer-20261115]
+    paths:
+      - benchmarks/ltx25_convrot/microbench_mmgp_host_packing_v100.py
+      - .github/workflows/ltx25-mmgp-host-pack-microbench-v100.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-mmgp-host-pack-microbench-v100
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: python3 -m py_compile benchmarks/ltx25_convrot/microbench_mmgp_host_packing_v100.py
+  v100:
+    needs: static
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 20
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check free GPU and measure pageable-to-pinned CPU packing
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '[0-9]' || true)"
+          /opt/venvs/ltx25-cu128/bin/python -u benchmarks/ltx25_convrot/microbench_mmgp_host_packing_v100.py 2>&1 | tee ltx25-host-pack-microbench.log
+          grep -Fq LTX25_PACK_MICROBENCH_PASS ltx25-host-pack-microbench.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ltx25-mmgp-host-pack-microbench
+          path: ltx25-host-pack-microbench.log
+          retention-days: 21

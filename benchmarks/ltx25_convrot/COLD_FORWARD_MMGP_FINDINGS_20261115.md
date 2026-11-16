@@ -138,3 +138,24 @@ The cold Stage 2 forward executes many **preload=True** parameter installations 
 The B-arm Stage2 CUDA allocator high-water was 19,789,3xx,xxx bytes allocated (~18.43 GiB), 20,635,975,680 bytes reserved (~19.22 GiB); this is **not** a matched A/B peak-VRAM comparison. CPU phase timers are host-side and may overlap GPU work; summing them does not establish recoverable end-to-end time. Pinned host-RAM peak remains unmeasured.
 
 **Decision:** Keep P1 and profiling flags OFF by default. Packing, not slot waits, dominates the measured B CPU path. Before another implementation, obtain matched baseline allocator high-water and per-block `_copy_runs` breakdown; then evaluate a bounded asynchronous pack/preparation experiment or reduced-copy layout with the same final GPU storage. Preserve 73f/241f fidelity, A–B–B–A, and peak-VRAM gates. No promotion to main.
+
+## P2 — size-adaptive host copy workers (2026-11-15, default OFF)
+
+[CPU-only correctness microbenchmark 43802615356](https://github.com/mylordmonkeyman/WanGP/actions/runs/43802615356) finished PASS on the V100 runner at commit `a0f0ba5b`. For 384 MiB copied to pinned host memory, median of three warmed trials:
+
+| Source-run size | 1 thread | 4 threads | 8 threads | Microbench observation |
+| --- | ---: | ---: | ---: | --- |
+| 1 MiB | 152.525 ms | 111.545 ms | 369.349 ms | 8-worker fanout counterproductive |
+| 4 MiB | 109.165 ms | **45.398 ms** | 56.319 ms | 4 best sampled |
+| 16 MiB | 47.859 ms | 36.828 ms | **22.959 ms** | 8 best sampled |
+| 64 MiB | 48.403 ms | 18.190 ms | **15.894 ms** | 8 best sampled |
+
+These synthetic measurements do not directly predict whole-video speedup. The preceding P1 pipeline instrumentation reported ~1.48s in _copy_runs host packing, with ~0.45s installing tensor views, ~0.30s pinned allocation and negligible scratch-slot waits; a faster CPU copy strategy is plausible but may overlap GPU compute.
+
+**Implementation:** [commit e3a6e31d](https://github.com/mylordmonkeyman/WanGP/commit/e3a6e31d1aaed8b1ee6387b0446a12b0e5d59957) changes only the opt-in `_copy_runs(..., adaptive_workers=True)` call from the cold transformer packed-preload path. `WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8=1` must be used alongside `WAN2GP_LTX25_MMGP_PACKED_PRELOAD=1`. Copy operations with individual contiguous run length <4 MiB use one main-thread memmove; 4–16 MiB use four workers; >=16 MiB use eight workers, with a max-eight thread pool. With the flag off, existing P1 three-worker behavior is exactly retained. MMGP ring/pool `_copy_runs` and all unpacked/production code remain unmodified in behavior. No new GPU buffers or quantization changes.
+
+**Full video gate:** [73-frame T2V/I2V ABBA workflow 43803583176](https://github.com/mylordmonkeyman/WanGP/actions/runs/43803583176), A=three-worker P1 packed preload, B=size-adaptive P2 packed preload, same 1024x576 image/prompt, seed 20261112, steps, checkpoint and 73-frame pinned decoded video/audio SHA-256. All 8 processes must pass exact fidelity and zero persistent FP16 copies. This isolates threading policy rather than attributing the entire P1 change to P2. Static checks PASS; GPU benchmark queued at documentation time. Do not infer a speedup until it completes.
+
+**Follow-up gated 241f:** `.github/workflows/ltx25-mmgp-adaptive-pack-241f-v100.yml` and `benchmarks/ltx25_convrot/benchmark_mmgp_adaptive_241f_abba.py` are prepared with manual dispatch or `benchmarks/ltx25_convrot/mmgp_adaptive_241f_launch.signal`; do **not** launch unless a meaningful 73f gain is confirmed. 241f compares 3-worker vs adaptive8 *both packed*, not stock; use independent A–B–B–A and per-mode decoded hashes. If P2 is noise/negative, retain flags disabled and reconsider parallel CPU staging, block layout or non-overlapped host work.
+
+**Isolation:** No edits to stable `main` or archive, no second persistent GPU weight copy. In particular, other workflows triggered by edits to `mmgp/offload.py` may perform redundant regression benches; inspect their run status to avoid concurrent use of the sole V100.

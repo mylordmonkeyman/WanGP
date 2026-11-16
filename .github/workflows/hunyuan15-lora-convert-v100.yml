@@ -1,0 +1,60 @@
+name: Hunyuan 1.5 Comfy-Org 4-step LoRA format inventory
+
+on:
+  push:
+    branches: [research/hunyuan15-v100-native-fp16-20261116]
+    paths:
+      - .github/workflows/hunyuan15-lora-convert-v100.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hunyuan15-lora-convert-v100
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Inventory published Comfy-Org adapter against 480p T2V FP16 base
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import collections, json
+          from pathlib import Path
+          from scripts.hunyuan15_checkpoint_audit import read_header, normalize, expand_fused_qkv_metadata
+          folder=Path('/cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints')
+          lora=folder/'loras/hunyuanvideo1.5_t2v_480p_lightx2v_4step_lora_rank_32_bf16.safetensors'
+          base=folder/'hunyuanvideo1.5_480p_t2v_fp16.safetensors'
+          assert lora.is_file() and base.is_file()
+          adapter=normalize(read_header(lora))
+          model,_=expand_fused_qkv_metadata(normalize(read_header(base)))
+          suffixes=('.lora_down.weight','.lora_up.weight','.lora_A.weight','.lora_B.weight','.diff_b','.diff','.alpha')
+          groups=collections.Counter()
+          dtype=collections.Counter()
+          unknown=[]
+          modules=collections.defaultdict(set)
+          for k,v in sorted(adapter.items()):
+              suff=next((s for s in suffixes if k.endswith(s)), None)
+              if suff is None:unknown.append(k);continue
+              mod=k[:-len(suff)]
+              groups[(mod.split('.')[0],'.'.join(mod.split('.')[2:]),suff)]+=1
+              dtype[v['dtype']]+=1
+              modules[mod].add(suff)
+          print('LORA_FILE',str(lora),'BYTES',lora.stat().st_size)
+          print('LORA_TENSORS',len(adapter),'DTYPES',dict(dtype),'MODEL_KEYS',len(model))
+          print('LORA_KEY_EXAMPLES',json.dumps({k:v for k,v in list(adapter.items())[:45]}))
+          print('MODULE_PATTERNS',json.dumps([{'pattern':k[1], 'suffix':k[2], 'n':v} for k,v in groups.most_common()[:130]]))
+          print('UNHANDLED_SUFFIXES',json.dumps(unknown[:40]))
+          print('SOURCE_MODULES',len(modules),'SAMPLE',json.dumps({k:sorted(v) for k,v in list(modules.items())[:40]}))
+          direct=sum((x+'.weight') in model for x in modules)
+          print('DIRECT_MATCHING_MODULES',direct,'OUT_OF',len(modules))
+          print('NON_DIRECT_MODULES',json.dumps([x for x in modules if (x+'.weight') not in model][:100]))
+          PY

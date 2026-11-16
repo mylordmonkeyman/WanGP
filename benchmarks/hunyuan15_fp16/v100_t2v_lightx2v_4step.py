@@ -116,6 +116,9 @@ def main():
         return original_run(cmd, log_path, env, timeout)
     base.run_command = offline_run
 
+    # User-staged checkpoint directory is owned by the host account; the
+    # runner only needs read access because both WanGP calls are offline.
+    os.environ["HUNYUAN15_ALLOW_READONLY_CACHE"] = "1"
     report = base.run_mode(MODE)
     generation_log = (base.OUT / MODE / "logs" / "generation.log").read_text(errors="replace")
     if "EXPERIMENTAL Hunyuan 1.5 native FP16 enabled" not in generation_log:

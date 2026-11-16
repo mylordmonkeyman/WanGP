@@ -181,3 +181,33 @@ These synthetic measurements do not directly predict whole-video speedup. The pr
 **Instrumented evidence captured:** for every `gpu_load_blocks` call, record host CPU start/stop timestamps, host dispatch duration, and events on the GPU consumer stream immediately before/after CPU loading; retain original per-forward transfer-event durations/bytes, consumer wait-event durations, prefetch-future host time, and host section timers. Record the CUDA allocator allocated/reserved high-water and MMGP pinned RAM total/`staging` from samples taken after each block load, then compare A/B under **the same tracing overhead**. Require `stage2:1` and `stage2:2` forward tags, valid CUDA event completion, and exact decoded video/audio hashes against pinned `main`. Temporary `mmgp/offload.py` and `distilled.py` overlays are compiled, checked and restored byte-exact; the hosted static job has passed.
 
 **Interpretation limits:** the GPU consumer-stream interval between two marker events includes *all previously queued GPU compute and transfer dependencies*, and thus is **not** by itself GPU idle or recoverable time. CPU per-block time and GPU marker spans overlap. The pinned-memory snapshot is a sampled maximum, not a continuous allocator high-water. Profiled whole-process wall times are not production speed measurements. Before P4, identify exposed CPU submission gaps vs actual transfer wait using per-block timelines; only prototype a material, demonstrably non-overlapped bottleneck. No second persistent GPU weights or promotion to main.
+
+## P3 completed matched attribution — 2026-11-16, run 43899122726
+
+[Four 73f real T2V/I2V profiling runs 43899122726](https://github.com/mylordmonkeyman/WanGP/actions/runs/43899122726), commit `cc64cb826`, **PASS** (static and V100). Baseline vs P1+P2 under identical temporary diagnostic instrumentation. Both 73f T2V and I2V decoded video/audio hashes match pinned main; Candidate E 27,360 calls, tiled epilogue zero, no additional persistent GPU weight sets. Raw event and memory JSON artifact: [14240308572](https://github.com/mylordmonkeyman/WanGP/actions/runs/43899122726/artifacts/14240308572).
+
+| Measurement (first Stage2 forward) | T2V baseline | T2V P1+P2 | I2V baseline | I2V P1+P2 |
+| --- | ---: | ---: | ---: | ---: |
+| Host block loader CPU sum | 5,755.5 ms | 4,136.1 ms | 5,941.1 ms | 4,126.0 ms |
+| Preload=True CPU work, 49 calls | 4,962.2 ms | 3,348.4 ms | 5,085.5 ms | 3,309.0 ms |
+| CPU `copy_block_params_and_lora` *nested section*, 99 calls | 4,965.5 ms | 1,779.6 ms | 5,092.4 ms | 1,759.3 ms |
+| Consumer-stream event-gap sum during block loads | 5,457.5 ms | 3,839.6 ms | 5,587.6 ms | 3,819.3 ms |
+| GPU first-forward elapsed event span | 12,319.2 ms | 10,718.0 ms | 12,314.7 ms | 10,491.9 ms |
+| Warm Stage2 GPU forward elapsed event span (second) | 6,333.4 ms | 6,280.0 ms | 6,227.5 ms | 6,189.4 ms |
+
+The **preload-only CPU/gap improvement**, approximately 1.61s T2V / 1.78s I2V, accounts for nearly the entire difference. Per-block medians fell from 95.5ms to 56.2ms (T2V) and 96.9ms to 55.4ms (I2V). Some individual optimized blocks remained long (~205–212ms), so the packed-copy and view-installation path may still have headroom. The `copy_block` nested section fell by more than this because P1 shifts work into packing prior to normal installation; do not interpret nested timing difference as recoverable wall savings.
+
+**Matched memory, sampled across block loads:**
+
+| Measure | Baseline | P1+P2 | Difference |
+| --- | ---: | ---: | ---: |
+| Sampled max CUDA memory allocated, T2V | 20,127,448,392 B | 20,127,112,008 B | −336,384 B |
+| Sampled max CUDA reserved, T2V and I2V | 21,307,064,320 B | 21,206,401,024 B | −100,663,296 B (~96 MiB) |
+| MMGP pinned `staging` RAM, both modes | 201,326,592 B | 922,746,880 B | **+721,420,288 B (~688 MiB)** |
+| MMGP total pinned RAM, both modes | 1,328,828,416 B | 2,083,803,136 B | **+754,974,720 B (~720 MiB)** |
+
+Total staging is bounded by P1's two scratch slots and other MMGP staging reservations, not by 18.55 GB cumulative transferred bytes. This is a sampled high-water, not proof of global process peak. GPU allocated maxima are essentially equal and GPU reserved modestly lower, but high-water comparisons do not establish GPU safety on other workloads.
+
+**Critical-path interpretation:** Since GPU first-forward span falls ~1.60s T2V/~1.82s I2V in parallel with the host preload reduction, a substantial part of cold CPU submission is visible in the first-transformer-forward GPU event span. Nevertheless CUDA events straddling host work include earlier queued GPU kernels, and first-forward GPU-span differences are not interchangeable with whole-process speedup. Earlier non-profiled, repeated P1/P2 video benchmark results of only ~0–1% remain the authoritative net-latency evidence. P3 is one run per variant/mode, not a fresh ABBA speed qualification.
+
+**Decision:** P3 confirms that loading and preloading are meaningful first-forward bottlenecks, *not* that more memcpy worker tuning will improve overall end-to-end time. Candidate P4 should prioritize bounded preparation/installation ahead of consumer execution or reduced per-tensor Python/view work with a strictly opt-in design. However, the extra ~720 MiB pinned RAM from P1/P2 is a real resource tradeoff; any P4 attempt should quantify and preferably reduce it, and must not duplicate persistent GPU weights. Require 73f and 241f non-instrumented matched ABBA T2V/I2V and exact decoded outputs before promotion. Leave P1/P2 and P4 off by default; stable main remains untouched.

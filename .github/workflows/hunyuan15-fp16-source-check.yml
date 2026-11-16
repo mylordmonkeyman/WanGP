@@ -9,6 +9,8 @@ on:
       - models/hyvideo/**
       - scripts/hunyuan15_checkpoint_audit.py
       - benchmarks/hunyuan15_fp16/**
+      - wgp.py
+      - finetunes/hunyuan15_v100_*.json
       - .github/workflows/hunyuan15-fp16-source-check.yml
   workflow_dispatch:
 

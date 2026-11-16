@@ -4255,6 +4255,12 @@ class offload:
         self._ltx25_packed_slot = 0
         self._ltx25_packed_lock = threading.Lock()
         self._ltx25_packed_helpers = None
+        self._ltx25_packed_profile = os.environ.get("WAN2GP_LTX25_MMGP_PACKED_PROFILE", "0") == "1"
+        self._ltx25_packed_profile_stats = {"slot_wait_ms": 0., "pin_alloc_ms": 0.,
+                                            "host_pack_ms": 0., "gpu_enqueue_ms": 0.,
+                                            "install_view_ms": 0., "packed_blocks": 0,
+                                            "peak_gpu_allocated_bytes": 0,
+                                            "peak_gpu_reserved_bytes": 0}
         self._ltx25_packed_stats = {"packed_blocks": 0, "packed_bytes": 0,
                                      "skip_pinned": 0, "skip_bounded": 0,
                                      "skip_pin_budget": 0}
@@ -4566,13 +4572,21 @@ class offload:
                     for _ in range(2)
                 ]
             slot_no = self._ltx25_packed_slot = self._ltx25_packed_slot ^ 1
+            prof = self._ltx25_packed_profile
+            t0 = time.perf_counter() if prof else 0.
             ready = self._ltx25_packed_events[slot_no]
             if ready is not None:
                 ready.synchronize()  # ONLY the prior use of this CPU scratch
                 self._ltx25_packed_events[slot_no] = None
+            if prof:
+                self._ltx25_packed_profile_stats["slot_wait_ms"] += (time.perf_counter()-t0)*1000
+                t0 = time.perf_counter()
             with torch.inference_mode(False):
                 slot = self._ltx25_packed_buffers[slot_no].get(
                     nbytes, self.max_reservable_memory)
+            if prof:
+                self._ltx25_packed_profile_stats["pin_alloc_ms"] += (time.perf_counter()-t0)*1000
+                t0 = time.perf_counter()
             if slot is None:
                 self._ltx25_packed_stats["skip_pin_budget"] += 1
                 return None
@@ -4580,15 +4594,28 @@ class offload:
                 self._ltx25_packed_helpers = ThreadPoolExecutor(
                     max_workers=RING_COPY_THREADS, thread_name_prefix="ltx25_preload_pack")
             _copy_runs(slot.data_ptr(), runs, self._ltx25_packed_helpers)
+            if prof:
+                self._ltx25_packed_profile_stats["host_pack_ms"] += (time.perf_counter()-t0)*1000
+                t0 = time.perf_counter()
             with torch.cuda.stream(stream):
                 final_gpu_bytes = torch.empty(nbytes, dtype=torch.uint8, device="cuda")
                 final_gpu_bytes.copy_(slot[:nbytes], non_blocking=True)
                 done = torch.cuda.Event()
                 done.record(stream)
             self._ltx25_packed_events[slot_no] = done
+            if prof:
+                self._ltx25_packed_profile_stats["gpu_enqueue_ms"] += (time.perf_counter()-t0)*1000
+                t0 = time.perf_counter()
             self._ltx25_packed_stats["packed_blocks"] += 1
             self._ltx25_packed_stats["packed_bytes"] += nbytes
-            return {i: _ring_view(t, final_gpu_bytes, offsets, 0) for i, t in items}
+            views = {i: _ring_view(t, final_gpu_bytes, offsets, 0) for i, t in items}
+            if prof:
+                stats = self._ltx25_packed_profile_stats
+                stats["install_view_ms"] += (time.perf_counter()-t0)*1000
+                stats["packed_blocks"] += 1
+                stats["peak_gpu_allocated_bytes"] = max(stats["peak_gpu_allocated_bytes"], torch.cuda.max_memory_allocated())
+                stats["peak_gpu_reserved_bytes"] = max(stats["peak_gpu_reserved_bytes"], torch.cuda.max_memory_reserved())
+            return views
 
     def _move_block(self, stream, entry_name, staged):
         # One VRAM buffer for the parameters of a block, filled by a single copy from the region of the block in the staging ring or by one
@@ -5396,6 +5423,9 @@ class offload:
         if model_id == "transformer" and self._ltx25_packed_preload_enabled:
             print("LTX25_MMGP_PACKED_PRELOAD " + json.dumps(
                 self._ltx25_packed_stats, sort_keys=True), flush=True)
+            if self._ltx25_packed_profile:
+                print("LTX25_MMGP_PACKED_PROFILE " + json.dumps(
+                    self._ltx25_packed_profile_stats, sort_keys=True), flush=True)
 
     def unload_all(self, *, keep=()):
         with self.park_lock:

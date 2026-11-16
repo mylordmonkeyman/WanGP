@@ -8,6 +8,7 @@ on:
     paths:
       - .github/workflows/hunyuan15-checkpoint-headers.yml
       - scripts/hunyuan15_remote_header_probe.py
+      - scripts/hunyuan15_remote_t2v_header_probe.py
       - scripts/hunyuan15_checkpoint_audit.py
   workflow_dispatch:
 
@@ -24,10 +25,14 @@ jobs:
           persist-credentials: false
       - name: Read safetensors headers using HTTP byte ranges
         run: python3 scripts/hunyuan15_remote_header_probe.py | tee "${{ runner.temp }}/hunyuan15-headers.json"
+      - name: Verify T2V checkpoint header layout via HTTP byte ranges
+        run: python3 scripts/hunyuan15_remote_t2v_header_probe.py | tee "${{ runner.temp }}/hunyuan15-t2v-headers.json"
       - name: Upload metadata report only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: hunyuan15-header-layout-report
-          path: ${{ runner.temp }}/hunyuan15-headers.json
+          path: |
+            ${{ runner.temp }}/hunyuan15-headers.json
+            ${{ runner.temp }}/hunyuan15-t2v-headers.json
           if-no-files-found: ignore

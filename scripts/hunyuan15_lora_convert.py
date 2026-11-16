@@ -23,7 +23,7 @@ import re
 import sys
 
 from hunyuan15_checkpoint_audit import (
-    expand_fused_qkv_metadata, normalize, read_header,
+    expand_fused_qkv_metadata, normalize, read_header, strip_wrapper,
 )
 
 SUFFIXES = (
@@ -147,7 +147,7 @@ def sha256_file(path):
 
 def convert(source_path, base_path, destination, report_path=None, *, require_source_sha=True):
     source_path, base_path, destination = map(Path, (source_path, base_path, destination))
-    source_header = read_header(source_path)
+    source_header = normalize(read_header(source_path))
     ref, qkv = expand_fused_qkv_metadata(normalize(read_header(base_path)))
     mapping, out_shapes, stats = plan(source_header, ref)
     stats["reference_modules"] = len(ref)
@@ -160,7 +160,10 @@ def convert(source_path, base_path, destination, report_path=None, *, require_so
         raise ValueError(f"Unexpected Comfy-Org source SHA256: {digest}")
     import torch
     from safetensors.torch import load_file, save_file
-    source = load_file(str(source_path), device="cpu")
+    source_raw = load_file(str(source_path), device="cpu")
+    source = {strip_wrapper(key): tensor for key, tensor in source_raw.items()}
+    if len(source) != len(source_raw):
+        raise ValueError("Source wrapper stripping collided with another tensor name")
     if set(source) != set(mapping):
         raise ValueError("Source bytes and inspected source header disagree")
     output = {}

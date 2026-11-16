@@ -1,0 +1,4 @@
+P2 73f qualification passed: https://github.com/mylordmonkeyman/WanGP/actions/runs/43803583176
+T2V: legacy 111.4665 s, adaptive 110.6845 s (+0.7016%).
+I2V: legacy 112.8135 s, adaptive 111.8255 s (+0.8758%).
+All eight decoded video/audio hashes match stable main. Run 241f ABBA with memory and fidelity checks; no promotion.

@@ -80,7 +80,7 @@ jobs:
           from hunyuan15_checkpoint_audit import read_header,normalize,expand_fused_qkv_metadata
           from hunyuan15_lora_convert import plan
           folder=Path('/cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints')
-          source=read_header(folder/'loras/hunyuanvideo1.5_t2v_480p_lightx2v_4step_lora_rank_32_bf16.safetensors')
+          source=normalize(read_header(folder/'loras/hunyuanvideo1.5_t2v_480p_lightx2v_4step_lora_rank_32_bf16.safetensors'))
           ref,_=expand_fused_qkv_metadata(normalize(read_header(folder/'hunyuanvideo1.5_480p_t2v_fp16.safetensors')))
           _,_,stats=plan(source,ref)
           print('HUNYUAN15_LORA_PLAN_PASS',json.dumps(stats,sort_keys=True))

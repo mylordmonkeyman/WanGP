@@ -104,3 +104,16 @@ The cold Stage 2 forward executes many **preload=True** parameter installations 
 **Fidelity:** All eight arms have identical decoded video **and** audio hashes to the pinned stable-main reference; Candidate E 27,360 calls, 384 native fallbacks, tiled epilogue zero, and same exceptional-row counts in each mode. No persistent FP16 weight copies. This is a small but encouraging measured wall-clock gain; **do not promote** on 73-frame results alone. It may include run noise; 241-frame validation and additional memory/VRAM measurement are required.
 
 **Next:** 241-frame T2V+I2V ABBA automatically launched at [run 43784862151](https://github.com/mylordmonkeyman/WanGP/actions/runs/43784862151), commit `48a1c162`, following this success. Review fidelity, absolute times and VRAM behavior before further changes. If gains remain marginal, pursue targeted CPU timing of packed `_copy_runs` vs original `_move_block`, and test 1-vs-2 staging slots or asynchronous prepack scheduling; do not increase VRAM residency or change math.
+
+## P1 241-frame qualification — PASS, speedup shrinks with duration
+
+[Run 43784862151](https://github.com/mylordmonkeyman/WanGP/actions/runs/43784862151), 2026-11-16 UTC, **PASS**: 8 independent 241-frame, 1024×576, 8-step processes, same pinned model/image/prompt/seed. B arms each packed 48 cold transformer blocks, ~18.55 GB cumulative, with zero skipped pinned/bounded/budget cases. Decoded video and audio SHA256 **identical** for every A/B arm; Candidate E 45,216 calls, 1,824 native fallbacks, zero tiled epilogue calls, matching exceptional-row counts (T2V 5,851; I2V 5,578). Zero persistent FP16 weight copies. These checks do **not** constitute an instrumented peak-VRAM comparison; that remains outstanding.
+
+| Mode | A1 original | B1 packed | B2 packed | A2 original | A mean | B mean | B improvement |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| T2V | 223.766s | 221.920s | 222.210s | 223.815s | **223.7905s** | **222.065s** | **+0.7710%** |
+| I2V | 225.328s | 224.880s | 225.326s | 224.924s | **225.126s** | **225.103s** | **+0.0102%** |
+
+**Interpretation:** The 73f ~1% gain does not scale with frames, especially for I2V. P1 improves some one-time cold installation overhead, not the dominant repeated GEMM/attention work. 241f T2V saves 1.73s on average; I2V saves 0.023s (noise). Neither result justifies promoting P1 to default. **Keep default off.** Existing implementation remains opt-in for further experiments.
+
+**Next experiments:** Separate CPU packing time (`_copy_runs`), pinned scratch waits, transfer enqueue and GPU consumer waits, and compare against the existing MMGP pageable path. Check peak allocated/reserved VRAM and pinned host RAM; avoid adding a second GPU weight set. Consider prepacking on a bounded worker overlapping upstream computation or optimizing non-preload streamed blocks only if traces show meaningful opportunity. Do not promote P1 to main.

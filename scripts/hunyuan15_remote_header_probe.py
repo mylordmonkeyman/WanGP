@@ -131,6 +131,66 @@ def fp32_to_fp16_samples(comfy, comfy_header_len, original, original_header_len)
     }
 
 
+def qkv_fusion_order_samples(comfy, comfy_header_len, original, original_header_len):
+    """Validate Comfy Q,K,V block order against Tencent separate projections.
+
+    Read tiny slices from start/end of each part, including attention *weight*
+    matrices whose full contents are enormous. No full tensor is downloaded.
+    """
+    keys = (
+        "double_blocks.0.img_attn_qkv.weight",
+        "double_blocks.0.txt_attn_qkv.weight",
+        "double_blocks.10.img_attn_qkv.bias",
+        "double_blocks.10.txt_attn_qkv.weight",
+    )
+    details = []
+    matches_total = values_total = 0
+    for fused in keys:
+        c = comfy.get(fused)
+        if c is None or c["dtype"] != "F16":
+            raise ValueError(f"Comfy fused QKV missing/not FP16: {fused}")
+        size_c = c["data_offsets"][1] - c["data_offsets"][0]
+        if size_c % 6:
+            raise ValueError(f"QKV bytes not divisible by 3 FP16 chunks: {fused}")
+        part_bytes = size_c // 3
+        for idx, part in enumerate(("q", "k", "v")):
+            name = fused.replace("_attn_qkv.", f"_attn_{part}.")
+            o = original.get(name)
+            if o is None or o["dtype"] != "F32":
+                raise ValueError(f"Tencent split QKV missing/not FP32: {name}")
+            if o["shape"] != [c["shape"][0] // 3, *c["shape"][1:]]:
+                raise ValueError(f"Inconsistent QKV part shape: {name}")
+            if o["data_offsets"][1] - o["data_offsets"][0] != part_bytes * 2:
+                raise ValueError(f"Inconsistent QKV part bytes: {name}")
+            for place, offset_values in (("head", 0), ("tail", part_bytes // 2 - min(64, part_bytes // 2))):
+                nvalues = min(64, part_bytes // 2)
+                cpos = 8 + comfy_header_len + c["data_offsets"][0] + idx * part_bytes + offset_values * 2
+                opos = 8 + original_header_len + o["data_offsets"][0] + offset_values * 4
+                cb = fetch_range(URLS["comfy_fp16"], cpos, cpos + nvalues * 2 - 1)
+                ob = fetch_range(URLS["tencent_original"], opos, opos + nvalues * 4 - 1)
+                matches = 0
+                for j in range(nvalues):
+                    v = struct.unpack_from("<f", ob, j * 4)[0]
+                    try:
+                        rounded = struct.pack("<e", v)
+                    except OverflowError:
+                        rounded = b""
+                    if cb[2*j:2*j+2] == rounded:
+                        matches += 1
+                details.append({
+                    "tensor": fused, "part": part, "location": place,
+                    "values": nvalues, "exact_fp32_to_fp16": matches
+                })
+                values_total += nvalues
+                matches_total += matches
+    return {
+        "fused_tensors": len(keys), "values_sampled": values_total,
+        "exact_fp32_to_fp16": matches_total,
+        "all_sampled_values_match": matches_total == values_total and values_total > 0,
+        "details": details
+    }
+
+
 def main():
     catalogs = {}
     result = {}
@@ -156,6 +216,14 @@ def main():
             )
         except Exception as exc:
             result["numeric_fp16_source_samples"] = {"error": str(exc)}
+    if "comfy_fp16" in catalogs and "tencent_original" in catalogs:
+        try:
+            result["qkv_fusion_order_samples"] = qkv_fusion_order_samples(
+                catalogs["comfy_fp16"], result["comfy_fp16"]["header_bytes"],
+                catalogs["tencent_original"], result["tencent_original"]["header_bytes"],
+            )
+        except Exception as exc:
+            result["qkv_fusion_order_samples"] = {"error": str(exc)}
     if "wangp_bf16" in catalogs:
         for label in ("comfy_fp16", "tencent_original"):
             if label in catalogs:

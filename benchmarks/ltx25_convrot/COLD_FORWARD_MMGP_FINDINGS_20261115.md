@@ -117,3 +117,24 @@ The cold Stage 2 forward executes many **preload=True** parameter installations 
 **Interpretation:** The 73f ~1% gain does not scale with frames, especially for I2V. P1 improves some one-time cold installation overhead, not the dominant repeated GEMM/attention work. 241f T2V saves 1.73s on average; I2V saves 0.023s (noise). Neither result justifies promoting P1 to default. **Keep default off.** Existing implementation remains opt-in for further experiments.
 
 **Next experiments:** Separate CPU packing time (`_copy_runs`), pinned scratch waits, transfer enqueue and GPU consumer waits, and compare against the existing MMGP pageable path. Check peak allocated/reserved VRAM and pinned host RAM; avoid adding a second GPU weight set. Consider prepacking on a bounded worker overlapping upstream computation or optimizing non-preload streamed blocks only if traces show meaningful opportunity. Do not promote P1 to main.
+
+## P1 73-frame phase attribution — measured, not a new default
+
+[Profiling run 43791198999](https://github.com/mylordmonkeyman/WanGP/actions/runs/43791198999) **PASS** at commit `90705eec`, eight fresh-process 73f 1024×576 8-step T2V/I2V A–B–B–A generations. Every decoded video/audio output matched pinned stable main. Candidate E 27,360 calls, native fallbacks 384, tiled calls zero per generation. B packed 48 Stage2 cold blocks (~18.55 GB cumulative copied), with no skips. The separately enabled `WAN2GP_LTX25_MMGP_PACKED_PROFILE=1` instrumentation measured the B arms only.
+
+| Mode | A1 | B1 | B2 | A2 | A mean | B mean | B saving |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| T2V | 111.960s | 111.371s | 111.378s | 111.213s | 111.5865s | 111.3745s | 0.1900% |
+| I2V | 113.681s | 112.880s | 111.938s | 113.238s | 113.4595s | 112.4090s | 0.9259% |
+
+| B-arm Stage2 CPU phase, mean of four | Time |
+| --- | ---: |
+| Host packing `_copy_runs` | 1,481.0 ms |
+| Parameter view installation | 450.5 ms |
+| Pinned scratch allocation | 300.7 ms |
+| GPU transfer enqueue (host time) | 153.6 ms |
+| Scratch-slot wait | 0.92 ms |
+
+The B-arm Stage2 CUDA allocator high-water was 19,789,3xx,xxx bytes allocated (~18.43 GiB), 20,635,975,680 bytes reserved (~19.22 GiB); this is **not** a matched A/B peak-VRAM comparison. CPU phase timers are host-side and may overlap GPU work; summing them does not establish recoverable end-to-end time. Pinned host-RAM peak remains unmeasured.
+
+**Decision:** Keep P1 and profiling flags OFF by default. Packing, not slot waits, dominates the measured B CPU path. Before another implementation, obtain matched baseline allocator high-water and per-block `_copy_runs` breakdown; then evaluate a bounded asynchronous pack/preparation experiment or reduced-copy layout with the same final GPU storage. Preserve 73f/241f fidelity, A–B–B–A, and peak-VRAM gates. No promotion to main.

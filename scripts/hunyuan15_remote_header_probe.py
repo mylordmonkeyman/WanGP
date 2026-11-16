@@ -9,7 +9,7 @@ import json
 import struct
 from urllib.request import Request, urlopen
 
-from hunyuan15_checkpoint_audit import MAX_HEADER_BYTES, compare
+from hunyuan15_checkpoint_audit import MAX_HEADER_BYTES, compare, expand_fused_qkv_metadata
 
 
 URLS = {
@@ -96,6 +96,23 @@ def main():
         for label in ("comfy_fp16", "tencent_original"):
             if label in catalogs:
                 result[label]["versus_wangp"] = compare(catalogs[label], catalogs["wangp_bf16"])
+                if label == "comfy_fp16":
+                    expanded, conversion_count = expand_fused_qkv_metadata(catalogs[label])
+                    transformed = compare(expanded, catalogs["wangp_bf16"])
+                    allowed_extra = {
+                        "time_r_in.mlp.0.bias", "time_r_in.mlp.0.weight",
+                        "time_r_in.mlp.2.bias", "time_r_in.mlp.2.weight",
+                    }
+                    result[label]["hypothetical_unfuse"] = {
+                        "fused_tensors_split": conversion_count,
+                        "comparison": transformed,
+                        "only_known_unused_extra_keys": (
+                            transformed["missing_keys"] == 0
+                            and transformed["shape_mismatches"] == 0
+                            and set(transformed["unexpected_examples"]) == allowed_extra
+                            and transformed["unexpected_keys"] == len(allowed_extra)
+                        ),
+                    }
     print(json.dumps(result, indent=2), flush=True)
     return 1 if any("error" in entry for entry in result.values()) else 0
 

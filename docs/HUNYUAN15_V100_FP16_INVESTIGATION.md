@@ -56,6 +56,7 @@ Both set `"dtype":"fp16"`, `"hunyuan15_native_fp16":true`, and `"auto_quantize":
 - Initial header audit: [GitHub Actions 43920843463](https://github.com/mylordmonkeyman/WanGP/actions/runs/43920843463). Comfy 1,365 F16 tensors, WanGP 1,793 BF16, Tencent 1,797 F32.
 - Correctly scoped QKV audit: [GitHub Actions 43921412288](https://github.com/mylordmonkeyman/WanGP/actions/runs/43921412288). Split 216 QKV tensors; 1,793 / 1,793 WanGP tensor keys and shapes match. Four extra unused `time_r_in.mlp` names are also found in the Tencent reference.
 - FP32 provenance sample: [GitHub Actions 43921937836](https://github.com/mylordmonkeyman/WanGP/actions/runs/43921937836). All 3,808 sampled Comfy FP16 values (5 common small tensors) **bitwise equal** to directly rounded Tencent FP32 values. This is a sample, **not** proof for every tensor or the fused QKV value ordering.
+- QKV numeric ordering check: [GitHub Actions 43922762022](https://github.com/mylordmonkeyman/WanGP/actions/runs/43922762022). For 4 Comfy fused image/text QKV tensors, sampled head/tail values in **all Q, K and V segments** matched the corresponding Tencent standalone FP32 tensors after rounding: **1,536 / 1,536 exact**. This strongly supports the proposed `chunk(3, dim=0)` order but does not test every QKV value.
 - Source and synthetic layout-adapter checks: [GitHub Actions 43921737820](https://github.com/mylordmonkeyman/WanGP/actions/runs/43921737820) succeeded. These tests are not GPU inference.
 
 ## Stage 0: inspect source checkpoint without allocating 16-33 GB

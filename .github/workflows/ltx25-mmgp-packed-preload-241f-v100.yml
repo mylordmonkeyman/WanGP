@@ -1,0 +1,80 @@
+name: LTX-2.5 V100 MMGP packed preload 241f T2V I2V ABBA qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/ltx25-v100-mmgp-transfer-20261115]
+    paths:
+      - benchmarks/ltx25_convrot/mmgp_packed_241f_launch.signal
+permissions:
+  contents: read
+concurrency:
+  group: ltx25-v100-mmgp-packed-preload-241f
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false, fetch-depth: 0}
+      - name: Verify default-off and strict 241f audio/video parity guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile mmgp/offload.py benchmarks/ltx25_convrot/benchmark_mmgp_packed_preload_241f_abba.py
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('mmgp/offload.py').read_text()
+          s=Path('benchmarks/ltx25_convrot/benchmark_mmgp_packed_preload_241f_abba.py').read_text()
+          assert 'os.environ.get("WAN2GP_LTX25_MMGP_PACKED_PRELOAD", "0") == "1"' in m
+          assert 'four.settings(241)' in s
+          assert 'base.FRAMES,base.STEPS,base.SEED=241,8,20261112' in s
+          assert 'WAN2GP_LTX25_E_EPILOGUE_TILED"]="0"' in s
+          assert 'WAN2GP_LTX25_STAGE2_KEEP_CUDA_CACHE"]="0"' in s
+          assert 'WAN2GP_LTX25_MMGP_PACKED_PRELOAD"]="1" if pack_preload else "0"' in s
+          assert 'require(all(x["video_and_audio_bit_identical"] for x in out)' in s
+          assert 'LTX25_MMGP_PACKED_241F_ABBA_PASS' in s
+          print('LTX25_MMGP_PACKED_241F_STATIC_PASS')
+          PY
+  benchmark:
+    needs: static
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 100
+    env:
+      PYTHONPATH: .
+      LTX25_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      LTX25_MMGP_PACKED_241F_ROOT: /cache/ltx25/results/mmgp-packed-241f-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Confirm free V100 and original model/image
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$LTX25_PYTHON"
+          test -s /opt/ltx25/checkpoints/ltx-2.5-22b-distilled_diffusion_model_int8_convrot.safetensors
+          test -s benchmarks/ltx25_convrot/inputs/profile_i2v_1024x576.png.png
+          "$LTX25_PYTHON" -c 'import torch; assert torch.cuda.get_device_capability(0)==(7,0)'
+          test -z "$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '[0-9]' || true)"
+      - name: 241-frame T2V and I2V A-B-B-A with exact decoded hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$LTX25_PYTHON" -u benchmarks/ltx25_convrot/benchmark_mmgp_packed_preload_241f_abba.py 2>&1 | tee mmgp-packed-241f.log
+          grep -Fq LTX25_MMGP_PACKED_241F_ABBA_PASS mmgp-packed-241f.log
+      - name: Upload 241-frame fidelity, timings, logs and partial results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ltx25-mmgp-packed-preload-241f-abba
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            mmgp-packed-241f.log
+            /cache/ltx25/results/mmgp-packed-241f-${{ github.run_id }}-attempt${{ github.run_attempt }}/manifest.json
+            /cache/ltx25/results/mmgp-packed-241f-${{ github.run_id }}-attempt${{ github.run_attempt }}/partial.json
+            /cache/ltx25/results/mmgp-packed-241f-${{ github.run_id }}-attempt${{ github.run_attempt }}/summary.json
+            /cache/ltx25/results/mmgp-packed-241f-${{ github.run_id }}-attempt${{ github.run_attempt }}/results/*.json
+            /cache/ltx25/results/mmgp-packed-241f-${{ github.run_id }}-attempt${{ github.run_attempt }}/logs/*.log

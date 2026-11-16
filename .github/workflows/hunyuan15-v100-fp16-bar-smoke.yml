@@ -1,0 +1,102 @@
+name: Hunyuan 1.5 V100 native FP16 bar I2V + T2V smoke
+
+# One-shot experiment on this isolated branch. Changes to other branches do not trigger.
+on:
+  push:
+    branches: [research/hunyuan15-v100-native-fp16-20261116]
+    paths:
+      - .github/workflows/hunyuan15-v100-fp16-bar-smoke.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hunyuan15-v100-bar-fp16-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Static Python and bar-image check
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile benchmarks/hunyuan15_fp16/v100_bar_video_smoke.py
+          python3 -m unittest discover -s benchmarks/hunyuan15_fp16 -p 'test_*.py' -v
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          p=Path("benchmarks/ltx25_convrot/inputs/profile_i2v_1024x576.png.png")
+          h=p.read_bytes()[:24]
+          assert h[:8] == bytes.fromhex("89504e470d0a1a0a"), h[:8]
+          assert struct.unpack(">II", h[16:24]) == (1024,576)
+          print("BAR_IMAGE_VALIDATED",p)
+          PY
+
+  generate:
+    needs: lint
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        mode: [i2v, t2v]
+    env:
+      HUNYUAN15_TEST_MODE: ${{ matrix.mode }}
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      HUNYUAN15_TEST_OUT: /cache/ltx25/results/hunyuan15-fp16-smoke-${{ matrix.mode }}-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      PYTHONPATH: .
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      GRADIO_ANALYTICS_ENABLED: 'False'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify V100 and shared model cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvidia-smi -L
+          test -x "$HUNYUAN15_PYTHON"
+          test -d /cache/ltx25/models
+          test -s benchmarks/ltx25_convrot/inputs/profile_i2v_1024x576.png.png
+          if [ "${{ matrix.mode }}" = i2v ]; then
+            test -s /cache/ltx25/models/hunyuanvideo1.5_480p_i2v_step_distilled_fp16.safetensors
+          fi
+          # T2V may be downloaded into the existing shared checkpoint cache
+          # by WanGP if it was not pre-staged; never modify global WanGP config.
+      - name: Produce real ${{ matrix.mode }} 33-frame bar video
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/v100_bar_video_smoke.py \
+            2>&1 | tee "hunyuan15-${{ matrix.mode }}.log"
+          grep -Fq 'HUNYUAN15_CASE_SUMMARY' "hunyuan15-${{ matrix.mode }}.log"
+      - name: Upload diagnostic inputs, logs and summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-fp16-${{ matrix.mode }}-diagnostics
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            hunyuan15-${{ matrix.mode }}.log
+            /cache/ltx25/results/hunyuan15-fp16-smoke-${{ matrix.mode }}-${{ github.run_id }}-attempt${{ github.run_attempt }}/${{ matrix.mode }}/settings.json
+            /cache/ltx25/results/hunyuan15-fp16-smoke-${{ matrix.mode }}-${{ github.run_id }}-attempt${{ github.run_attempt }}/${{ matrix.mode }}/summary.json
+            /cache/ltx25/results/hunyuan15-fp16-smoke-${{ matrix.mode }}-${{ github.run_id }}-attempt${{ github.run_attempt }}/${{ matrix.mode }}/logs/*.log
+      - name: Publish playable ${{ matrix.mode }} MP4
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-fp16-${{ matrix.mode }}-bar-videos
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: /cache/ltx25/results/hunyuan15-fp16-smoke-${{ matrix.mode }}-${{ github.run_id }}-attempt${{ github.run_attempt }}/${{ matrix.mode }}/clips/*.mp4

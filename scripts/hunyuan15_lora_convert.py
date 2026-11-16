@@ -50,11 +50,15 @@ def target_modules(module):
             return tuple(base + "." + stem + "_" + part for part in "qkv")
     # Comfy exports timestep embedding MLPs as in_layer/out_layer; WanGP
     # TimestepEmbedder uses mlp.0/mlp.2. Vector MLPEmbedder does not.
-    for stem in ("time_in", "time_r_in", "guidance_in"):
+    for stem in ("time_in", "time_r_in", "guidance_in", "txt_in.t_embedder"):
         if module == stem + ".in_layer":
             return (stem + ".mlp.0",)
         if module == stem + ".out_layer":
             return (stem + ".mlp.2",)
+    # The refiner context embedding uses TextProjection.linear_1/linear_2.
+    for part, target in (("in_layer", "linear_1"), ("out_layer", "linear_2")):
+        if module == "txt_in.c_embedder." + part:
+            return ("txt_in.c_embedder." + target,)
     result = module
     for stem in ("img_attn", "txt_attn", "self_attn"):
         result = result.replace("." + stem + ".qkv", "." + stem + "_qkv")

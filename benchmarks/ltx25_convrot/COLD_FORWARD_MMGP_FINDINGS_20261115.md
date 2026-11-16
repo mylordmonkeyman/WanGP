@@ -159,3 +159,17 @@ These synthetic measurements do not directly predict whole-video speedup. The pr
 **Follow-up gated 241f:** `.github/workflows/ltx25-mmgp-adaptive-pack-241f-v100.yml` and `benchmarks/ltx25_convrot/benchmark_mmgp_adaptive_241f_abba.py` are prepared with manual dispatch or `benchmarks/ltx25_convrot/mmgp_adaptive_241f_launch.signal`; do **not** launch unless a meaningful 73f gain is confirmed. 241f compares 3-worker vs adaptive8 *both packed*, not stock; use independent A–B–B–A and per-mode decoded hashes. If P2 is noise/negative, retain flags disabled and reconsider parallel CPU staging, block layout or non-overlapped host work.
 
 **Isolation:** No edits to stable `main` or archive, no second persistent GPU weight copy. In particular, other workflows triggered by edits to `mmgp/offload.py` may perform redundant regression benches; inspect their run status to avoid concurrent use of the sole V100.
+
+
+## P2 adaptive host packing — 241-frame qualification (2026-11-16)
+
+[GitHub Actions run 43814831364](https://github.com/mylordmonkeyman/WanGP/actions/runs/43814831364) **PASS**, static and V100 benchmark jobs. Eight fresh-process 241-frame 1024×576, eight-step T2V/I2V generations, A–B–B–A per mode, comparing P1 three-worker packed preload (A) against P2 adaptive eight-worker packed preload (B). This is **not** a comparison to stock main. The exact decoded video and audio hashes matched the reference in all eight cases; Candidate E 45,216 calls, native fallback 1,824, tiled epilogue zero, matching exceptional-row counts. Each run packed 48 cold blocks (~18.55 GB cumulative), with zero bounded, pin-budget, or pinned-source skips. No second persistent GPU weight set.
+
+| Mode | A1 P1 legacy3 | B1 P2 adaptive8 | B2 P2 adaptive8 | A2 P1 legacy3 | A mean | B mean | B speedup |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| T2V | 222.256s | 221.969s | 221.000s | 222.632s | 222.444s | 221.4845s | **0.4313%** |
+| I2V | 223.739s | 224.212s | 223.570s | 224.479s | 224.109s | 223.891s | **0.0973%** |
+
+**Decision:** P2 passes correctness but its 73f gains (0.70% T2V / 0.88% I2V) shrink to 0.43% T2V / 0.10% I2V at 241f; I2V difference is consistent with noise. Keep both `WAN2GP_LTX25_MMGP_PACKED_PRELOAD` and `WAN2GP_LTX25_MMGP_PACKED_ADAPTIVE8` default **OFF**; do not promote to main. The host-copy microbench improvement does not translate into a large whole-process gain. No additional full-video run is warranted for P2 alone. A matched baseline-vs-P2 peak VRAM comparison remains unmeasured; prior P1 profile reported ~18.43 GiB allocated / 19.22 GiB reserved in optimized Stage 2, but that is not a matched P2 memory comparison.
+
+**Next research gate:** Identify truly non-overlapped CPU-side MMGP block installation and GPU consumer stalls with per-block timeline traces before implementing more packing changes. Prioritize reducing parameter-view installation / Python dispatch or moving bounded preparation earlier only if measured on the critical path. Require explicit peak VRAM and pinned-host-RAM comparison for any new candidate. No persistent duplicate GPU weights, no default changes, and no overlapping V100 workflows.

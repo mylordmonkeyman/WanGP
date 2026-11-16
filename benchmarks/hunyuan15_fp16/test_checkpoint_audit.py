@@ -90,7 +90,7 @@ class DtypePathStaticTest(unittest.TestCase):
         code = (ROOT / "wgp.py").read_text(encoding="utf-8")
         compile(code, "wgp.py", "exec")
         start = code.index("def get_transformer_dtype(")
-        section = code[start:code.index("\\ndef get_settings_file_name(", start)]
+        section = code[start:code.index("def get_settings_file_name(", start)]
         self.assertIn('get_model_def(model_type)', section)
         self.assertIn('get("hunyuan15_native_fp16", False)', section)
         self.assertIn("return torch.float16", section)

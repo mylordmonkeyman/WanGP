@@ -24,8 +24,8 @@ Volta lacks native BF16 compute; FP16 Tensor Cores are supported. BF16 checkpoin
 | Candidate | Approx. model size | Native dtype / expected key format | Assessment |
 | --- | ---: | --- | --- |
 | DeepBeepMeep WanGP 480p BF16 | 16.7 GB | BF16 / known WanGP keys | **Reference** to compare key names, shapes, and output quality; not a direct native-FP16 source |
-| Comfy-Org 480p FP16 | 16.7 GB | FP16 / ComfyUI single-file format | **First candidate**; cheapest download and no extra FP32->FP16 conversion if keys/shapes already match or have a verified lossless renaming map |
-| Tencent original `transformer/480p_*/diffusion_pytorch_model.safetensors` | 33.3 GB | Likely FP32 from size (verify header) / original Diffusers format | **Fallback or quality challenger**; converting directly to WanGP FP16 may avoid a BF16 intermediate and can use original source names, but may require a key mapping and a 33.3 GB download |
+| Comfy-Org 480p FP16 | 16.7 GB | FP16 / ComfyUI single-file format | **Preferred source.** 216 image/text QKV tensors require an audited unfusion; after splitting all 1,793 expected WanGP keys and shapes match |
+| Tencent original `transformer/480p_*/diffusion_pytorch_model.safetensors` | 33.3 GB | **Verified FP32** (1,797 tensors) / original Diffusers format | **Fallback only**; 1,793 matching WanGP tensors + four unused extra keys. Existing Comfy FP16 matches direct FP32->FP16 rounding in sampled weights |
 | DeepBeepMeep Quanto BF16 INT8 | ~8.5 GB | BF16/INT8 | Do **not** mislabel as FP16; evaluate FP16 Quantization only after full-FP16 correctness is established |
 
 Source URLs:
@@ -33,7 +33,7 @@ Source URLs:
 - https://huggingface.co/tencent/HunyuanVideo-1.5/tree/main/transformer
 - https://huggingface.co/DeepBeepMeep/HunyuanVideo1.5/tree/main
 
-**Recommendation:** Try Comfy FP16 first **provided** its tensor keys/shapes can be reconciled with a matching WanGP BF16 reference. If it requires nontrivial fused/split transformations, audit Tencent FP32 next and build a streaming converter into WanGP-native keys. Do not download both large sources speculatively. Direct FP32 conversion is not inherently higher-quality than Comfy FP16: its value depends on Comfy's conversion provenance and actual numeric comparison.
+**Recommendation (updated after automated metadata/weight probes):** Use Comfy-Org FP16 directly with an *in-memory, view-based* unfusion of image/text QKV projections, rather than downloading 33.3 GB of Tencent FP32 for conversion. After unfusing 216 QKV tensors, its 1,793 expected tensor keys and shapes precisely match the WanGP 480p I2V step-distilled reference, plus four extra `time_r_in.mlp` keys (also present in Tencent FP32). Small matched weight samples (3,808 values across 5 tensors) are **bit-identical** to Tencent's directly rounded FP32→FP16 weights. This does **not** establish that all ~8B model weights are identical. Do not download the Tencent FP32 unless a subsequent numerical or visual-quality test reveals a reason.
 
 ## Experimental implementation
 
@@ -41,29 +41,22 @@ Source URLs:
 - The loader creates a meta-device FP16 transformer and asks MMGP to load/cast weights into FP16.
 - Model double/single blocks and the inference pipeline select FP16 activation/latent/prompt dtypes only for the opt-in model.
 - All code without the flag continues to use the prior BF16 path.
+- The model loader uses `preprocess_sd=unfuse_hunyuan15_qkv` in experimental mode; it splits Comfy-Org's 216 fused image/text projections into Q, K, V tensor views, while preserving the refiner's `self_attn_qkv` tensors. It rejects on-the-fly quantization and export in this mode.
+- `wgp.get_transformer_dtype` explicitly resolves the FP16 model-def opt-in, even if the machine's default dtype policy would otherwise select BF16.
 - This is a **prototype**, not a statement of runtime correctness or fidelity. An FP16-only checkpoint in the wrong key layout will fail loading.
 
-Example **research-only** finetune definition to create *after* a verified matching checkpoint exists (put in `finetunes/`, not `defaults/`):
+The branch includes two **research-only, selectable finetune definitions** in `finetunes/` (stock `defaults/` untouched):
+- `hunyuan15_v100_i2v_480_step_fp16_experiment.json` — direct Comfy-Org 480p I2V step-distilled FP16, 8 steps.
+- `hunyuan15_v100_t2v_480_fp16_experiment.json` — direct Comfy-Org 480p T2V FP16, initially 30 steps; the T2V checkpoint layout and FP16 runtime remain separately unverified.
 
-```json
-{
-  "model": {
-    "name": "Hunyuan 1.5 V100 I2V FP16 EXPERIMENT",
-    "architecture": "hunyuan_1_5_i2v",
-    "dtype": "fp16",
-    "hunyuan15_native_fp16": true,
-    "URLs": ["ckpts/hunyuan15_480p_i2v_step_distilled_wangp_fp16.safetensors"],
-    "profiles_dir": [""]
-  },
-  "resolution": "832x480",
-  "video_length": 33,
-  "num_inference_steps": 8,
-  "guidance_scale": 1.0,
-  "flow_shift": 5.0
-}
-```
+Both set `"dtype":"fp16"`, `"hunyuan15_native_fp16":true`, and `"auto_quantize":false` and point to real Comfy-Org URLs. Select the **unquantized** model mode, not Quanto INT8. Their published filenames are not newly created WanGP-quantized files: they are the original Comfy FP16 checkpoints, adapted only in memory on load.
 
-The path above is a **placeholder**, not an existing file. Use unquantized transformer selection initially. Do not allow automatic quantization to obscure the first correctness test.
+## Published research measurements (CPU-only; no full checkpoint download)
+
+- Initial header audit: [GitHub Actions 43920843463](https://github.com/mylordmonkeyman/WanGP/actions/runs/43920843463). Comfy 1,365 F16 tensors, WanGP 1,793 BF16, Tencent 1,797 F32.
+- Correctly scoped QKV audit: [GitHub Actions 43921412288](https://github.com/mylordmonkeyman/WanGP/actions/runs/43921412288). Split 216 QKV tensors; 1,793 / 1,793 WanGP tensor keys and shapes match. Four extra unused `time_r_in.mlp` names are also found in the Tencent reference.
+- FP32 provenance sample: [GitHub Actions 43921937836](https://github.com/mylordmonkeyman/WanGP/actions/runs/43921937836). All 3,808 sampled Comfy FP16 values (5 common small tensors) **bitwise equal** to directly rounded Tencent FP32 values. This is a sample, **not** proof for every tensor or the fused QKV value ordering.
+- Source and synthetic layout-adapter checks: [GitHub Actions 43921737820](https://github.com/mylordmonkeyman/WanGP/actions/runs/43921737820) succeeded. These tests are not GPU inference.
 
 ## Stage 0: inspect source checkpoint without allocating 16-33 GB
 
@@ -98,8 +91,8 @@ The tool reads only the JSON header; it reports stored dtypes, key names, shape 
 
 ## Open risks / limitations
 
-- The Comfy-Org FP16 **tensor layout has not yet been header-compared** to the WanGP BF16 layout in this branch. Loading it directly is unverified.
-- The Tencent 33.3 GB file's **actual dtype has not yet been header-verified**; the size alone suggests FP32.
+- Comfy-Org's **header layout has been reconciled** by unfusing image/text QKV, but the live checkpoint, QKV value order, transformer numerical stability and generated videos remain unverified.
+- Tencent's reference checkpoint has been header-verified as F32. No 33.3 GB Tencent checkpoint conversion is planned unless Comfy proves inadequate.
 - Existing `lock_layers_dtypes` deliberately preserves FP32 numerics in some layers; native FP16 means FP16 transformer backbone, not eliminating sensible mixed precision.
 - The V100 has not been exercised with the new code; no accuracy, compatibility, or wall-time result has been claimed.
 - MMGP `save_model` currently assumes BF16 for some Hunyuan nonquantized filenames; any eventual FP32->FP16 exporter must explicitly produce and verify an FP16-named, WanGP-keyed result rather than relying on that default.

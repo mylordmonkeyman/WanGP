@@ -1,128 +1,182 @@
 #!/usr/bin/env python3
-"""Cold-process, cached-checkpoint Hunyuan 1.5 LightX2V 4-step T2V smoke.
+"""Cold-process, offline Hunyuan 1.5 LightX2V *full-checkpoint* 4-step T2V.
 
-The user previously staged the 341 MB Comfy-Org 480p T2V LoRA. Reuse the
-EXACT 30-step full-FP16 checkpoint, text, seed, dimensions and frame count.
-Change only LoRA activation, steps 30->4, CFG 6->1, flow shift 5->8, per
-WanGP's own built-in Hunyuan 1.5 LightX2V 4-step preset.
+This replaces the incompatible Comfy-Org LoRA experiment with the published
+16.7 GB full LightX2V 4-step distilled transformer. The baseline remains
+the same 30-step 33-frame bar scene: same text, resolution, frame count, seed,
+V100 backend, and cold-process timing. No LoRA is loaded or downloaded.
 
-Preflight/LoRA hash/offline dry run are EXCLUDED from the wall-clock figure.
-Generation timing includes a new Python process, model load, inference, VAE,
-and MP4 saving. Do not report it as hot-model diffusion-only speed.
+Checkpoint layout is audited using safetensors headers before launching WanGP.
+The wall clock includes a new Python process, weights, denoising, decode,
+and MP4 saving, but excludes the independent dry run and header audit.
 """
 from __future__ import annotations
 
+from collections import Counter
 import json
 import os
 from pathlib import Path
+import sys
 
 import v100_bar_video_smoke as base
 from v100_t2v_cached_steady_state import validate_clip
 
+sys.path.insert(0, str(base.ROOT / "scripts"))
+from hunyuan15_checkpoint_audit import (
+    read_header, normalize, expand_fused_qkv_metadata, compare,
+)
+
 MODE = "t2v"
-LORA_NAME = "hunyuanvideo1.5_t2v_480p_lightx2v_4step_lora_rank_32_bf16.safetensors"
-LORA_DIR = base.WRITABLE_CHECKPOINTS / "loras"
-LORA_FILE = LORA_DIR / LORA_NAME
-# SHA256 for the published 341 MB safetensors, Comfy-Org HF Xet pointer.
-LORA_SHA256 = "8fef6f9b9f2f6aa5259166e78b10a022485391dababc6a8c68585fddd31d5d62"
-CHECKPOINT = base.WRITABLE_CHECKPOINTS / base.MODEL_FILES[MODE]
-BASELINE_SUMMARY = (base.CACHE/"results"
-    /"hunyuan15-cached-t2v-43933748031-attempt1"/"t2v"/"summary.json")
+DISTILLED_NAME = "hy1.5_t2v_480p_lightx2v_4step.safetensors"
+MODEL_TYPE = "hunyuan15_v100_t2v_480_lightx2v_4step_fp16_experiment"
+CHECKPOINT = base.WRITABLE_CHECKPOINTS / DISTILLED_NAME
+ORIGINAL_CHECKPOINT = (
+    base.WRITABLE_CHECKPOINTS / "hunyuanvideo1.5_480p_t2v_fp16.safetensors"
+)
+BASELINE_SUMMARY = (
+    base.CACHE / "results" / "hunyuan15-cached-t2v-43933748031-attempt1"
+    / "t2v" / "summary.json"
+)
+
+# Use the new model definition's URL to select the *distilled* weights.
+# Do not alter the working 30-step research model definition or baseline.
+base.MODEL_TYPES[MODE] = MODEL_TYPE
+base.MODEL_FILES[MODE] = DISTILLED_NAME
+
+
+def preflight_checkpoint():
+    if not CHECKPOINT.is_file() or CHECKPOINT.stat().st_size < 15_000_000_000:
+        raise RuntimeError(f"Full distilled 4-step checkpoint not staged: {CHECKPOINT}")
+    if not ORIGINAL_CHECKPOINT.is_file():
+        raise RuntimeError(f"Expected original T2V checkpoint for header audit: {ORIGINAL_CHECKPOINT}")
+    reference_raw = normalize(read_header(ORIGINAL_CHECKPOINT))
+    candidate_raw = normalize(read_header(CHECKPOINT))
+    reference, ref_fused = expand_fused_qkv_metadata(reference_raw)
+    candidate, cand_fused = expand_fused_qkv_metadata(candidate_raw)
+    layout = compare(candidate, reference)
+    source_dtypes = dict(sorted(Counter(v["dtype"] for v in candidate_raw.values()).items()))
+    report = {
+        "checkpoint": str(CHECKPOINT),
+        "checkpoint_bytes": CHECKPOINT.stat().st_size,
+        "checkpoint_source": "lightx2v/Hy1.5-Distill-Models",
+        "model_type": MODEL_TYPE,
+        "original_reference": str(ORIGINAL_CHECKPOINT),
+        "candidate_source_tensors": len(candidate_raw),
+        "expanded_candidate_tensors": len(candidate),
+        "reference_expected_tensors": len(reference),
+        "candidate_fused_qkv_expansions": cand_fused,
+        "reference_fused_qkv_expansions": ref_fused,
+        "source_dtypes": source_dtypes,
+        "layout": layout,
+        "downloads_in_timed_run": False,
+        "lora_activated": False,
+    }
+    base.OUT.mkdir(parents=True, exist_ok=True)
+    (base.OUT / "distilled_checkpoint_audit.json").write_text(
+        json.dumps(report, indent=2) + "\n"
+    )
+    print("HUNYUAN15_DISTILLED_CHECKPOINT_AUDIT " + json.dumps(report, sort_keys=True), flush=True)
+    if not layout["keys_and_shapes_match"]:
+        raise RuntimeError("Distilled checkpoint key/shape mismatch: " + json.dumps(layout))
+    if not set(source_dtypes) <= {"F16", "BF16", "F32"}:
+        raise RuntimeError(f"Unexpected weight quantization: {source_dtypes}")
+    return report
 
 
 def main():
     base.gpu_preflight()
-    if not CHECKPOINT.is_file() or CHECKPOINT.stat().st_size < 15_000_000_000:
-        raise RuntimeError(f"Cached unquantized T2V checkpoint missing: {CHECKPOINT}")
-    if not LORA_FILE.is_file() or LORA_FILE.stat().st_size < 300_000_000:
-        raise RuntimeError(f"Comfy-Org LoRA not staged in Docker at {LORA_FILE}")
-    actual_digest = base.hash_file(LORA_FILE)
-    if actual_digest != LORA_SHA256:
-        raise RuntimeError(f"LoRA SHA256 mismatch: {actual_digest} != {LORA_SHA256}")
-    print("HUNYUAN15_LIGHTX2V_PREFLIGHT_PASS " + json.dumps({
-        "checkpoint":str(CHECKPOINT),"checkpoint_bytes":CHECKPOINT.stat().st_size,
-        "lora":str(LORA_FILE),"lora_bytes":LORA_FILE.stat().st_size,
-        "lora_sha256":actual_digest,"downloads_in_timed_run":False
-    },sort_keys=True),flush=True)
+    preflight = preflight_checkpoint()
 
-    base.OUT.mkdir(parents=True,exist_ok=True)
-    config_path = base.OUT / "lightx2v_lora_paths.json"
-    config_path.write_text(json.dumps({"hunyuan_1_5":str(LORA_DIR)},indent=2)+"\n")
-    assert LORA_FILE.is_file()
-
-    original_settings=base.make_settings
-    def lora_settings(mode):
+    original_settings = base.make_settings
+    def distilled_settings(mode):
         if mode != MODE:
-            raise RuntimeError("LightX2V LoRA is T2V ONLY: I2V unvalidated")
-        s = original_settings(mode)
-        s.update({
-            "num_inference_steps":4,
-            "guidance_scale":1.0,
-            "flow_shift":8.0,
-            "activated_loras":[LORA_NAME],
-            "loras_multipliers":"1.0",
+            raise RuntimeError("LightX2V 480p 4-step distilled checkpoint is T2V only")
+        settings = original_settings(mode)
+        settings.update({
+            "num_inference_steps": 4,
+            "guidance_scale": 1.0,
+            "flow_shift": 8.0,
+            "activated_loras": [],
+            "loras_multipliers": "",
         })
-        return s
-    base.make_settings = lora_settings
+        return settings
+    base.make_settings = distilled_settings
 
-    original_run=base.run_command
-    def offline_run(cmd,log_path,env,timeout):
-        cmd=list(cmd)
+    original_run = base.run_command
+    def offline_run(cmd, log_path, env, timeout):
+        cmd = list(cmd)
         if "wgp.py" in cmd:
-            cmd.insert(cmd.index("wgp.py")+1,"--offline")
-            cmd.extend(["--lora-config",str(config_path)])
-        env=dict(env)
+            cmd.insert(cmd.index("wgp.py") + 1, "--offline")
+        env = dict(env)
         env.update({
-            "HF_HUB_OFFLINE":"1",
-            "TRANSFORMERS_OFFLINE":"1",
-            "HF_DATASETS_OFFLINE":"1",
+            "HF_HUB_OFFLINE": "1",
+            "TRANSFORMERS_OFFLINE": "1",
+            "HF_DATASETS_OFFLINE": "1",
         })
-        return original_run(cmd,log_path,env,timeout)
-    base.run_command=offline_run
+        return original_run(cmd, log_path, env, timeout)
+    base.run_command = offline_run
 
-    report=base.run_mode(MODE)
-    log=(base.OUT/MODE/"logs"/"generation.log").read_text(errors="replace")
-    if ("EXPERIMENTAL Hunyuan 1.5 native FP16 enabled" not in log
-        or "Hunyuan 1.5 experimental loader: unpacked 216 Comfy QKV tensors" not in log):
-        raise RuntimeError("Experimental FP16 transformer not loaded")
-    if any(x in log for x in ("Unable to Download","Downloading Model","Downloading model","Downloading Lora")):
-        raise RuntimeError("Missing dependency / download during timed measurement")
-    settings=json.loads((base.OUT/MODE/"settings.json").read_text())
-    assert settings["activated_loras"] == [LORA_NAME], settings["activated_loras"]
-    assert settings["loras_multipliers"] == "1.0"
+    report = base.run_mode(MODE)
+    generation_log = (base.OUT / MODE / "logs" / "generation.log").read_text(errors="replace")
+    if "EXPERIMENTAL Hunyuan 1.5 native FP16 enabled" not in generation_log:
+        raise RuntimeError("Experimental native FP16 transformer was not activated")
+    if f"Loading Model '{CHECKPOINT}'" not in generation_log:
+        raise RuntimeError("WanGP did not load the required LightX2V full checkpoint")
+    fused = preflight["candidate_fused_qkv_expansions"]
+    if fused and f"unpacked {fused} Comfy QKV tensors" not in generation_log:
+        raise RuntimeError(f"Expected {fused} fused QKV tensors to be unpacked")
+    if any(marker in generation_log for marker in (
+        "Unable to Download", "Download URL:", "Downloading Model",
+        "Downloading model", "Downloading Lora",
+    )):
+        raise RuntimeError("Missing dependency or download attempt in timed run")
+
+    settings = json.loads((base.OUT / MODE / "settings.json").read_text())
+    assert settings["model_type"] == MODEL_TYPE
+    assert settings["activated_loras"] == []
+    assert settings["loras_multipliers"] == ""
     assert settings["num_inference_steps"] == 4
     assert settings["guidance_scale"] == 1.0
     assert settings["flow_shift"] == 8.0
+    assert report["model_file"] == str(CHECKPOINT)
 
-    videos=[validate_clip(Path(i["name"])) for i in report["videos"]]
+    videos = [validate_clip(Path(item["name"])) for item in report["videos"]]
     if not videos:
-        raise RuntimeError("Missing output clip")
-
-    old_time=None
+        raise RuntimeError("Missing decoded MP4")
+    baseline_seconds = None
     if BASELINE_SUMMARY.is_file():
-        old_time=json.loads(BASELINE_SUMMARY.read_text()).get("run",{}).get("seconds")
-    elapsed=report["run"]["seconds"]
-    comparison={
-        "status":"LIGHTX2V_4STEP_T2V_VIDEO_PASS",
-        "model_type":report["model_type"],
-        "checkpoint":str(CHECKPOINT),"checkpoint_bytes":CHECKPOINT.stat().st_size,
-        "lora":str(LORA_FILE),"lora_bytes":LORA_FILE.stat().st_size,
-        "lora_sha256":actual_digest,"lora_multiplier":1.0,
-        "steps":4,"guidance":1.0,"flow_shift":8.0,
-        "seed":base.SEED,"frames":base.FRAMES,"resolution":base.RESOLUTION,
-        "text_prompt":base.PROMPT,"offline":True,
-        "timing_scope":"new Python process, cached model/LoRA; loading+inference+decode+save; dry-run excluded",
-        "generation_wall_seconds":elapsed,
-        "previous_30step_cached_wall_seconds":old_time,
-        "wall_time_saved_seconds":round(old_time-elapsed,1) if old_time is not None else None,
-        "wall_time_speedup_factor":round(old_time/elapsed,3) if old_time and elapsed else None,
-        "video_validation":videos,
-        "note":"4-step versus 30-step is a quality/sampling change; speedup is not a same-quality or same-step kernel benchmark",
+        baseline_seconds = json.loads(BASELINE_SUMMARY.read_text()).get("run", {}).get("seconds")
+    seconds = report["run"]["seconds"]
+    comparison = {
+        "status": "LIGHTX2V_4STEP_T2V_VIDEO_PASS",
+        "model_type": report["model_type"],
+        "checkpoint": str(CHECKPOINT),
+        "checkpoint_bytes": preflight["checkpoint_bytes"],
+        "checkpoint_source_dtypes": preflight["source_dtypes"],
+        "lora": None,
+        "steps": 4,
+        "guidance": 1.0,
+        "flow_shift": 8.0,
+        "seed": base.SEED,
+        "frames": base.FRAMES,
+        "resolution": base.RESOLUTION,
+        "text_prompt": base.PROMPT,
+        "offline": True,
+        "timing_scope": "new Python process, cached full distilled checkpoint; load+inference+decode+save; dry-run/header-audit excluded",
+        "generation_wall_seconds": seconds,
+        "previous_30step_cached_wall_seconds": baseline_seconds,
+        "wall_time_saved_seconds": round(baseline_seconds-seconds, 1)
+            if baseline_seconds is not None else None,
+        "wall_time_speedup_factor": round(baseline_seconds/seconds, 3)
+            if baseline_seconds and seconds else None,
+        "video_validation": videos,
+        "note": "Distilled 4-step versus original 30-step changes the model and sampling, not an equal-quality or same-step kernel benchmark.",
     }
-    (base.OUT/MODE/"lightx2v_4step_comparison.json").write_text(
-        json.dumps(comparison,indent=2)+"\n")
-    print("HUNYUAN15_LIGHTX2V_4STEP_T2V_PASS "+json.dumps(comparison,sort_keys=True),flush=True)
+    (base.OUT / MODE / "lightx2v_4step_comparison.json").write_text(
+        json.dumps(comparison, indent=2) + "\n"
+    )
+    print("HUNYUAN15_LIGHTX2V_4STEP_T2V_PASS " + json.dumps(comparison, sort_keys=True), flush=True)
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()

@@ -254,7 +254,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
         self.noise_pertub = 0
         self.hunyuan_1_5 = hunyuan_1_5
-        self.target_dtype = torch.bfloat16 
+        self.target_dtype = torch.float16 if getattr(transformer, "native_fp16", False) else torch.bfloat16
         self.text_encoder_cache = TextEncoderCache()
 
     def encode_prompt_1_5(
@@ -1339,7 +1339,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
 
 
         vae_precision = "fp16" # torch.float16
-        precision = "bf16" # torch.bfloat16
+        precision = "fp16" if self.target_dtype == torch.float16 else "bf16"
 
         disable_autocast =  True
         target_dtype = PRECISION_TO_TYPE[precision]
@@ -1477,11 +1477,11 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         if self.transformer.mixed_precision:
             latent_dtype = torch.float32
         else:
-            latent_dtype = torch.bfloat16
+            latent_dtype = self.target_dtype
         if prompt_embeds != None:
-            prompt_embeds = prompt_embeds.to(torch.bfloat16)
+            prompt_embeds = prompt_embeds.to(self.target_dtype)
         if prompt_embeds_2 != None:
-            prompt_embeds_2 = prompt_embeds_2.to(torch.bfloat16)
+            prompt_embeds_2 = prompt_embeds_2.to(self.target_dtype)
 
         if self.upsampler is not None:
             # lq_latents = rearrange(bg_latents, "b c f h w -> (b f) c h w")

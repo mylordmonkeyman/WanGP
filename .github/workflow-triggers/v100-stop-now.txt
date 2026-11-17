@@ -1,0 +1,1 @@
+ONE-TIME STOP REQUEST 2026-11-17. User explicitly requested pause all work and stop all runners. This triggers ONLY an ubuntu-hosted no-op workflow with cancel-in-progress true, sharing the active V100 concurrency group. No self-hosted or V100 jobs must be scheduled. All recurring automations are disabled.

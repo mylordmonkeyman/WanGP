@@ -1,0 +1,155 @@
+name: Hunyuan 1.5 V100 native FP16 P0 persistent hot baseline
+
+# Explicit dispatch only. Never auto-starts an unattended V100 workload.
+on:
+  workflow_dispatch:
+    inputs:
+      phase_diagnostic:
+        description: "Run a separate synchronized phase-diagnostic pass (not an adoption score)"
+        type: boolean
+        required: true
+        default: true
+      changed_prompt:
+        description: "Run additional persistent queue with a changed final prompt"
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+# Shared group for NEW V100 optimization experiments. The idle preflight also
+# protects against older workflows which do not use this concurrency group.
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  cpu-fixtures:
+    name: Static checks and CPU-only P0 invariants
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: optimization/hunyuan15-v100-fp16
+          persist-credentials: false
+      - name: Confirm protected ancestry and Python syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE=7b4c3f5ab3595eff14450eeb2549779931ede405
+          git cat-file -e "${SOURCE}^{commit}"
+          git merge-base --is-ancestor "$SOURCE" HEAD
+          python3 -m py_compile \
+            benchmarks/hunyuan15_fp16/p0_hot_queue.py \
+            benchmarks/hunyuan15_fp16/p0_trace.py \
+            benchmarks/hunyuan15_fp16/p0_statistics.py \
+            benchmarks/hunyuan15_fp16/test_p0_hot.py \
+            wgp.py \
+            models/hyvideo/diffusion/pipelines/pipeline_hunyuan_video.py
+          python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p 'test_p0_hot.py'
+      - name: Assert no automatic V100 triggers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path(".github/workflows/hunyuan15-v100-fp16-p0-hot.yml")
+          content = path.read_text()
+          assert "workflow_dispatch:" in content
+          assert not any(line.startswith("  push:") or line.startswith("  schedule:") or line.startswith("  pull_request:")
+                         for line in content.splitlines())
+          print("HUNYUAN15_P0_DISPATCH_ONLY_PASS")
+          PY
+
+  v100-p0:
+    name: Serialized, offline V100 P0 hot benchmark
+    needs: cpu-fixtures
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 90
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      HUNYUAN15_TEST_OUT: /cache/ltx25/results/hunyuan15-p0-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      PYTHONPATH: .
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_DATASETS_OFFLINE: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      GRADIO_ANALYTICS_ENABLED: 'False'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: optimization/hunyuan15-v100-fp16
+          persist-credentials: false
+      - name: Ancestry and pinned branch guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e 7b4c3f5ab3595eff14450eeb2549779931ede405^{commit}
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          echo "Branch HEAD: $(git rev-parse HEAD)"
+          echo "P0_GIT_GUARD_PASS"
+      - name: GPU idle and cached offline identity preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$HUNYUAN15_PYTHON"
+          nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv,noheader
+          nvidia-smi --query-gpu=name --format=csv,noheader | grep -q 'V100'
+          ACTIVE="$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+' || true)"
+          if [ -n "$ACTIVE" ]; then
+            echo "Refusing to benchmark while a GPU process exists: $ACTIVE" >&2
+            exit 1
+          fi
+          test -s /cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints/hunyuanvideo1.5_480p_t2v_fp16.safetensors
+          test -s /cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1/converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors
+          echo "P0_IDLE_ASSETS_PASS"
+      - name: Fixed-reference warm-up plus five genuine hot generations
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p0_hot_queue.py 2>&1 | tee p0-hot.log
+          grep -Fq P0_PERSISTENT_QUEUE_PASS p0-hot.log
+          test -s "$HUNYUAN15_TEST_OUT/p0/hot/baseline.json"
+      - name: Optional separately labeled synchronized phase diagnosis
+        if: ${{ inputs.phase_diagnostic }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p0_hot_queue.py --diagnostic 2>&1 | tee p0-diagnostic.log
+          grep -Fq P0_PERSISTENT_QUEUE_PASS p0-diagnostic.log
+          test -s "$HUNYUAN15_TEST_OUT/p0/diagnostic/diagnostic.json"
+      - name: Optional changed-prompt persistence/correctness test
+        if: ${{ inputs.changed_prompt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p0_hot_queue.py --changed-prompt 2>&1 | tee p0-changed-prompt.log
+          grep -Fq P0_PERSISTENT_QUEUE_PASS p0-changed-prompt.log
+          test -s "$HUNYUAN15_TEST_OUT/p0/changed_prompt/baseline.json"
+      - name: Upload run manifest, trace, and logs even when a test fails
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p0-hot-results
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            p0-hot.log
+            p0-diagnostic.log
+            p0-changed-prompt.log
+            /cache/ltx25/results/hunyuan15-p0-${{ github.run_id }}-attempt${{ github.run_attempt }}/p0/**/baseline.json
+            /cache/ltx25/results/hunyuan15-p0-${{ github.run_id }}-attempt${{ github.run_attempt }}/p0/**/diagnostic.json
+            /cache/ltx25/results/hunyuan15-p0-${{ github.run_id }}-attempt${{ github.run_attempt }}/p0/**/requests.jsonl
+            /cache/ltx25/results/hunyuan15-p0-${{ github.run_id }}-attempt${{ github.run_attempt }}/p0/**/settings.json
+            /cache/ltx25/results/hunyuan15-p0-${{ github.run_id }}-attempt${{ github.run_attempt }}/p0/**/generation.log
+      - name: Upload MP4s for visual and frame-count inspection
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p0-hot-clips
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: /cache/ltx25/results/hunyuan15-p0-${{ github.run_id }}-attempt${{ github.run_attempt }}/p0/**/videos/*.mp4

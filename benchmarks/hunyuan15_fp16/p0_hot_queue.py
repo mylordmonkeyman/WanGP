@@ -168,7 +168,7 @@ def main():
     parser.add_argument("--plan-only", action="store_true")
     args = parser.parse_args()
     measured = 1 if args.diagnostic else 5
-    out = OUT / ("diagnostic" if args.diagnostic else "hot")
+    out = OUT / ("diagnostic" if args.diagnostic else "changed_prompt" if args.changed_prompt else "hot")
     values = prepare(out, measured, args.changed_prompt)
     if args.plan_only:
         print("P0_PLAN_PASS " + json.dumps({

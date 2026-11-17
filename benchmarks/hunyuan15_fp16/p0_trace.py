@@ -104,6 +104,54 @@ def record_qk(block, stream, q, k, q_norm, k_norm):
         })
 
 
+
+def profile_first_hot_attention(fn, *args, **kwargs):
+    """Opt-in CUPTI/PyTorch profiler for exactly one hot diagnostic attention call.
+
+    This is profiler-only, never an adoption wall-clock measurement. Preserve
+    the baseline attention function unchanged for all unprofiled calls.
+    """
+    if (_active is None or not _DIAGNOSTIC or
+            _active.get("request_no") != 2 or
+            _active.get("_attention_profile_claimed")):
+        return fn(*args, **kwargs)
+    _active["_attention_profile_claimed"] = True
+    import torch
+    try:
+        from torch.profiler import profile, ProfilerActivity
+        prof = profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                       record_shapes=False, profile_memory=False)
+        prof.__enter__()
+    except Exception as exc:
+        _active["attention_kernel_profile_error"] = "profiler_unavailable: " + repr(exc)
+        return fn(*args, **kwargs)
+    try:
+        result = fn(*args, **kwargs)
+    finally:
+        import sys
+        prof.__exit__(*sys.exc_info())
+    try:
+        # Only a *single* attention call is profiled. No trace of the entire
+        # four-step generation is retained in memory.
+        events = list(prof.events())
+        gpu = [e for e in events if "cuda" in str(
+            getattr(e, "device_type", "")).lower()]
+        _active["attention_kernel_profile"] = {
+            "request_no": _active["request_no"],
+            "cuda_kernel_names": list(dict.fromkeys(e.name for e in gpu))[:40],
+            "cuda_event_count": len(gpu),
+            "attention_ops": [{
+                "name": e.name, "count": int(e.count),
+                "self_cuda_time_us": float(getattr(e, "self_device_time_total", 0)),
+            } for e in prof.key_averages()
+                if any(k in e.key.lower() for k in (
+                    "attention", "flash", "sdpa", "scaled_dot", "fmha"))][:40],
+        }
+    except Exception as exc:
+        _active["attention_kernel_profile_error"] = "profiler_report: " + repr(exc)
+    return result
+
+
 def record_attention(q, k, q_lens, k_lens, resolved_mode):
     if _active is None or not _DIAGNOSTIC:
         return

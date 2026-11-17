@@ -9989,7 +9989,7 @@ def process_tasks_cli(queue, state):
                         p0_started = True
                     generate_media(task, send_cmd, plugin_data=plugin_data, **filtered_params)
                     if p0_started:
-                        p0_trace.end(wan_model, offloadobj)
+                        p0_trace.end(wan_model, offloadobj, effective_profile=loaded_profile)
                         p0_started = False
                     write_vram_debug_report(save_path, params.get("model_type"))
                     write_ram_debug_report(save_path, params.get("model_type"))
@@ -10001,7 +10001,7 @@ def process_tasks_cli(queue, state):
                 finally:
                     if p0_started:
                         try:
-                            p0_trace.end(wan_model, offloadobj, error=p0_error)
+                            p0_trace.end(wan_model, offloadobj, error=p0_error, effective_profile=loaded_profile)
                         except Exception as e:
                             print(f"\n  [P0 ERROR] {e}")
                             send_cmd("error", str(e))

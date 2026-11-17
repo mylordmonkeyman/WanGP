@@ -12,22 +12,24 @@ No work is authorized on `main` or the source research branch.
 |---|---|---|
 | Branch ancestry | Complete | Branch created from pinned research SHA; no source changes |
 | Fixed Comfy-Org T2V FP16 + converted rank-32 LoRA | Harness configured | Offline cached checkpoint and preconverted adapter required |
-| Single persistent process | Implemented, unexecuted | One `wgp.py --process settings.json` containing six tasks; production `process_tasks_cli` reuses `wan_model` |
-| One warm-up + five hot requests | Implemented, unexecuted | First full generation discarded; request start/end CUDA sync |
-| Model and MMGP identity | Instrumented, unexecuted | Same PID plus object IDs, 54 block end placements, model load count |
-| Hot offload-inclusive denoise | Diagnostic incomplete | Pipeline timing boundaries instrumented; early MMGP preloads/H2D remain to be traced |
-| Q/K pre-RMSNorm safety and FP32 reference | Diagnostic instrumented, unexecuted | Per-block image/text Q/K maxima, overflow counts; sample FP32-reference norm error |
-| Attention dispatch shapes and lengths | Diagnostic instrumented, unexecuted | Actual Q/K shapes and available q_lens/k_lens values; kernel name profiling still required |
-| VAE tile geometry and executed decoder calls | Diagnostic instrumented, unexecuted | VAE state, per-decoder-call input shapes; VAE precision probe still incomplete |
-| Separate cold one-video reference | Harness configured, unexecuted | Entire CLI process wall time, with one task only |
-| Changed prompt sequence | Harness configured, unexecuted | Same persistent queue, last request changes prompt only |
-| CPU-only fixture and noise gate | Committed, execution not verified | MAD, bootstrap CI, fixed config tests |
-| CPU-only branch push workflow | Running, prior checkout issue corrected | 8 CPU unit tests and syntax passed in a previous run; trigger-lint assertion corrected; full success pending |
-| V100 workflow | Committed, not executed | Dedicated branch-scoped trigger-file push or manual dispatch; idle GPU guard; single-job V100 serialization |
+| Single persistent process | **Measured; validated** | One process over six tasks, stable PID/model/pipeline/offload IDs, single checkpoint/model load; run `44013580271` |
+| One warm-up + five hot requests | **Measured** | Hot E2E 34.609 / 34.818 / 34.684 / 34.631 / 34.651 s; median 34.651 s, MAD 0.034 s |
+| Model and MMGP identity | **Measured, MMGP residency incomplete** | 54 blocks on CPU after requests; stable offload identity; read-only pool/transfer snapshots added for P1B |
+| Hot offload-inclusive denoise | **Provisional 19.657 s median** | Early transformer preloads and H2D still require attribution; do not promote as verified inclusive-denoise time |
+| Q/K pre-RMSNorm safety and FP32 reference | **Measured one seed; more seeds pending** | 864 tensor observations, maximum |Q/K| 44.5, zero FP16-square threshold violations, max sampled FP32 reference difference 0.03578 |
+| Attention dispatch shapes and lengths | **Measured; kernel profiling queued** | 216 SDPA calls, Q/K [1,14159,16,128], 14,040 video + 119 text tokens; kernel identity pending |
+| VAE tile geometry and executed decoder calls | **Measured** | Runtime module FP16; 256px/64-frame preset 1, overlap .25, 15 decoder calls; arithmetic dtype finer probe pending |
+| Separate cold one-video reference | **Measured** | Whole-process 68.9 s, request time 49.891 s |
+| Changed prompt sequence | **Validated** | Five hot durations 34.770–36.156 s, last changed prompt incurred ~1.415 s conditioning |
+| CPU-only fixture and noise gate | **Passed** | All eight tests, syntax and ancestor guards passed on Github-hosted runner |
+| CPU-only branch push workflow | **Passing** | `.github/workflows/hunyuan15-p0-cpu.yml`, branch-only, no GPU jobs |
+| V100 workflow | **Completed successfully** | P0 `44013580271`; P1B `44016638220` launched; SDPA kernel profiler `44016941390` queued |
 
-**P0 has NOT passed.** All numerical and speed conclusions are pending actual
-runner tests. No performance default, model math, scheduler, VAE precision,
-memory profile, or attention kernel has been changed.
+**P0 has a credible first hot baseline, but its full gate has NOT passed.**
+MMGP H2D and pin-pool lifecycle, actual SDPA CUDA kernel, LoRA/kernel
+attribution, and startup subphases remain open. Run results and direct links:
+[`P0_RESULTS.md`](P0_RESULTS.md). No performance default, model math,
+scheduler, VAE precision, memory profile, or attention kernel has been changed.
 
 ## Reproduce on the existing runner when the GPU is idle
 

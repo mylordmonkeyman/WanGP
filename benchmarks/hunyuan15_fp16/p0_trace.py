@@ -73,6 +73,73 @@ def mark(name, details=None):
     _active["events"].append(event)
 
 
+def record_qk(block, stream, q, k, q_norm, k_norm):
+    """Diagnostic-only pre-RMSNorm reductions; transfer scalars after timing."""
+    if _active is None or not _DIAGNOSTIC:
+        return
+    import torch
+    storage = _active.setdefault("_qk_gpu", [])
+    for label, x, norm in (("q", q, q_norm), ("k", k, k_norm)):
+        bound = torch.finfo(x.dtype).max ** 0.5 if x.dtype == torch.float16 else float("inf")
+        # Sampling 16 tokens is enough to flag a discrepancy without keeping
+        # complete Q/K tensors alive or adding many GiB of diagnostic state.
+        sample = x[:, :min(16, x.shape[1])].detach()
+        legacy = sample.clone()
+        scale = legacy.pow(2).mean(dim=-1, keepdim=True)
+        scale.add_(norm.eps)
+        scale.rsqrt_()
+        legacy.mul_(scale)
+        if hasattr(norm, "weight"):
+            legacy.mul_(norm.weight)
+        ref = sample.float()
+        ref = ref * torch.rsqrt(ref.square().mean(dim=-1, keepdim=True) + norm.eps)
+        if hasattr(norm, "weight"):
+            ref = ref * norm.weight.float()
+        storage.append({
+            "block_object_id": id(block), "stream": stream, "tensor": label,
+            "dtype": str(x.dtype), "shape": list(x.shape), "safe_square_bound": bound,
+            "amax": x.detach().abs().amax(),
+            "unsafe_square_elements": (x.detach().abs() > bound).sum(),
+            "fp32_reference_sample_max_abs_diff": (legacy.float() - ref).abs().amax(),
+        })
+
+
+def record_attention(q, k, q_lens, k_lens, resolved_mode):
+    if _active is None or not _DIAGNOSTIC:
+        return
+    def copy_lens(lengths):
+        if lengths is None:
+            return None
+        return lengths.detach().clone() if hasattr(lengths, "detach") else list(lengths)
+    _active.setdefault("_attention_gpu", []).append({
+        "q_shape": list(q.shape), "k_shape": list(k.shape),
+        "q_lens": copy_lens(q_lens), "k_lens": copy_lens(k_lens),
+        "resolved_mode_at_dispatch": resolved_mode,
+    })
+
+
+def record_vae_config(vae, latent):
+    if _active is None or not _DIAGNOSTIC:
+        return
+    _active["vae_configuration"] = {
+        "latent_shape": list(latent.shape),
+        "tile_sample_min_size": getattr(vae, "tile_sample_min_size", None),
+        "tile_sample_min_tsize": getattr(vae, "tile_sample_min_tsize", None),
+        "tile_latent_min_size": getattr(vae, "tile_latent_min_size", None),
+        "tile_latent_min_tsize": getattr(vae, "tile_latent_min_tsize", None),
+        "overlap_factor": getattr(vae, "tile_overlap_factor", None),
+        "spatial_tiling": getattr(vae, "use_spatial_tiling", None),
+        "temporal_tiling": getattr(vae, "use_temporal_tiling", None),
+        "module_dtype": str(getattr(vae, "_model_dtype", None)),
+    }
+
+
+def record_vae_decoder_call(latent):
+    if _active is None or not _DIAGNOSTIC:
+        return
+    _active.setdefault("vae_decoder_input_shapes", []).append(list(latent.shape))
+
+
 def end(model, offloadobj, error=None):
     """Capture state after a written output, outside the measured interval."""
     global _active
@@ -127,6 +194,28 @@ def end(model, offloadobj, error=None):
         phases["output"] = round(finished - events["decode_end"], 6)
     record["phase_seconds"] = phases
     record["phase_timings_diagnostic_only"] = _DIAGNOSTIC
+    # Deferred GPU-to-host transfer: reductions are collected during the
+    # diagnostic and materialized ONLY after the timed request has ended.
+    by_object = {id(b): i for i, b in enumerate(
+        getattr(getattr(model, "model", None), "double_blocks", ()))}
+    norms = record.pop("_qk_gpu", [])
+    record["pre_norm_qk"] = [{
+        **{k: v for k, v in entry.items() if k not in (
+            "amax", "unsafe_square_elements", "fp32_reference_sample_max_abs_diff")},
+        "block": by_object.get(entry["block_object_id"]),
+        "amax": entry["amax"].item(),
+        "unsafe_square_elements": entry["unsafe_square_elements"].item(),
+        "fp32_reference_sample_max_abs_diff":
+            entry["fp32_reference_sample_max_abs_diff"].item(),
+    } for entry in norms]
+    attn = record.pop("_attention_gpu", [])
+    for entry in attn:
+        for key in ("q_lens", "k_lens"):
+            value = entry[key]
+            if hasattr(value, "cpu"):
+                entry[key] = value.cpu().tolist()
+    record["attention_calls"] = attn
+    record["vae_decoder_calls"] = len(record.get("vae_decoder_input_shapes", []))
     path = Path(os.environ["HUNYUAN15_P0_TRACE_DIR"]) / "requests.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:

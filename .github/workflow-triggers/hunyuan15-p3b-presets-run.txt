@@ -1,0 +1,1 @@
+User-authorized branch-only Hunyuan1.5 V100 P3B stock VAE presets 0/1/2/3 hot performance screen. GPU serialized, idle preflight, same FP16 checkpoint and LoRA, one warmup + five hot per preset; no code or default tiling changes.

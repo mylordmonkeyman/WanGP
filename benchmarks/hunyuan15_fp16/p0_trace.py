@@ -140,6 +140,46 @@ def record_vae_decoder_call(latent):
     _active.setdefault("vae_decoder_input_shapes", []).append(list(latent.shape))
 
 
+
+def _mmgp_snapshot(manager):
+    """Read-only offload counters: never infer raw PCIe bytes from block count."""
+    if manager is None:
+        return None
+    import importlib
+    mm = importlib.import_module("mmgp.offload")
+    pool = getattr(mm, "_pool", None)
+    pool_stats = pool.stats() if pool is not None else {}
+    pinned_mod = getattr(mm, "pinned", None)
+    preload = getattr(manager, "preloaded_blocks_per_model", {})
+    blocks = getattr(manager, "blocks_of_modules_sizes", {})
+    return {
+        "offload_object_id": id(manager),
+        "bulk_move_blocks_cumulative": getattr(manager, "transfers", None),
+        "pinned_total_bytes": getattr(pinned_mod, "total_bytes", None),
+        "pinned_pool_epoch": getattr(pool, "epoch", None),
+        "pinned_pool_version": getattr(pool, "version", None),
+        "pinned_pool_stats": {str(k): {"blocks": int(v[0]), "locked_bytes": int(v[1]),
+                             "in_place_bytes": int(v[2])}
+                              for k, v in pool_stats.items()},
+        "preloaded_block_counts": {str(k): len(v) for k, v in preload.items()},
+        "preloaded_block_bytes": {str(k): int(sum(
+            blocks.get(str(k) + "/" + str(block_name), 0)
+            for block_name in v))
+            for k, v in preload.items()},
+        "prefetch_window": getattr(manager, "prefetch_window", None),
+        "inflight_count": len(getattr(manager, "inflight", {})),
+        "pinned_models": sorted(str(v) for v in getattr(manager, "pinned_models", ())),
+        "pool_models": sorted(str(v) for v in getattr(manager, "pool_models", ())),
+        "max_reservable_memory_bytes": getattr(manager, "max_reservable_memory", None),
+    }
+
+
+def record_request_begin_mmgp(manager):
+    if _active is None:
+        return
+    _active["_mmgp_start"] = _mmgp_snapshot(manager)
+
+
 def end(model, offloadobj, error=None):
     """Capture state after a written output, outside the measured interval."""
     global _active
@@ -175,6 +215,16 @@ def end(model, offloadobj, error=None):
                 record["mmgp_" + name] = value
             except (TypeError, ValueError):
                 pass
+    start_snapshot = record.pop("_mmgp_start", None)
+    end_snapshot = _mmgp_snapshot(offloadobj)
+    record["mmgp_start"] = start_snapshot
+    record["mmgp_end"] = end_snapshot
+    if start_snapshot and end_snapshot and start_snapshot["offload_object_id"] == end_snapshot["offload_object_id"]:
+        before = start_snapshot["bulk_move_blocks_cumulative"]
+        after = end_snapshot["bulk_move_blocks_cumulative"]
+        if before is not None and after is not None:
+            record["mmgp_bulk_move_block_delta"] = after - before
+            record["mmgp_bulk_move_block_delta_is_not_h2d_bytes"] = True
     record["pin_pool_reuse_verified"] = False
     record["h2d_bytes_verified"] = False
     events = {e["name"]: e["at"] for e in record["events"]}

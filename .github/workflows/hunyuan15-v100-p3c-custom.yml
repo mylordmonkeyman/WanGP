@@ -1,0 +1,149 @@
+name: Hunyuan 1.5 V100 P3C larger VAE tile hot quality trials
+
+on:
+  push:
+    branches:
+      - optimization/hunyuan15-v100-fp16
+    paths:
+      - .github/workflow-triggers/hunyuan15-p3c-custom-run.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  cpu-safety:
+    name: Branch and native-only tile policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify branch/ancestor, syntax and geometry safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = optimization/hunyuan15-v100-fp16
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          python3 -m py_compile wgp.py models/hyvideo/vae/hunyuanvideo_15_vae.py \
+            benchmarks/hunyuan15_fp16/p0_hot_queue.py \
+            benchmarks/hunyuan15_fp16/p3c_custom_compare.py \
+            shared/hunyuan15_p3c_tile_policy.py
+          python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_p3c_tile_policy.py
+          python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_p0_hot.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path(".github/workflows/hunyuan15-v100-p3c-custom.yml").read_text()
+          assert "      - .github/workflow-triggers/hunyuan15-p3c-custom-run.txt" in s
+          assert "      - optimization/hunyuan15-v100-fp16" in s
+          assert not any(x in ("  schedule:","  pull_request:") for x in s.splitlines())
+          print("P3C_NO_BROAD_GPU_TRIGGER_PASS")
+          PY
+
+  v100-custom-tiles:
+    name: 256 baseline then 384 and guarded 512, fixed native default MMGP1
+    needs: cpu-safety
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 105
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      P3C_ROOT: /cache/ltx25/results/hunyuan15-p3c-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      PYTHONPATH: .
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_DATASETS_OFFLINE: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      GRADIO_ANALYTICS_ENABLED: 'False'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirm V100 is idle and existing model/checkpoints are cached
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$HUNYUAN15_PYTHON"
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+          nvidia-smi --query-gpu=name --format=csv,noheader | grep -q V100
+          ACTIVE="$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+' || true)"
+          if [ -n "$ACTIVE" ]; then echo "V100 occupied: $ACTIVE" >&2; exit 1; fi
+          test -s /cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints/hunyuanvideo1.5_480p_t2v_fp16.safetensors
+          test -s /cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1/converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors
+          echo P3C_IDLE_AND_CACHES_PASS
+      - name: Measure existing 256px baseline, then custom 384/512px with memory headroom
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$P3C_ROOT"
+          for TILE in 256 384 512; do
+            if [ "$TILE" = 512 ]; then
+              "$HUNYUAN15_PYTHON" - <<'PY'
+          import json,os
+          from pathlib import Path
+          root=Path(os.environ["P3C_ROOT"])
+          p=root/"arm_384/p3c/spatial_384/baseline.json"
+          if not p.is_file():
+              raise SystemExit("P3C_SKIP_512: no valid 384px reference (safety guard)")
+          d=json.loads(p.read_text())
+          allocated=d["peak_vram_bytes"]/2**30
+          print("P3C_384_PEAK_TORCH_GIB",round(allocated,3))
+          if allocated>16:
+              raise SystemExit("P3C_SKIP_512: 384px peak allocated >16GiB, preserve workspace headroom")
+          PY
+            fi
+            echo "P3C_TILE_BEGIN $TILE" | tee "p3c-$TILE.log"
+            set +e
+            HUNYUAN15_TEST_OUT="$P3C_ROOT/arm_$TILE" "$HUNYUAN15_PYTHON" -u \
+              benchmarks/hunyuan15_fp16/p0_hot_queue.py --p3c --p3c-spatial "$TILE" \
+              2>&1 | tee -a "p3c-$TILE.log"
+            EXIT="${PIPESTATUS[0]}"
+            set -e
+            echo "P3C_TILE_END $TILE exit=$EXIT" | tee -a "p3c-$TILE.log"
+            echo "$EXIT" > "$P3C_ROOT/tile-$TILE-exit.txt"
+            if [ "$EXIT" -ne 0 ]; then
+              echo "P3C trial failed for tile $TILE; do not continue with larger tiles" >&2
+              exit "$EXIT"
+            fi
+            grep -Fq P3C_HOT_VAE_PASS "p3c-$TILE.log"
+          done
+      - name: Compare actual VAE decoder calls, hot time, frame differences, PSNR and SSIM
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p3c_custom_compare.py "$P3C_ROOT" \
+            | tee p3c-summary.log
+          grep -Fq P3C_CUSTOM_VAE_REPORT p3c-summary.log
+          test -s "$P3C_ROOT/p3c_custom_summary.json"
+      - name: Upload reports and traces even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p3c-custom-vae-reports
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            p3c-*.log
+            /cache/ltx25/results/hunyuan15-p3c-${{ github.run_id }}-attempt${{ github.run_attempt }}/tile-*-exit.txt
+            /cache/ltx25/results/hunyuan15-p3c-${{ github.run_id }}-attempt${{ github.run_attempt }}/p3c_custom_summary.json
+            /cache/ltx25/results/hunyuan15-p3c-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p3c/*/baseline.json
+            /cache/ltx25/results/hunyuan15-p3c-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p3c/*/trace/requests.jsonl
+            /cache/ltx25/results/hunyuan15-p3c-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p3c/*/generation.log
+      - name: Upload videos for quality and seam review
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p3c-custom-vae-clips
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: /cache/ltx25/results/hunyuan15-p3c-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p3c/*/videos/*.mp4

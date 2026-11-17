@@ -1,6 +1,7 @@
 # Copyright 2024-2025 The Alibaba Wan Team Authors. All rights reserved.
 # Modifications Copyright (c) 2025-2026 DeepBeepMeep - part of WanGP, WanGP Community License 2.0 (see LICENSE.txt)
 import functools
+import os
 import sys
 from contextlib import contextmanager, nullcontext
 
@@ -606,6 +607,11 @@ def pay_attention(
             v = v.squeeze(0)
 
 
+    # Record actual dispatch-side Q/K shapes and GPU sequence length tensors.
+    # The opt-in diagnostic does not force a GPU-to-host .item() in this path.
+    if os.environ.get("HUNYUAN15_P0_DIAGNOSTIC") == "1":
+        from benchmarks.hunyuan15_fp16 import p0_trace
+        p0_trace.record_attention(q, k, q_lens, k_lens, attn)
     # apply attention
     if sage_rows:
         qkv_list = [t.reshape(-1, *t.shape[2:]).view(t.shape) for t in (q, k, v)]  # batch items one after another (copies only otherwise)

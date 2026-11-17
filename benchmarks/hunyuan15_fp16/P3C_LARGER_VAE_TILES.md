@@ -43,4 +43,20 @@ Use original Comfy-Org FP16 transformer, the same converted rank-32 LightX2V LoR
 
 Record median and MAD hot request time, preliminary decode/copy duration, PyTorch allocated peak, 33-frame count, executed spatial decoder calls, image/frame hashes, FFmpeg PSNR and SSIM on H264-decoded corresponding clips. These are **not lossless pre-encode parity metrics**, so visual seam inspection, lossless frame/latent comparisons, peak reserve/overall VRAM headroom, and a balanced follow-up are required before adopting any custom tile as default.
 
-**Promotion state:** not promoted; await measured results from the linked run. A mere reduction in source-derived decoder positions is not a speedup claim.
+**Promotion state:** not promoted; measured results below do not satisfy all quality and repeatability gates.
+
+## Completed V100 trial — 2026-11-17
+
+[Run 44027986619](https://github.com/mylordmonkeyman/WanGP/actions/runs/44027986619) completed all three video-generation arms successfully, but the post-generation report step failed with `KeyError: 'clips'` (report mutates/removes the reference clips before reusing them). The report-script bug was corrected in commit `202fada0`; **no GPU rerun is needed for these measurements**. The uploaded reports and 18 clips were independently analyzed offline; source: `p3c_local_analysis.json` from archived artifacts, with FFmpeg decoded H264 comparisons. All arms: one warmup plus five hot runs, native-only selected MMGP1 fixed, same model/LoRA/seed, 832×480×33, 4 steps.
+
+| Spatial tile | Actual decoder calls per generation | Median hot E2E (s) | Median decode/copy (s) | Median denoise (s) | Peak PyTorch allocated (GiB) | PSNR vs 256 (dB) | SSIM vs 256 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 256 | 15 | 34.080267 | 11.568600 | 19.111365 | 5.640 | reference | reference |
+| 384 | 6 | 33.086775 | 10.624149 | 19.128679 | 9.534 | 48.01802 | 0.992565 |
+| 512 | 6 | 33.538176 | 10.981524 | 19.127194 | 14.249 | 48.04734 | 0.992586 |
+
+The 384 tile improves hot E2E by 0.993492 s (2.91%) and decode/copy by 0.944451 s (8.16%). The 512 tile improves hot E2E by 0.542091 s (1.59%) and decode/copy by 0.587076 s (5.08%). The actual spatial decoder-call reductions are 15→6, confirmed in all six generations per arm. All 33 decoded H264 frames differ by hash for both larger tiles, but PSNR/SSIM are high and consistent across all five hot clips per arm. The unchanged 256 baseline is bit-identical to itself across hot clips.
+
+The 32 GiB V100 has *nominal* 32-minus-PyTorch-allocated differences of approximately 26.36 / 22.47 / 17.75 GiB respectively, **not actual GPU headroom**: PyTorch allocated peaks omit cached/reserved, CUDA context, model offload and other allocations. No claim about measured free device memory is supported by these figures. Tile-seam inspection and lossless pre-encode comparison remain outstanding; H264 PSNR/SSIM alone cannot establish seam absence. The single sequential 256→384→512 sweep is not balanced or replicated. **Do not promote either tile** before visual seam review, memory-reserve/device-headroom measurement and a balanced follow-up with explicit quality thresholds. 384 is the provisional speed candidate, not a production default.
+
+[Report artifact](https://github.com/mylordmonkeyman/WanGP/actions/runs/44027986619/artifacts/14304716305) · [Video artifact](https://github.com/mylordmonkeyman/WanGP/actions/runs/44027986619/artifacts/14305040483)

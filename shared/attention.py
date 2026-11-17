@@ -694,3 +694,14 @@ def pay_attention(
 
 
     return x 
+
+# Profiler-only P0 investigation. Never wrap production/baseline attention
+# without an explicit Hunyuan 1.5 diagnostic flag. One hot call at most.
+if os.environ.get("HUNYUAN15_P0_PROFILE_FIRST_ATTENTION") == "1":
+    _hunyuan15_original_pay_attention = pay_attention
+
+    @functools.wraps(_hunyuan15_original_pay_attention)
+    def pay_attention(*args, **kwargs):
+        from benchmarks.hunyuan15_fp16 import p0_trace
+        return p0_trace.profile_first_hot_attention(
+            _hunyuan15_original_pay_attention, *args, **kwargs)

@@ -8,7 +8,8 @@
     "auto_quantize": false,
     "URLs": [
       "https://huggingface.co/lightx2v/Hy1.5-Distill-Models/resolve/main/hy1.5_t2v_480p_lightx2v_4step.safetensors"
-    ]
+    ],
+    "default_mmgp_profile": 1
   },
   "resolution": "832x480",
   "video_length": 33,

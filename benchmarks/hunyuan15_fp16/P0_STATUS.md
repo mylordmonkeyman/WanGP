@@ -28,8 +28,7 @@ No work is authorized on `main` or the source research branch.
 **P0 has a credible first hot baseline, but its full gate has NOT passed.**
 MMGP H2D and pin-pool lifecycle, actual SDPA CUDA kernel, LoRA/kernel
 attribution, and startup subphases remain open. Run results and direct links:
-[`P0_RESULTS.md`](P0_RESULTS.md). No performance default, model math,
-scheduler, VAE precision, memory profile, or attention kernel has been changed.
+[`P0_RESULTS.md`](P0_RESULTS.md). The user has since selected **MMGP\nprofile 1 as the tagged native-FP16 Hunyuan 1.5 finetune default**, an\nexplicit exception to the inconclusive P1B statistical gate; it has not\nchanged the historical P0 profile-0 benchmark, VAE precision, attention\nkernel, BF16, or other-model defaults. See [`P1B_SCREEN_RESULTS.md`](P1B_SCREEN_RESULTS.md).
 
 ## Reproduce on the existing runner when the GPU is idle
 

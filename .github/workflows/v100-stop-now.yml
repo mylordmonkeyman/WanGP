@@ -1,0 +1,25 @@
+name: Stop active V100 optimization work
+
+on:
+  push:
+    branches:
+      - optimization/hunyuan15-v100-fp16
+    paths:
+      - .github/workflow-triggers/v100-stop-now.txt
+
+permissions:
+  contents: read
+
+# Deliberately interrupts the existing V100 optimization lock.  The only job
+# is on a GitHub-hosted runner: never requests or uses a V100 worker.
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: true
+
+jobs:
+  confirm-stop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Cancel prior active V100 workflow; launch no GPU work
+        run: echo 'Stop signal delivered via concurrency group; no GPU runner requested.'

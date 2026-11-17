@@ -1,0 +1,125 @@
+name: Hunyuan 1.5 V100 P1B balanced MMGP 0 versus 1
+
+on:
+  push:
+    branches:
+      - optimization/hunyuan15-v100-fp16
+    paths:
+      - .github/workflow-triggers/hunyuan15-p1b-balanced-run.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  cpu-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify branch, ancestry, source and fixture syntax
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = optimization/hunyuan15-v100-fp16
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          python3 -m py_compile benchmarks/hunyuan15_fp16/p0_hot_queue.py benchmarks/hunyuan15_fp16/p1b_balanced_compare.py
+          python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_p0_hot.py
+      - name: Narrow trigger safety guard
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path(".github/workflows/hunyuan15-v100-p1b-balanced.yml").read_text()
+          assert "      - .github/workflow-triggers/hunyuan15-p1b-balanced-run.txt" in s
+          assert "      - optimization/hunyuan15-v100-fp16" in s
+          assert not any(v in ("  schedule:", "  pull_request:") for v in s.splitlines())
+          print("P1B_BALANCED_SAFE_TRIGGER_PASS")
+          PY
+
+  v100-balanced:
+    name: Four independent hot queues A0-B1-B1-A0
+    needs: cpu-fixtures
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 120
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      P1B_BALANCED_ROOT: /cache/ltx25/results/hunyuan15-p1b-balanced-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      PYTHONPATH: .
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_DATASETS_OFFLINE: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      GRADIO_ANALYTICS_ENABLED: 'False'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: GPU idle, offline model, and source preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          test -x "$HUNYUAN15_PYTHON"
+          nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv,noheader
+          nvidia-smi --query-gpu=name --format=csv,noheader | grep -q V100
+          ACTIVE="$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+' || true)"
+          if [ -n "$ACTIVE" ]; then echo "GPU busy, refuse test: $ACTIVE" >&2; exit 1; fi
+          test -s /cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints/hunyuanvideo1.5_480p_t2v_fp16.safetensors
+          test -s /cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1/converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors
+          free -h
+          echo P1B_BALANCED_IDLE_PASS
+      - name: Run A0 B1 B1 A0 with independent warm-ups, no concurrency
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$P1B_BALANCED_ROOT"
+          for TAG in A1 B1 B2 A2; do
+            if [[ "$TAG" == A* ]]; then PROFILE=0; else PROFILE=1; fi
+            echo "P1B_BALANCED_BEGIN ${TAG} profile ${PROFILE}" | tee "p1b-balanced-${TAG}.log"
+            HUNYUAN15_TEST_OUT="$P1B_BALANCED_ROOT/$TAG" "$HUNYUAN15_PYTHON" -u \
+              benchmarks/hunyuan15_fp16/p0_hot_queue.py --p1b --profile "$PROFILE" \
+              2>&1 | tee -a "p1b-balanced-${TAG}.log"
+            test -s "$P1B_BALANCED_ROOT/$TAG/p1b/profile_${PROFILE}/baseline.json"
+            echo "P1B_BALANCED_SUCCESS ${TAG}" | tee -a "p1b-balanced-${TAG}.log"
+          done
+      - name: Aggregate hot E2E, host memory, and all decoded frame checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p1b_balanced_compare.py \
+            "$P1B_BALANCED_ROOT" | tee p1b-balanced-report.log
+          grep -Fq P1B_BALANCED_REPORT p1b-balanced-report.log
+          test -s "$P1B_BALANCED_ROOT/p1b_balanced_report.json"
+      - name: Upload reports even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p1b-balanced-reports
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            p1b-balanced-*.log
+            p1b-balanced-report.log
+            /cache/ltx25/results/hunyuan15-p1b-balanced-${{ github.run_id }}-attempt${{ github.run_attempt }}/p1b_balanced_report.json
+            /cache/ltx25/results/hunyuan15-p1b-balanced-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p1b/profile_*/baseline.json
+            /cache/ltx25/results/hunyuan15-p1b-balanced-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p1b/profile_*/trace/requests.jsonl
+            /cache/ltx25/results/hunyuan15-p1b-balanced-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p1b/profile_*/generation.log
+      - name: Upload four-session video samples for independent quality review
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p1b-balanced-clips
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: /cache/ltx25/results/hunyuan15-p1b-balanced-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p1b/profile_*/videos/*.mp4

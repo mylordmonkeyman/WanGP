@@ -1,0 +1,2 @@
+Explicit P2A profile-0 A/B experiment: baseline GPU length scalar .item per block vs Hunyuan-native-FP16 opt-in CPU scalar cached once per denoiser invocation.
+Same seeds, checkpoint, LoRA, attention, VAE, sampler. One warm-up + five hot generations per arm. Serialized behind P1B balanced workflow, GPU idle preflight. No default promotion.

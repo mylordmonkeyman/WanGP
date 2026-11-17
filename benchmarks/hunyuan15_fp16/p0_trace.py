@@ -228,7 +228,7 @@ def record_request_begin_mmgp(manager):
     _active["_mmgp_start"] = _mmgp_snapshot(manager)
 
 
-def end(model, offloadobj, error=None):
+def end(model, offloadobj, error=None, effective_profile=None):
     """Capture state after a written output, outside the measured interval."""
     global _active
     if _active is None:
@@ -239,6 +239,7 @@ def end(model, offloadobj, error=None):
     record["end"] = finished
     record["hot_request_seconds"] = round(finished - record["start"], 6)
     record["error"] = str(error) if error is not None else None
+    record["effective_loaded_profile"] = effective_profile
     record["model_loads_cumulative"] = _load_count
     record["model_object_id"] = id(model) if model is not None else None
     record["pipeline_object_id"] = id(getattr(model, "pipeline", None)) if model is not None else None

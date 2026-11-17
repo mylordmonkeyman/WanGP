@@ -58,6 +58,27 @@ changed prompt incurred ~1.415 seconds in the conditioning phase.
 - Peak `torch.cuda.max_memory_allocated()` was **5.64 GiB**; this is a
   PyTorch allocator peak, not a total device utilization/VRAM headroom claim.
 
+## Attention dispatch and synchronization follow-up
+
+Profiler-only runs:
+- Initial report parsing failed on `FunctionEventAvg.name` (GitHub Actions
+  `44016941390`); corrected to `.key` and reran as
+  https://github.com/mylordmonkeyman/WanGP/actions/runs/44019009553 .
+- Resolved PyTorch dispatch operators: `aten::scaled_dot_product_attention`
+  → `aten::_scaled_dot_product_efficient_attention`
+  → `aten::_efficient_attention_forward`.
+- **Exact CUDA kernel function name remains unknown.** The CUDA profiler
+  reported a CUPTI callback-thread error; its visible events were two copy
+  categories, not the expected attention kernel name. Do not falsely claim
+  a particular CUDA kernel from the PyTorch operator label.
+- P0 traces show **216 SDPA calls per 4-step clip**, each carrying
+  `q_lens=k_lens=[14159]`. Existing batch-1 SDPA code performs two
+  scalar `.item()` reads per call (code-derived **432 synchronous reads
+  per clip**). A separately flagged P2A candidate converts that length
+  once per transformer forward (four forward calls at the reference geometry,
+  expected four GPU→CPU length reads); the performance/quality consequence
+  remains under test, and no default path was changed.
+
 ## P0 gate outstanding
 
 Offload-inclusive denoise preloads, per-request H2D/D2H bytes/waits,

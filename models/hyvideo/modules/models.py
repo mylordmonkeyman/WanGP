@@ -299,7 +299,12 @@ class MMDoubleStreamBlock(nn.Module):
             img_modulated = img_modulated.to(torch.float16 if getattr(self, "native_fp16", False) else torch.bfloat16)
             modulate_( img_modulated[:, :frist_frame_token_num], shift=tr_img_mod2_shift, scale=tr_img_mod2_scale)
             modulate_( img_modulated[:, frist_frame_token_num:], shift=img_mod2_shift, scale=img_mod2_scale)
-            self.img_mlp.apply_(img_modulated)        
+            if (getattr(self, "native_fp16", False) and
+                    os.environ.get("HUNYUAN15_P2B_MLP_DIVIDE")):
+                from shared.hunyuan15_p2b_mlp_policy import native_mlp_divide
+                self.img_mlp.apply_(img_modulated, divide=native_mlp_divide(True))
+            else:
+                self.img_mlp.apply_(img_modulated)
             apply_gate_and_accumulate_(img[:, :frist_frame_token_num], img_modulated[:, :frist_frame_token_num], gate=tr_img_mod2_gate)
             apply_gate_and_accumulate_(img[:, frist_frame_token_num:], img_modulated[:, frist_frame_token_num:], gate=img_mod2_gate)
             del img_modulated
@@ -310,7 +315,12 @@ class MMDoubleStreamBlock(nn.Module):
             img_modulated = self.img_norm2(img)
             img_modulated = img_modulated.to(torch.float16 if getattr(self, "native_fp16", False) else torch.bfloat16)
             modulate_( img_modulated , shift=img_mod2_shift, scale=img_mod2_scale)
-            self.img_mlp.apply_(img_modulated)        
+            if (getattr(self, "native_fp16", False) and
+                    os.environ.get("HUNYUAN15_P2B_MLP_DIVIDE")):
+                from shared.hunyuan15_p2b_mlp_policy import native_mlp_divide
+                self.img_mlp.apply_(img_modulated, divide=native_mlp_divide(True))
+            else:
+                self.img_mlp.apply_(img_modulated)
             apply_gate_and_accumulate_(img, img_modulated, gate=img_mod2_gate)
             del img_modulated
 

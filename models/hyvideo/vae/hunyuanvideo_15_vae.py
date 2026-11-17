@@ -18,6 +18,7 @@
 from shared.utils.phase_progress import vae_decoding_progress, set_phase_status
 import math
 import os
+import json
 from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 
@@ -824,6 +825,8 @@ class AutoencoderKLConv3D(ModelMixin, ConfigMixin):
             for j in range(0, W, overlap_size):
                 tile = z[:, :, :, i: i + self.tile_latent_min_size, j: j + self.tile_latent_min_size]
                 decoded = self.decoder(tile)
+                if os.environ.get("HUNYUAN15_P3C_TRACE") == "1":
+                    self._p3c_actual_spatial_decoder_calls += 1
                 row.append(decoded)
             rows.append(row)
 
@@ -895,6 +898,8 @@ class AutoencoderKLConv3D(ModelMixin, ConfigMixin):
 
     def decode(self, z: Tensor, return_dict: bool = True, generator=None):
 
+        if os.environ.get("HUNYUAN15_P3C_TRACE") == "1":
+            self._p3c_actual_spatial_decoder_calls = 0
         if os.environ.get("HUNYUAN15_P0_DIAGNOSTIC") == "1":
             from benchmarks.hunyuan15_fp16 import p0_trace
             p0_trace.record_vae_config(self, z)
@@ -918,6 +923,17 @@ class AutoencoderKLConv3D(ModelMixin, ConfigMixin):
             else:
                 decoded = _decode(z)
 
+            if os.environ.get("HUNYUAN15_P3C_TRACE") == "1":
+                print("HUNYUAN15_P3C_RUNTIME_DECODER_CALLS " + json.dumps({
+                    "spatial_calls": self._p3c_actual_spatial_decoder_calls,
+                    "spatial_tiling": self.use_spatial_tiling,
+                    "temporal_tiling": self.use_temporal_tiling,
+                    "parallel_tiling": self._tile_parallelism_enabled,
+                    "latent_shape": list(z.shape),
+                    "tile_sample_min_size": self.tile_sample_min_size,
+                    "tile_sample_min_tsize": self.tile_sample_min_tsize,
+                    "output_shape": list(decoded.shape),
+                }, sort_keys=True), flush=True)
             if not return_dict:
                 return (decoded,)
 

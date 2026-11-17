@@ -38,12 +38,13 @@ def summarize(root:Path):
     arms={str(n):read(root,n) for n in (4,2,1)}
     a=arms["4"]
     if a["status"]!="complete":raise RuntimeError("Stock divide=4 baseline is missing")
+    reference_settings={key:a[key] for key in ("checkpoint_sha256","converted_lora_sha256","settings")}
     reference=frame_md5(a["clips"][1]["clip"])
     if len(reference)!=33:raise RuntimeError("Baseline not 33 decoded frames")
     for arm in arms.values():
         if arm["status"]!="complete":continue
         for key in ("checkpoint_sha256","converted_lora_sha256","settings"):
-            if arm[key]!=a[key]:
+            if arm[key]!=reference_settings[key]:
                 raise RuntimeError(f"P2B changed model/reference setting {key}")
         diffs=[]
         for clip in arm["clips"][1:]:

@@ -1,0 +1,5 @@
+Hunyuan 1.5 V100 P0 baseline explicit launch
+Authorized by the user in chat on 2026-11-16.
+Scope: CPU static gates, separate cold reference, persistent one-warm-up + five hot runs, independent diagnostics, changed-prompt validation.
+Run once on push to this file; subsequent launches require a new edit/commit to this exact file.
+Use the existing offline checkpoints and idle-GPU guard. Do not modify main or research branches.

@@ -7730,7 +7730,12 @@ def generate_media(
             send_cmd("progress", [(completed, total), title, total, "blocks" if phase == "Pinning" else "phases"])
 
         try:
+            if os.environ.get("HUNYUAN15_P0_TRACE_DIR") and model_type == "hunyuan15_v100_t2v_480_fp16_experiment":
+                from benchmarks.hunyuan15_fp16 import p0_trace
+                p0_trace.mark("model_load_begin")
             wan_model, offloadobj = load_models(model_type, override_profile, output_type=output_type, config_id=config, gen=gen, loading_callback=offload.LoadingCallback(lambda: gen.get("abort", False), loading_progress), overrides=override_values, **model_kwargs)
+            if os.environ.get("HUNYUAN15_P0_TRACE_DIR") and model_type == "hunyuan15_v100_t2v_480_fp16_experiment":
+                p0_trace.mark("model_load_end")
         except offload.LoadingCancelled as error:
             traceback.clear_frames(error.__traceback__)
             gc.collect()
@@ -9957,6 +9962,8 @@ def process_tasks_cli(queue, state):
 
         def make_error_handler(task, params, send_cmd):
             def error_handler():
+                p0_started = False
+                p0_error = None
                 try:
                     # Filter to only valid generate_media params
                     expected_args = set(inspect.signature(generate_media).parameters.keys())
@@ -9965,14 +9972,27 @@ def process_tasks_cli(queue, state):
                         filtered_params.setdefault("model_type", "")
                     filtered_params.setdefault("client_id", "")
                     plugin_data = task.get('plugin_data', {})
+                    if os.environ.get("HUNYUAN15_P0_TRACE_DIR"):
+                        from benchmarks.hunyuan15_fp16 import p0_trace
+                        p0_trace.begin(task_no, filtered_params.get("model_type"), filtered_params.get("prompt"), filtered_params.get("seed"))
+                        p0_started = True
                     generate_media(task, send_cmd, plugin_data=plugin_data, **filtered_params)
+                    if p0_started:
+                        p0_trace.mark("generation_returned")
                     write_vram_debug_report(save_path, params.get("model_type"))
                     write_ram_debug_report(save_path, params.get("model_type"))
                 except Exception as e:
+                    p0_error = e
                     print(f"\n  [ERROR] {e}")
                     traceback.print_exc()
                     send_cmd("error", str(e))
                 finally:
+                    if p0_started:
+                        try:
+                            p0_trace.end(wan_model, offloadobj, error=p0_error)
+                        except Exception as e:
+                            print(f"\n  [P0 ERROR] {e}")
+                            send_cmd("error", str(e))
                     send_cmd("exit", None)
             return error_handler
 

@@ -1,0 +1,121 @@
+name: Hunyuan 1.5 V100 P2A CPU seq length exploratory A/B
+
+on:
+  push:
+    branches:
+      - optimization/hunyuan15-v100-fp16
+    paths:
+      - .github/workflow-triggers/hunyuan15-p2a-run.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  cpu-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify branch, syntax, fixed reference and scope
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = optimization/hunyuan15-v100-fp16
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          python3 -m py_compile benchmarks/hunyuan15_fp16/p0_hot_queue.py benchmarks/hunyuan15_fp16/p2a_compare.py shared/attention.py models/hyvideo/modules/models.py
+          python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_p0_hot.py
+          test "$(grep -c 'HUNYUAN15_P2A_CPU_SEQLENS' models/hyvideo/modules/models.py)" -eq 1
+      - name: Confirm narrow trigger
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path(".github/workflows/hunyuan15-v100-p2a-seqlens.yml").read_text()
+          assert "      - .github/workflow-triggers/hunyuan15-p2a-run.txt" in s
+          assert "      - optimization/hunyuan15-v100-fp16" in s
+          assert not any(v in ("  schedule:", "  pull_request:") for v in s.splitlines())
+          print("P2A_NARROW_TRIGGER_PASS")
+          PY
+
+  v100-p2a:
+    name: SDPA P2A profile0 A/B persistent hot clips
+    needs: cpu-gate
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 80
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      P2A_ROOT: /cache/ltx25/results/hunyuan15-p2a-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      PYTHONPATH: .
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_DATASETS_OFFLINE: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      GRADIO_ANALYTICS_ENABLED: 'False'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: V100 idle and cached checkpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          test -x "$HUNYUAN15_PYTHON"
+          nvidia-smi --query-gpu=name --format=csv,noheader | grep -q V100
+          ACTIVE="$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+' || true)"
+          if [ -n "$ACTIVE" ]; then echo "GPU occupied: $ACTIVE" >&2; exit 1; fi
+          test -s /cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints/hunyuanvideo1.5_480p_t2v_fp16.safetensors
+          test -s /cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1/converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors
+          echo P2A_IDLE_PASS
+      - name: Independent baseline and opt-in candidate; one warmup plus five hot each
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$P2A_ROOT"
+          for ARM in A B; do
+            if [ "$ARM" = A ]; then SWITCH=0; else SWITCH=1; fi
+            echo "P2A_ARM_BEGIN $ARM cpu_lengths=$SWITCH" | tee "p2a-$ARM.log"
+            HUNYUAN15_TEST_OUT="$P2A_ROOT/$ARM" HUNYUAN15_P2A_CPU_SEQLENS="$SWITCH" \
+              "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p0_hot_queue.py 2>&1 | tee -a "p2a-$ARM.log"
+            grep -Fq P0_PERSISTENT_QUEUE_PASS "p2a-$ARM.log"
+            test -s "$P2A_ROOT/$ARM/p0/hot/baseline.json"
+            echo "P2A_ARM_PASS $ARM" | tee -a "p2a-$ARM.log"
+          done
+      - name: Compare timings and all H264 decoded frames; no default change
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p2a_compare.py "$P2A_ROOT" | tee p2a-report.log
+          test -s "$P2A_ROOT/p2a_comparison.json"
+      - name: Upload reports, traces, and logs on every outcome
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p2a-seqlens-reports
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            p2a-*.log
+            /cache/ltx25/results/hunyuan15-p2a-${{ github.run_id }}-attempt${{ github.run_attempt }}/p2a_comparison.json
+            /cache/ltx25/results/hunyuan15-p2a-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p0/hot/baseline.json
+            /cache/ltx25/results/hunyuan15-p2a-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p0/hot/trace/requests.jsonl
+            /cache/ltx25/results/hunyuan15-p2a-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p0/hot/generation.log
+      - name: Upload videos for independent full quality review
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p2a-seqlens-clips
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: /cache/ltx25/results/hunyuan15-p2a-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p0/hot/videos/*.mp4

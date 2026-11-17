@@ -1,3 +1,5 @@
 Explicit serialized profiler-only P0 SDPA CUDA kernel identification.
 Run exactly one warm-up plus one hot diagnostic; capture only first actual hot attention call in PyTorch profiler.
 No optimized-default changes and no concurrent GPU work. Authorized continuation of Hunyuan15 native FP16 spec.
+
+Retry profiler report after correcting FunctionEventAvg .key access; no baseline math changes.

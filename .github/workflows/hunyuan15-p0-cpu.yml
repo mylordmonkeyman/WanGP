@@ -10,6 +10,7 @@ on:
       - benchmarks/hunyuan15_fp16/p0_*.py
       - benchmarks/hunyuan15_fp16/p2*.py
       - benchmarks/hunyuan15_fp16/p3*.py
+      - benchmarks/hunyuan15_fp16/p4*.py
       - benchmarks/hunyuan15_fp16/test_*.py
       - wgp.py
       - shared/attention.py
@@ -51,6 +52,7 @@ jobs:
             shared/hunyuan15_p2b_mlp_policy.py \
             benchmarks/hunyuan15_fp16/p3b_preset_compare.py \
             benchmarks/hunyuan15_fp16/p3c_custom_compare.py \
+            benchmarks/hunyuan15_fp16/p4_attention_compare.py \
             benchmarks/hunyuan15_fp16/test_p3c_tile_policy.py \
             shared/hunyuan15_p3c_tile_policy.py \
             benchmarks/hunyuan15_fp16/test_p0_hot.py \

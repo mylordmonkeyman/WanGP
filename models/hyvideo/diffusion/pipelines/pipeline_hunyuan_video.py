@@ -19,6 +19,7 @@
 # Modifications Copyright (c) 2025-2026 DeepBeepMeep - part of WanGP, WanGP Community License 2.0 (see LICENSE.txt)
 from shared.utils.phase_progress import text_encoding_prompts, text_encoding_progress
 import inspect
+import os
 from typing import Any, Callable, Dict, List, Optional, Union, Tuple
 import torch
 import torch.distributed as dist
@@ -1357,6 +1358,20 @@ class HunyuanVideoPipeline(DiffusionPipeline):
 
         device = torch.device(f"cuda:{dist.get_rank()}") if dist.is_initialized() else self._execution_device
 
+        # P0 is an explicitly opted-in diagnostic, isolated to native FP16 1.5.
+        # In an uninstrumented hot run mark() only timestamps CPU transitions;
+        # the sync-at-boundary diagnostic is never an adoption benchmark.
+        p0_enabled = (self.hunyuan_1_5
+                      and getattr(self.transformer, "native_fp16", False)
+                      and bool(os.environ.get("HUNYUAN15_P0_TRACE_DIR")))
+        if p0_enabled:
+            from benchmarks.hunyuan15_fp16 import p0_trace
+            p0_trace.mark("conditioning_begin", {
+                "vae_dtype": str(vae_dtype),
+                "transformer_dtype": str(self.target_dtype),
+                "requested_video_frames": video_length,
+                "height": height, "width": width,
+            })
         # 3. Encode input prompt
         lora_scale = (
             self.cross_attention_kwargs.get("scale", None)
@@ -1550,6 +1565,12 @@ class HunyuanVideoPipeline(DiffusionPipeline):
 
             
 
+        if p0_enabled:
+            p0_trace.mark("denoise_begin", {
+                "latents_shape": list(latents.shape),
+                "text_padded_shape": list(prompt_embeds.shape),
+                "text_mask_shape": list(prompt_mask.shape),
+            })
         # 7. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         self._num_timesteps = len(timesteps)
@@ -1775,6 +1796,8 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                 if callback is not None:
                     callback(i, latents.squeeze(0), False)         
 
+        if p0_enabled:
+            p0_trace.mark("denoise_end")
         if self.interrupt:
             return [None]
         
@@ -1832,6 +1855,8 @@ class HunyuanVideoPipeline(DiffusionPipeline):
 
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloa16
         image = image.cpu().float()
+        if p0_enabled:
+            p0_trace.mark("decode_end", {"output_shape": list(image.shape)})
 
         # if i2v_mode and i2v_condition_type == "latent_concat":
         #     image = image[:, :, 4:, :, :]

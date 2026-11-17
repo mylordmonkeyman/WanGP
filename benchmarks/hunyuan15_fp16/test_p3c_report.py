@@ -53,9 +53,9 @@ class P3CReportTests(TestCase):
                 (directory/"generation.log").write_text("\n".join(lines)+"\n")
             def fake_md5(filename):
                 return ["same" if "_256_" in filename else "different"]*33
-            with mock.patch.object(p3c,"frame_md5",side_effect=fake_md5), \\
-                 mock.patch.object(p3c,"_ffmpeg_quality",side_effect=lambda *a:48.0):
-                report=p3c.summarize(root)
+            with mock.patch.object(p3c,"frame_md5",side_effect=fake_md5):
+                with mock.patch.object(p3c,"_ffmpeg_quality",side_effect=lambda *a:48.0):
+                    report=p3c.summarize(root)
             self.assertEqual(report["arms"]["256"]["actual_decoder_calls"],[15]*6)
             self.assertEqual(report["arms"]["384"]["actual_decoder_calls"],[6]*6)
             self.assertEqual(report["arms"]["512"]["actual_decoder_calls"],[6]*6)

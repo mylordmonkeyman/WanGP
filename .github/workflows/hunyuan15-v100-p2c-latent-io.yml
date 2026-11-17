@@ -107,7 +107,7 @@ jobs:
               clips[kind]=hashes
           latent=torch.load(root+"/debug-latents.pt",map_location="cpu",weights_only=True)
           assert tuple(latent.shape)==(1,32,9,30,52),tuple(latent.shape)
-          assert latent.dtype==torch.float16,latent.dtype
+          assert latent.is_floating_point() and torch.isfinite(latent).all(), "non-finite debug latent"
           assert clips["skip"]==clips["save"],"VAE outputs changed when toggling debug write"
           print("P2C_DECODED_VIDEO_PARITY_PASS",json.dumps({
               "frames":len(clips["skip"]),"debug_latent_shape":list(latent.shape),

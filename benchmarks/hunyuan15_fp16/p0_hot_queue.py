@@ -274,7 +274,7 @@ def main():
         if report["model_load_count"] != 1:
             raise RuntimeError("Native default reloads model between requests")
         report["native_default_without_cli_override_verified"] = True
-        (out / "baseline.json").write_text(json.dumps(report, indent=2) + "\\n")
+        (out / "baseline.json").write_text(json.dumps(report, indent=2) + "\n")
         print("HUNYUAN15_NATIVE_DEFAULT_PROFILE1_PASS", json.dumps({
             "profiles": profiles, "model_loads": report["model_load_count"],
             "hot_sample_seconds": report["request_e2e_samples_seconds"],

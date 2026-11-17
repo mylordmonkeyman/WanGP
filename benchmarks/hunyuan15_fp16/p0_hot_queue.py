@@ -181,14 +181,20 @@ def main():
     parser.add_argument("--p3c-spatial", type=int, choices=(256, 384, 512), default=256)
     parser.add_argument("--p2b", action="store_true", help="Native-FP16 image MLP chunks, fixed default MMGP1")
     parser.add_argument("--p2b-divide", type=int, choices=(4,2,1), default=4)
+    parser.add_argument("--p4-events", type=int, choices=(0,1), default=None, help="P4 fixed-profile1 SDPA timing control or CUDA-event instrumentation")
     parser.add_argument("--vae-config", type=int, choices=(0,1,2,3), default=0)
     args = parser.parse_args()
-    if args.native_default_smoke and (args.cold_only or args.diagnostic or args.p1b or args.p3b or args.p3c or args.p2b or args.changed_prompt or args.vae_config != 0 or args.profile != 0):
+    if args.native_default_smoke and (args.cold_only or args.diagnostic or args.p1b or args.p3b or args.p3c or args.p2b or args.p4_events is not None or args.changed_prompt or args.vae_config != 0 or args.profile != 0):
         parser.error("--native-default-smoke requires otherwise unmodified baseline settings")
     if args.cold_only and (args.diagnostic or args.changed_prompt):
         parser.error("--cold-only cannot be combined with other run modes")
-    if sum((args.p1b,args.p3b,args.p3c,args.p2b)) > 1:
-        parser.error("--p1b, --p3b, --p3c and --p2b are independent experiments")
+    p4 = args.p4_events is not None
+    if sum((args.p1b,args.p3b,args.p3c,args.p2b,p4)) > 1:
+        parser.error("--p1b, --p3b, --p3c, --p2b and --p4-events are independent")
+    if p4 and (args.cold_only or args.diagnostic or args.changed_prompt
+               or args.native_default_smoke or args.profile != 0 or args.vae_config != 0):
+        parser.error("--p4-events uses fixed profile1, SDPA, auto VAE, 1 warmup + 5 hot")
+
     if not args.p2b and args.p2b_divide != 4:
         parser.error("--p2b-divide requires --p2b")
     if args.p2b and (args.cold_only or args.diagnostic or args.changed_prompt or args.profile != 0 or args.vae_config != 0):
@@ -206,13 +212,14 @@ def main():
     if not args.p1b and args.profile != 0:
         parser.error("Nonbaseline MMGP profiles require --p1b")
     measured = 0 if args.cold_only else (1 if args.diagnostic or args.native_default_smoke else 5)
-    out = (base.OUT / "p2b" / ("divide_" + str(args.p2b_divide)) if args.p2b else
+    out = (base.OUT / "p4" / ("events_" + str(args.p4_events)) if p4 else
+           base.OUT / "p2b" / ("divide_" + str(args.p2b_divide)) if args.p2b else
            base.OUT / "p3c" / ("spatial_" + str(args.p3c_spatial)) if args.p3c else
            base.OUT / "native_default" if args.native_default_smoke else
            base.OUT / "p1b" / ("profile_" + str(args.profile)) if args.p1b else
            base.OUT / "p3b" / ("vae_config_" + str(args.vae_config)) if args.p3b else
            OUT / ("cold" if args.cold_only else "diagnostic" if args.diagnostic else "changed_prompt" if args.changed_prompt else "hot"))
-    values = prepare(out, measured, args.changed_prompt, profile=1 if args.p3c or args.p2b else args.profile, vae_config=args.vae_config)
+    values = prepare(out, measured, args.changed_prompt, profile=1 if args.p3c or args.p2b or p4 else args.profile, vae_config=args.vae_config)
     if args.plan_only:
         print("P0_PLAN_PASS " + json.dumps({
             "output": str(out), "tasks": len(values),
@@ -248,6 +255,10 @@ def main():
         env["HUNYUAN15_P2B_MLP_DIVIDE"] = str(args.p2b_divide)
     else:
         env.pop("HUNYUAN15_P2B_MLP_DIVIDE", None)
+    if p4 and args.p4_events == 1:
+        env["HUNYUAN15_P4_ATTENTION_EVENTS"] = "1"
+    else:
+        env.pop("HUNYUAN15_P4_ATTENTION_EVENTS", None)
     command = [
         base.PYTHON, "-u", "wgp.py", "--offline",
         "--config", str(out / "config"), "--process", str(out / "settings.json"),
@@ -256,7 +267,7 @@ def main():
         "--lora-config", str(out / "lora_paths.json"),
         "--no-prevent-power-throttling", "--verbose", "1",
     ]
-    if not (args.native_default_smoke or args.p3c or args.p2b):
+    if not (args.native_default_smoke or args.p3c or args.p2b or p4):
         command[command.index("--attention"):command.index("--attention")] = ["--profile", str(args.profile)]
     print("P0_EXECUTION " + json.dumps({
         "command": command, "tasks": len(values),
@@ -292,7 +303,7 @@ def main():
         print("P0_COLD_REFERENCE_PASS " + json.dumps(report, sort_keys=True), flush=True)
         return
     report = collect(out, measured, args.diagnostic,
-                     profile=1 if args.native_default_smoke or args.p3c or args.p2b else args.profile,
+                     profile=1 if args.native_default_smoke or args.p3c or args.p2b or p4 else args.profile,
                      vae_config=args.vae_config)
     if args.p3c:
         report["p3c_spatial_tile_requested"] = args.p3c_spatial
@@ -312,6 +323,31 @@ def main():
             "median_hot_e2e": report["request_e2e_median_seconds"],
             "samples": report["request_e2e_samples_seconds"],
             "peak_vram_gib": round(report["peak_vram_bytes"] / 2**30, 3),
+        }, sort_keys=True), flush=True)
+    if p4:
+        traces = [json.loads(line) for line in
+                  (out / "trace" / "requests.jsonl").read_text().splitlines()
+                  if line.strip()]
+        observed = [r.get("p4_attention") for r in traces]
+        if args.p4_events == 1:
+            if any(not r or r.get("status") != "P4_ATTENTION_EVENTS_RECORDED"
+                   or r["intervals"]["pay_attention"]["count"] != 216
+                   or r["intervals"]["sdpa_core"]["count"] != 216
+                   for r in observed):
+                raise RuntimeError("P4 instrumentation did not capture 216 outer+core SDPA calls for each video")
+        elif any(observed):
+            raise RuntimeError("P4 control unexpectedly recorded event timing")
+        report["p4_cuda_events_enabled"] = (args.p4_events == 1)
+        report["p4_attention_hot_samples"] = observed[1:]
+        (out / "baseline.json").write_text(json.dumps(report, indent=2) + "\n")
+        print("P4_ATTENTION_ARM_PASS " + json.dumps({
+            "events": args.p4_events,
+            "hot_median_e2e": report["request_e2e_median_seconds"],
+            "hot_samples": report["request_e2e_samples_seconds"],
+            "sdpa_gpu_stream_ms": [r["intervals"]["sdpa_core"]["gpu_stream_total_ms"]
+                                   for r in observed[1:]] if args.p4_events == 1 else None,
+            "outer_gpu_stream_ms": [r["intervals"]["pay_attention"]["gpu_stream_total_ms"]
+                                   for r in observed[1:]] if args.p4_events == 1 else None,
         }, sort_keys=True), flush=True)
     if args.native_default_smoke:
         trace = out / "trace" / "requests.jsonl"

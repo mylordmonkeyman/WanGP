@@ -1,0 +1,141 @@
+name: Hunyuan 1.5 V100 P2B native FP16 image MLP chunk sweep
+
+on:
+  push:
+    branches:
+      - optimization/hunyuan15-v100-fp16
+    paths:
+      - .github/workflow-triggers/hunyuan15-p2b-mlp-run.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  cpu-validate:
+    name: Native-only MLP policy and fixed experiment checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify pinned source, syntax and opt-in policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = optimization/hunyuan15-v100-fp16
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          python3 -m py_compile shared/hunyuan15_p2b_mlp_policy.py \
+            benchmarks/hunyuan15_fp16/p0_hot_queue.py \
+            benchmarks/hunyuan15_fp16/p2b_mlp_compare.py \
+            models/hyvideo/modules/models.py
+          python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_p2b_mlp_policy.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path(".github/workflows/hunyuan15-v100-p2b-mlp.yml").read_text()
+          assert "      - .github/workflow-triggers/hunyuan15-p2b-mlp-run.txt" in s
+          assert not any(x in ("  schedule:","  pull_request:") for x in s.splitlines())
+          print("P2B_NARROW_TRIGGER_AND_NATIVE_ONLY_PASS")
+          PY
+
+  v100-image-mlp:
+    name: Serial fixed-MMGP1 image-MLP divide 4-2-1 hot trials
+    needs: cpu-validate
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 95
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      P2B_ROOT: /cache/ltx25/results/hunyuan15-p2b-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      PYTHONPATH: .
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_DATASETS_OFFLINE: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      GRADIO_ANALYTICS_ENABLED: 'False'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirm GPU idle and preserve cached original FP16 weights and LoRA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$HUNYUAN15_PYTHON"
+          nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+          nvidia-smi --query-gpu=name --format=csv,noheader | grep -q V100
+          ACTIVE="$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+' || true)"
+          if [ -n "$ACTIVE" ]; then echo "V100 occupied, abort P2B: $ACTIVE" >&2; exit 1; fi
+          test -s /cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints/hunyuanvideo1.5_480p_t2v_fp16.safetensors
+          test -s /cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1/converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors
+          echo P2B_V100_PREFLIGHT_PASS
+      - name: Test baseline divide4, candidate2, candidate1 serially
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$P2B_ROOT"
+          for DIV in 4 2 1; do
+            if [ "$DIV" = 1 ]; then
+              "$HUNYUAN15_PYTHON" - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path(os.environ["P2B_ROOT"])/"divide_2/p2b/divide_2/baseline.json"
+          if not p.is_file():raise SystemExit("P2B_SKIP_DIVIDE1: no completed divide2 report")
+          peak=json.loads(p.read_text())["peak_vram_bytes"]/2**30
+          print("P2B_DIVIDE2_PEAK_TORCH_GIB",round(peak,3))
+          if peak>16:raise SystemExit("P2B_SKIP_DIVIDE1: insufficient safety headroom")
+          PY
+            fi
+            echo "P2B_DIVIDE_BEGIN $DIV" | tee "p2b-$DIV.log"
+            set +e
+            HUNYUAN15_TEST_OUT="$P2B_ROOT/divide_$DIV" "$HUNYUAN15_PYTHON" -u \
+              benchmarks/hunyuan15_fp16/p0_hot_queue.py --p2b --p2b-divide "$DIV" \
+              2>&1 | tee -a "p2b-$DIV.log"
+            EXIT="${PIPESTATUS[0]}"
+            set -e
+            echo "P2B_DIVIDE_END $DIV exit=$EXIT" | tee -a "p2b-$DIV.log"
+            echo "$EXIT" > "$P2B_ROOT/divide-$DIV-exit.txt"
+            if [ "$EXIT" -ne 0 ]; then
+              echo "P2B stop: failed divide=$DIV" >&2
+              exit "$EXIT"
+            fi
+            grep -Fq P2B_HOT_MLP_PASS "p2b-$DIV.log"
+          done
+      - name: Summarize hot E2E, denoise, memory, decoded frame parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p2b_mlp_compare.py "$P2B_ROOT" | tee p2b-summary.log
+          grep -Fq P2B_MLP_REPORT p2b-summary.log
+          test -s "$P2B_ROOT/p2b_mlp_summary.json"
+      - name: Preserve reports and logs even on any error
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p2b-mlp-reports
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            p2b-*.log
+            /cache/ltx25/results/hunyuan15-p2b-${{ github.run_id }}-attempt${{ github.run_attempt }}/divide-*-exit.txt
+            /cache/ltx25/results/hunyuan15-p2b-${{ github.run_id }}-attempt${{ github.run_attempt }}/p2b_mlp_summary.json
+            /cache/ltx25/results/hunyuan15-p2b-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p2b/*/baseline.json
+            /cache/ltx25/results/hunyuan15-p2b-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p2b/*/trace/requests.jsonl
+            /cache/ltx25/results/hunyuan15-p2b-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p2b/*/generation.log
+      - name: Preserve all generated comparison videos
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p2b-mlp-clips
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: /cache/ltx25/results/hunyuan15-p2b-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p2b/*/videos/*.mp4

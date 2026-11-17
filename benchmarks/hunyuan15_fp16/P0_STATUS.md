@@ -21,7 +21,8 @@ No work is authorized on `main` or the source research branch.
 | VAE tile geometry and executed decoder calls | Diagnostic instrumented, unexecuted | VAE state, per-decoder-call input shapes; VAE precision probe still incomplete |
 | Separate cold one-video reference | Harness configured, unexecuted | Entire CLI process wall time, with one task only |
 | Changed prompt sequence | Harness configured, unexecuted | Same persistent queue, last request changes prompt only |
-| CPU-only fixture and noise gate | Committed, not executed | MAD, bootstrap CI, fixed config tests |
+| CPU-only fixture and noise gate | Committed, execution not verified | MAD, bootstrap CI, fixed config tests |
+| CPU-only branch push workflow | Committed, execution not verified | `.github/workflows/hunyuan15-p0-cpu.yml`; no GPU jobs |
 | V100 workflow | Committed, not executed | Manual dispatch only; idle GPU guard; single-job V100 serialization |
 
 **P0 has NOT passed.** All numerical and speed conclusions are pending actual

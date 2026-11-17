@@ -1,0 +1,3 @@
+Explicit P1B MMGP profile-screen launch authorized in conversation 2026-11-16.
+Run profiles 0, 1, 3 serially; offline cached FP16 Hunyuan 1.5 + converted LightX2V LoRA; warm-up plus five measured hot generations per profile.
+Do not treat exploratory results as optimized defaults.

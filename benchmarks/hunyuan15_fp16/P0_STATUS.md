@@ -22,8 +22,8 @@ No work is authorized on `main` or the source research branch.
 | Separate cold one-video reference | Harness configured, unexecuted | Entire CLI process wall time, with one task only |
 | Changed prompt sequence | Harness configured, unexecuted | Same persistent queue, last request changes prompt only |
 | CPU-only fixture and noise gate | Committed, execution not verified | MAD, bootstrap CI, fixed config tests |
-| CPU-only branch push workflow | Committed, execution not verified | `.github/workflows/hunyuan15-p0-cpu.yml`; no GPU jobs |
-| V100 workflow | Committed, not executed | Manual dispatch only; idle GPU guard; single-job V100 serialization |
+| CPU-only branch push workflow | Running, prior checkout issue corrected | 8 CPU unit tests and syntax passed in a previous run; trigger-lint assertion corrected; full success pending |
+| V100 workflow | Committed, not executed | Dedicated branch-scoped trigger-file push or manual dispatch; idle GPU guard; single-job V100 serialization |
 
 **P0 has NOT passed.** All numerical and speed conclusions are pending actual
 runner tests. No performance default, model math, scheduler, VAE precision,
@@ -55,15 +55,18 @@ incorrect 33-frame decode, or other validation failure.
 Workflow file:
 `.github/workflows/hunyuan15-v100-fp16-p0-hot.yml`
 
-### GitHub dispatch limitation
+### GitHub runner launch
 
-GitHub requires a `workflow_dispatch` workflow to exist on the repository
-default branch before it can be triggered by Actions/CLI/API. This workflow is
-intentionally **branch-only**, under the specification's prohibition on editing
-`main`. Therefore it is staged for review/reuse but cannot be dispatched
-through GitHub Actions yet without an existing default-branch dispatch entry
-point or a separate authorized change to that restriction. Do not add an
-automatic `push` or `schedule` trigger to work around the restriction.
+The user explicitly authorized a branch-local push trigger for autonomous workflow
+starts. The GitHub connection exposes file commits and workflow run monitoring but
+not a direct `workflow_dispatch` action. Prior WanGP branches used push triggers.
+
+GPU tests remain manual-in-the-sense-of-intent: the P0 V100 workflow is triggered
+by **only** a push to `optimization/hunyuan15-v100-fp16` changing
+`.github/workflow-triggers/hunyuan15-p0-run.txt`, or by manual
+`workflow_dispatch`. Ordinary code commits, PRs, and schedules cannot launch
+this V100 job. All V100 work is serialized, first checks for an idle GPU, and
+uses offline caches. Do not use a broad push trigger or touch `main`.
 
 ## Interpretation of current telemetry
 

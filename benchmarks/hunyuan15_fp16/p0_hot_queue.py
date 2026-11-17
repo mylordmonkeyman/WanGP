@@ -173,11 +173,14 @@ def main():
     parser.add_argument("--changed-prompt", action="store_true")
     parser.add_argument("--cold-only", action="store_true")
     parser.add_argument("--plan-only", action="store_true")
+    parser.add_argument("--native-default-smoke", action="store_true", help="Do not pass --profile; assert selected native FP16 model resolves MMGP 1")
     parser.add_argument("--profile", type=int, choices=(0, 1, 3), default=0)
     parser.add_argument("--p1b", action="store_true", help="Isolated MMGP-profile experiment; does not overwrite P0")
     parser.add_argument("--p3b", action="store_true", help="Isolated existing VAE preset experiment; no VAE code change")
     parser.add_argument("--vae-config", type=int, choices=(0,1,2,3), default=0)
     args = parser.parse_args()
+    if args.native_default_smoke and (args.cold_only or args.diagnostic or args.p1b or args.p3b or args.changed_prompt or args.vae_config != 0 or args.profile != 0):
+        parser.error("--native-default-smoke requires otherwise unmodified baseline settings")
     if args.cold_only and (args.diagnostic or args.changed_prompt):
         parser.error("--cold-only cannot be combined with other run modes")
     if args.p1b and args.p3b:
@@ -190,8 +193,9 @@ def main():
         parser.error("--p1b runs a fixed warm-up + five measured hot requests only")
     if not args.p1b and args.profile != 0:
         parser.error("Nonbaseline MMGP profiles require --p1b")
-    measured = 0 if args.cold_only else (1 if args.diagnostic else 5)
-    out = (base.OUT / "p1b" / ("profile_" + str(args.profile)) if args.p1b else
+    measured = 0 if args.cold_only else (1 if args.diagnostic or args.native_default_smoke else 5)
+    out = (base.OUT / "native_default" if args.native_default_smoke else
+           base.OUT / "p1b" / ("profile_" + str(args.profile)) if args.p1b else
            base.OUT / "p3b" / ("vae_config_" + str(args.vae_config)) if args.p3b else
            OUT / ("cold" if args.cold_only else "diagnostic" if args.diagnostic else "changed_prompt" if args.changed_prompt else "hot"))
     values = prepare(out, measured, args.changed_prompt, profile=args.profile, vae_config=args.vae_config)
@@ -221,10 +225,12 @@ def main():
         base.PYTHON, "-u", "wgp.py", "--offline",
         "--config", str(out / "config"), "--process", str(out / "settings.json"),
         "--output-dir", str(out / "videos"),
-        "--profile", str(args.profile), "--attention", "sdpa", "--fp16",
+        "--attention", "sdpa", "--fp16",
         "--lora-config", str(out / "lora_paths.json"),
         "--no-prevent-power-throttling", "--verbose", "1",
     ]
+    if not args.native_default_smoke:
+        command[command.index("--attention"):command.index("--attention")] = ["--profile", str(args.profile)]
     print("P0_EXECUTION " + json.dumps({
         "command": command, "tasks": len(values),
         "process_count": 1, "diagnostic": args.diagnostic,
@@ -258,7 +264,21 @@ def main():
         (out / "cold.json").write_text(json.dumps(report, indent=2) + "\n")
         print("P0_COLD_REFERENCE_PASS " + json.dumps(report, sort_keys=True), flush=True)
         return
-    report = collect(out, measured, args.diagnostic, profile=args.profile, vae_config=args.vae_config)
+    report = collect(out, measured, args.diagnostic, profile=1 if args.native_default_smoke else args.profile, vae_config=args.vae_config)
+    if args.native_default_smoke:
+        trace = out / "trace" / "requests.jsonl"
+        records = [json.loads(line) for line in trace.read_text().splitlines() if line.strip()]
+        profiles = [r.get("effective_loaded_profile") for r in records]
+        if profiles != [1, 1]:
+            raise RuntimeError(f"Native FP16 default did not resolve MMGP profile 1: {profiles}")
+        if report["model_load_count"] != 1:
+            raise RuntimeError("Native default reloads model between requests")
+        report["native_default_without_cli_override_verified"] = True
+        (out / "baseline.json").write_text(json.dumps(report, indent=2) + "\\n")
+        print("HUNYUAN15_NATIVE_DEFAULT_PROFILE1_PASS", json.dumps({
+            "profiles": profiles, "model_loads": report["model_load_count"],
+            "hot_sample_seconds": report["request_e2e_samples_seconds"],
+        }, sort_keys=True), flush=True)
     print("P0_PERSISTENT_QUEUE_PASS " + json.dumps({
         "median_hot_e2e": report["request_e2e_median_seconds"],
         "samples": report["request_e2e_samples_seconds"],

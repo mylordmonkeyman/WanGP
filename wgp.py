@@ -4258,8 +4258,18 @@ def get_default_profile(output_type):
         return default_profile_audio
     return default_profile_video
 
-def compute_profile(override_profile, output_type="video"):
-    return override_profile if override_profile != -1 else get_default_profile(output_type)
+def compute_profile(override_profile, output_type="video", model_type=None):
+    global_default = get_default_profile(output_type)
+    if model_type is None:
+        return override_profile if override_profile != -1 else global_default
+    # Only explicitly tagged native-FP16 Hunyuan 1.5 finetunes may override
+    # the global/default video profile. User and CLI overrides always win.
+    from shared.hunyuan15_fp16_profile import resolve_profile
+    return resolve_profile(
+        override_profile, force_profile_no, _normalize_output_type(output_type),
+        get_base_model_type(model_type), get_model_def(model_type) or {},
+        global_default
+    )
 
 
 def compute_compile(override_compile, default_compile):
@@ -4582,7 +4592,7 @@ def load_models(model_type, override_profile = -1, output_type="video", config_i
 
 
     check_download_cancelled(gen)
-    profile = 0 if extension is not None else compute_profile(override_profile, output_type)
+    profile = 0 if extension is not None else compute_profile(override_profile, output_type, model_type)
     # an LM decoder uses every optimization the installation supports (CUDA graphs with any memory profile, Triton, FlashAttention 2)
     lm_features = resolve_lm_features() if model_def.get("lm_decoder") else None
     if lm_features is not None:
@@ -7718,7 +7728,7 @@ def generate_media(
     if new_model_vae_upsampling:
         model_kwargs.update(upsampler_api.model_load_kwargs_for_vae_upsampling(spatial_upsampling, base_model_type, model_def, image_mode))
     output_type = get_profile_type_for_model(model_type, image_mode)
-    profile = compute_profile(override_profile, output_type)
+    profile = compute_profile(override_profile, output_type, model_type)
     compilation = compute_compile(override_values.get("compilation", ""), compile)
     if model_type != transformer_type or reload_needed or profile != loaded_profile or config != loaded_config or compilation != loaded_compile or compute_quantization(override_values) != loaded_quantization:
         release_model()

@@ -1801,7 +1801,23 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         if self.interrupt:
             return [None]
         
-        if load_latent:
+        # P2C is deliberately opt-in, native Hunyuan 1.5 FP16 ONLY.
+        # Every other model, and every disabled experiment, executes the
+        # pre-existing unconditional latent-file write or explicit load.
+        p2c_native = bool(
+            self.hunyuan_1_5
+            and getattr(self.transformer, "native_fp16", False)
+            and os.environ.get("HUNYUAN15_P2C_ENABLE", "0") == "1"
+        )
+        if p2c_native:
+            from benchmarks.hunyuan15_fp16.p2c_latent_policy import latent_action
+            latent_op, latent_filename = latent_action(True, load_latent, os.environ)
+            if latent_op == "load":
+                latents = torch.load(latent_filename)
+            elif latent_op == "save":
+                torch.save(latents, latent_filename)
+            # "skip" deliberately preserves in-memory latents for decoding.
+        elif load_latent:
             latents = torch.load("latent.pt")
         else:
             torch.save(latents, "latent.pt")

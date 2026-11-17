@@ -1099,7 +1099,20 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
 
         text_len = text_mask.sum(1)
         total_len = text_len + img_seq_len
-        seqlens_q = seqlens_kv = total_len 
+        seqlens_q = seqlens_kv = total_len
+        # Opt-in Hunyuan 1.5 native FP16 P2A only: the same true non-padding
+        # length is read once per transformer invocation (not once per
+        # double-stream block). Keep the original GPU tensor lengths for
+        # non-SDPA backends, multi-batch, BF16 and disabled experiments.
+        if (getattr(self, "native_fp16", False)
+                and os.environ.get("HUNYUAN15_P2A_CPU_SEQLENS", "0") == "1"
+                and img.shape[0] == 1
+                and total_len.numel() == 1
+                and offload.shared_state.get("_attention") == "sdpa"):
+            static_len = int(total_len[0].item())
+            if not 0 < static_len <= img_seq_len + txt_seq_len:
+                raise ValueError("Hunyuan15 P2A invalid effective attention length")
+            seqlens_q = seqlens_kv = [static_len]
         attn_mask = None
 
         freqs_cis = (freqs_cos, freqs_sin) if freqs_cos is not None else None

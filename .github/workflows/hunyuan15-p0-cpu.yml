@@ -8,7 +8,9 @@ on:
     paths:
       - .github/workflows/hunyuan15-p0-cpu.yml
       - benchmarks/hunyuan15_fp16/p0_*.py
-      - benchmarks/hunyuan15_fp16/test_p0_hot.py
+      - benchmarks/hunyuan15_fp16/p2*.py
+      - benchmarks/hunyuan15_fp16/p3*.py
+      - benchmarks/hunyuan15_fp16/test_*.py
       - wgp.py
       - shared/attention.py
       - models/hyvideo/modules/models.py
@@ -41,12 +43,16 @@ jobs:
             benchmarks/hunyuan15_fp16/p0_hot_queue.py \
             benchmarks/hunyuan15_fp16/p0_statistics.py \
             benchmarks/hunyuan15_fp16/p0_trace.py \
+            benchmarks/hunyuan15_fp16/p2c_latent_policy.py \
+            benchmarks/hunyuan15_fp16/p2a_compare.py \
+            benchmarks/hunyuan15_fp16/p3b_preset_compare.py \
             benchmarks/hunyuan15_fp16/test_p0_hot.py \
+            benchmarks/hunyuan15_fp16/test_p2c_latent_policy.py \
             wgp.py shared/attention.py models/hyvideo/modules/models.py \
             models/hyvideo/vae/hunyuanvideo_15_vae.py \
             models/hyvideo/diffusion/pipelines/pipeline_hunyuan_video.py
       - name: Run CPU-only reference and numeric tests
-        run: python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_p0_hot.py
+        run: python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p 'test_*.py'
       - name: Confirm V100 workflow has only a narrow branch trigger
         run: |
           python3 - <<'PY'

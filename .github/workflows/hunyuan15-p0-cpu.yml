@@ -56,6 +56,6 @@ jobs:
           assert "  push:" in s and "  workflow_dispatch:" in s
           assert "      - optimization/hunyuan15-v100-fp16" in s
           assert "      - .github/workflow-triggers/hunyuan15-p0-run.txt" in s
-          assert "  schedule:" not in s and "  pull_request:" not in s
+          assert not any(line in ("  schedule:", "  pull_request:") for line in s.splitlines())
           print("NARROW_BRANCH_TRIGGER_PASS")
           PY

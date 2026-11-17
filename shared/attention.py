@@ -265,8 +265,16 @@ def sdpa_wrapper(
     v = v.transpose(1,2)
     if attention_mask != None:
         attention_mask = attention_mask.transpose(1,2)
-    with sdpa_kernel(SDPBackend.MATH) if _sdpa_requires_math(q, attention_mask) else nullcontext():
-        o = F.scaled_dot_product_attention(q, k, v, attn_mask=attention_mask, is_causal=causal, scale=softmax_scale, dropout_p=dropout_p).transpose(1,2)
+    p4_token = None
+    if os.environ.get("HUNYUAN15_P4_ATTENTION_EVENTS") == "1":
+        from benchmarks.hunyuan15_fp16 import p0_trace
+        p4_token = p0_trace.p4_attention_begin((q, k, v), "sdpa_core")
+    try:
+        with sdpa_kernel(SDPBackend.MATH) if _sdpa_requires_math(q, attention_mask) else nullcontext():
+            o = F.scaled_dot_product_attention(q, k, v, attn_mask=attention_mask, is_causal=causal, scale=softmax_scale, dropout_p=dropout_p).transpose(1,2)
+    finally:
+        if p4_token is not None:
+            p0_trace.p4_attention_end(p4_token)
     del q, k ,v
     qkv_list.clear()
 

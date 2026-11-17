@@ -1,0 +1,1 @@
+Run non-MMGP P2C latent-file skip/save and decoded-video parity experiment on V100. This dedicated trigger supersedes the pending MMGP profile-default verification run under the shared concurrency group; never test or revisit MMGP profile settings. Preserve currently running VAE P3B job, wait for idle GPU. Native FP16 default profile 1 remains selected.

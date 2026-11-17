@@ -30,7 +30,7 @@ class P4EventsTests(unittest.TestCase):
         self.assertEqual(d["intervals"]["pay_attention"]["count"],216)
         self.assertAlmostEqual(d["intervals"]["pay_attention"]["gpu_stream_total_ms"],1080.0)
         self.assertAlmostEqual(d["intervals"]["sdpa_core"]["gpu_stream_total_ms"],972.0)
-        self.assertAlmostEqual(d["sdpa_stream_fraction_of_request"],972/34000)
+        self.assertAlmostEqual(d["sdpa_stream_fraction_of_request"],972/34000,places=6)
         self.assertEqual(d["intervals"]["sdpa_core"]["first_shape"],[1,14159,16,128])
 
     def test_missing_inner_and_incomplete_intervals_fail(self):

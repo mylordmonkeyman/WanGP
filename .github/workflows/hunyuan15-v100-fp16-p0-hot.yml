@@ -105,6 +105,13 @@ jobs:
           test -s /cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints/hunyuanvideo1.5_480p_t2v_fp16.safetensors
           test -s /cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1/converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors
           echo "P0_IDLE_ASSETS_PASS"
+      - name: Separate cold-process single-generation control
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p0_hot_queue.py --cold-only 2>&1 | tee p0-cold.log
+          grep -Fq P0_COLD_REFERENCE_PASS p0-cold.log
+          test -s "$HUNYUAN15_TEST_OUT/p0/cold/cold.json"
       - name: Fixed-reference warm-up plus five genuine hot generations
         shell: bash
         run: |
@@ -137,8 +144,10 @@ jobs:
           if-no-files-found: warn
           path: |
             p0-hot.log
+            p0-cold.log
             p0-diagnostic.log
             p0-changed-prompt.log
+            /cache/ltx25/results/hunyuan15-p0-${{ github.run_id }}-attempt${{ github.run_attempt }}/p0/**/cold.json
             /cache/ltx25/results/hunyuan15-p0-${{ github.run_id }}-attempt${{ github.run_attempt }}/p0/**/baseline.json
             /cache/ltx25/results/hunyuan15-p0-${{ github.run_id }}-attempt${{ github.run_attempt }}/p0/**/diagnostic.json
             /cache/ltx25/results/hunyuan15-p0-${{ github.run_id }}-attempt${{ github.run_attempt }}/p0/**/requests.jsonl

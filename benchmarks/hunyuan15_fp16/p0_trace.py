@@ -141,7 +141,7 @@ def profile_first_hot_attention(fn, *args, **kwargs):
             "cuda_kernel_names": list(dict.fromkeys(e.name for e in gpu))[:40],
             "cuda_event_count": len(gpu),
             "attention_ops": [{
-                "name": e.name, "count": int(e.count),
+                "name": str(getattr(e, "key", getattr(e, "name", "unknown"))), "count": int(e.count),
                 "self_cuda_time_us": float(getattr(e, "self_device_time_total", 0)),
             } for e in prof.key_averages()
                 if any(k in e.key.lower() for k in (

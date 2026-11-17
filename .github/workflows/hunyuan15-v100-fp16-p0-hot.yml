@@ -1,7 +1,13 @@
 name: Hunyuan 1.5 V100 native FP16 P0 persistent hot baseline
 
-# Explicit dispatch only. Never auto-starts an unattended V100 workload.
+# Branch-local explicit trigger. No scheduled, broad push, or PR-triggered GPU runs.
+# A push modifies the dedicated trigger file ONLY when an experiment is requested.
 on:
+  push:
+    branches:
+      - optimization/hunyuan15-v100-fp16
+    paths:
+      - .github/workflow-triggers/hunyuan15-p0-run.txt
   workflow_dispatch:
     inputs:
       phase_diagnostic:
@@ -34,6 +40,7 @@ jobs:
         with:
           ref: optimization/hunyuan15-v100-fp16
           persist-credentials: false
+          fetch-depth: 0
       - name: Confirm protected ancestry and Python syntax
         shell: bash
         run: |
@@ -49,7 +56,7 @@ jobs:
             wgp.py \
             models/hyvideo/diffusion/pipelines/pipeline_hunyuan_video.py
           python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p 'test_p0_hot.py'
-      - name: Assert no automatic V100 triggers
+      - name: Assert only branch-scoped explicit GPU triggers
         shell: bash
         run: |
           set -euo pipefail
@@ -58,9 +65,11 @@ jobs:
           path = Path(".github/workflows/hunyuan15-v100-fp16-p0-hot.yml")
           content = path.read_text()
           assert "workflow_dispatch:" in content
-          assert not any(line.startswith("  push:") or line.startswith("  schedule:") or line.startswith("  pull_request:")
-                         for line in content.splitlines())
-          print("HUNYUAN15_P0_DISPATCH_ONLY_PASS")
+          assert "  push:" in content
+          assert "      - optimization/hunyuan15-v100-fp16" in content
+          assert "      - .github/workflow-triggers/hunyuan15-p0-run.txt" in content
+          assert not any(line.startswith("  schedule:") or line.startswith("  pull_request:") for line in content.splitlines())
+          print("HUNYUAN15_P0_NARROW_TRIGGER_PASS")
           PY
 
   v100-p0:
@@ -82,6 +91,7 @@ jobs:
         with:
           ref: optimization/hunyuan15-v100-fp16
           persist-credentials: false
+          fetch-depth: 0
       - name: Ancestry and pinned branch guard
         shell: bash
         run: |
@@ -120,7 +130,7 @@ jobs:
           grep -Fq P0_PERSISTENT_QUEUE_PASS p0-hot.log
           test -s "$HUNYUAN15_TEST_OUT/p0/hot/baseline.json"
       - name: Optional separately labeled synchronized phase diagnosis
-        if: ${{ inputs.phase_diagnostic }}
+        if: ${{ github.event_name == 'push' || inputs.phase_diagnostic }}
         shell: bash
         run: |
           set -euo pipefail
@@ -128,7 +138,7 @@ jobs:
           grep -Fq P0_PERSISTENT_QUEUE_PASS p0-diagnostic.log
           test -s "$HUNYUAN15_TEST_OUT/p0/diagnostic/diagnostic.json"
       - name: Optional changed-prompt persistence/correctness test
-        if: ${{ inputs.changed_prompt }}
+        if: ${{ github.event_name == 'push' || inputs.changed_prompt }}
         shell: bash
         run: |
           set -euo pipefail

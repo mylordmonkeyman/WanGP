@@ -274,12 +274,21 @@ class MMDoubleStreamBlock(nn.Module):
         qkv_list = [q,k,v]
         del q, k, v
 
-        attn = pay_attention(
-            qkv_list,
-            attention_mask=attn_mask,                
-            q_lens=seqlens_q,
-            k_lens=seqlens_kv,
-        )
+        p4_token = None
+        if (getattr(self, "native_fp16", False) and
+                os.environ.get("HUNYUAN15_P4_ATTENTION_EVENTS") == "1"):
+            from benchmarks.hunyuan15_fp16 import p0_trace
+            p4_token = p0_trace.p4_attention_begin(qkv_list, "pay_attention")
+        try:
+            attn = pay_attention(
+                qkv_list,
+                attention_mask=attn_mask,
+                q_lens=seqlens_q,
+                k_lens=seqlens_kv,
+            )
+        finally:
+            if p4_token is not None:
+                p0_trace.p4_attention_end(p4_token)
         b, s, a, d = attn.shape
         attn = attn.reshape(b, s, -1)        
         del qkv_list

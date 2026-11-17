@@ -54,8 +54,8 @@ def settings(prompt=None):
 
 
 def prepare(out: Path, measured: int, changed_prompt=False):
-    if measured < 1:
-        raise ValueError("Need at least one post-warm-up generation")
+    if measured < 0:
+        raise ValueError("Measured generation count cannot be negative")
     # Only the prompt changes, never the sampling configuration.
     values = [settings() for _ in range(measured + 1)]
     if changed_prompt:
@@ -73,6 +73,7 @@ def prepare(out: Path, measured: int, changed_prompt=False):
         "profile": 0, "video_profile": 0,
         "attention_mode": "sdpa", "compile": "disabled",
         "vae_config": 0,
+        "preload_model_policy": [],  # Must load through the first CLI task.
         "save_path": str(out / "videos"),
         "image_save_path": str(out / "videos"),
         "audio_save_path": str(out / "videos"),
@@ -165,10 +166,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--diagnostic", action="store_true")
     parser.add_argument("--changed-prompt", action="store_true")
+    parser.add_argument("--cold-only", action="store_true")
     parser.add_argument("--plan-only", action="store_true")
     args = parser.parse_args()
-    measured = 1 if args.diagnostic else 5
-    out = OUT / ("diagnostic" if args.diagnostic else "changed_prompt" if args.changed_prompt else "hot")
+    if args.cold_only and (args.diagnostic or args.changed_prompt):
+        parser.error("--cold-only cannot be combined with other run modes")
+    measured = 0 if args.cold_only else (1 if args.diagnostic else 5)
+    out = OUT / ("cold" if args.cold_only else "diagnostic" if args.diagnostic else "changed_prompt" if args.changed_prompt else "hot")
     values = prepare(out, measured, args.changed_prompt)
     if args.plan_only:
         print("P0_PLAN_PASS " + json.dumps({
@@ -207,6 +211,32 @@ def main():
     result = base.run_command(command, out / "generation.log", env, timeout=3600)
     if result["returncode"]:
         raise RuntimeError("Persistent production CLI queue failed: " + str(result))
+    if args.cold_only:
+        records = [json.loads(line) for line in
+                   (out / "trace" / "requests.jsonl").read_text().splitlines()
+                   if line.strip()]
+        clips = sorted((out / "videos").rglob("*.mp4"))
+        if len(records) != 1 or records[0]["error"] or len(clips) != 1:
+            raise RuntimeError("Cold baseline did not produce exactly one valid generation")
+        report = {
+            "status": "P0_COLD_WHOLE_PROCESS_REFERENCE",
+            "source_sha": SOURCE_SHA,
+            "actual_sha": os.environ.get("GITHUB_SHA"),
+            "whole_process_seconds": result["seconds"],
+            "generation_request_seconds": records[0]["hot_request_seconds"],
+            "model_load_seconds_diagnostic": next((
+                b["at"] - a["at"]
+                for a, b in zip(records[0]["events"], records[0]["events"][1:])
+                if a["name"] == "model_load_begin" and b["name"] == "model_load_end"
+            ), None),
+            "checkpoint_sha256": base.hash_file(CHECKPOINT),
+            "converted_lora_sha256": base.hash_file(CONVERTED_LORA),
+            "clip": validate_clip(clips[0]),
+            "note": "A separate process executes ONE generation; not a hot-model measurement.",
+        }
+        (out / "cold.json").write_text(json.dumps(report, indent=2) + "\n")
+        print("P0_COLD_REFERENCE_PASS " + json.dumps(report, sort_keys=True), flush=True)
+        return
     report = collect(out, measured, args.diagnostic)
     print("P0_PERSISTENT_QUEUE_PASS " + json.dumps({
         "median_hot_e2e": report["request_e2e_median_seconds"],

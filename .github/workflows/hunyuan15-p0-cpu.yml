@@ -1,0 +1,57 @@
+name: Hunyuan 1.5 P0 CPU-only regression checks
+
+# CPU-only push checks are safe. This workflow has NO self-hosted/GPU jobs.
+on:
+  push:
+    branches:
+      - optimization/hunyuan15-v100-fp16
+    paths:
+      - .github/workflows/hunyuan15-p0-cpu.yml
+      - benchmarks/hunyuan15_fp16/p0_*.py
+      - benchmarks/hunyuan15_fp16/test_p0_hot.py
+      - wgp.py
+      - shared/attention.py
+      - models/hyvideo/modules/models.py
+      - models/hyvideo/vae/hunyuanvideo_15_vae.py
+      - models/hyvideo/diffusion/pipelines/pipeline_hunyuan_video.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify strict pinned ancestry
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = optimization/hunyuan15-v100-fp16
+          git cat-file -e 7b4c3f5ab3595eff14450eeb2549779931ede405^{commit}
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+      - name: Compile production hooks and benchmark scripts
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            benchmarks/hunyuan15_fp16/p0_hot_queue.py \
+            benchmarks/hunyuan15_fp16/p0_statistics.py \
+            benchmarks/hunyuan15_fp16/p0_trace.py \
+            benchmarks/hunyuan15_fp16/test_p0_hot.py \
+            wgp.py shared/attention.py models/hyvideo/modules/models.py \
+            models/hyvideo/vae/hunyuanvideo_15_vae.py \
+            models/hyvideo/diffusion/pipelines/pipeline_hunyuan_video.py
+      - name: Run CPU-only reference and numeric tests
+        run: python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_p0_hot.py
+      - name: Confirm V100 workflow has manual trigger only
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path(".github/workflows/hunyuan15-v100-fp16-p0-hot.yml").read_text()
+          assert "workflow_dispatch:" in s
+          assert "  push:" not in s and "  schedule:" not in s
+          print("NO_AUTOMATIC_V100_RUNS_PASS")
+          PY

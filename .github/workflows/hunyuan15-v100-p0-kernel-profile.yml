@@ -1,0 +1,95 @@
+name: Hunyuan 1.5 V100 P0 SDPA kernel identity (profiler only)
+
+on:
+  push:
+    branches:
+      - optimization/hunyuan15-v100-fp16
+    paths:
+      - .github/workflow-triggers/hunyuan15-p0-kernel-run.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  cpu-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Pinned branch ancestry, Python and fixtures
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = optimization/hunyuan15-v100-fp16
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          python3 -m py_compile benchmarks/hunyuan15_fp16/p0_trace.py shared/attention.py benchmarks/hunyuan15_fp16/p0_hot_queue.py
+          python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_p0_hot.py
+
+  v100-kernel:
+    needs: cpu-gate
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 40
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      HUNYUAN15_TEST_OUT: /cache/ltx25/results/hunyuan15-p0-kernel-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      HUNYUAN15_P0_PROFILE_FIRST_ATTENTION: '1'
+      PYTHONPATH: .
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_DATASETS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Idle V100 and offline checkpoint preflight
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          test -x "$HUNYUAN15_PYTHON"
+          nvidia-smi --query-gpu=name --format=csv,noheader | grep -q V100
+          ACTIVE="$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+' || true)"
+          if [ -n "$ACTIVE" ]; then echo "GPU busy: $ACTIVE" >&2; exit 1; fi
+          test -s /cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints/hunyuanvideo1.5_480p_t2v_fp16.safetensors
+          test -s /cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1/converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors
+          echo "P0_KERNEL_IDLE_PASS"
+      - name: One warm-up and one diagnostic hot request with single attention profile
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p0_hot_queue.py --diagnostic 2>&1 | tee p0-kernel.log
+          grep -Fq P0_PERSISTENT_QUEUE_PASS p0-kernel.log
+          "$HUNYUAN15_PYTHON" - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path(os.environ["HUNYUAN15_TEST_OUT"])/"p0/diagnostic/trace/requests.jsonl"
+          recs=[json.loads(x) for x in p.read_text().splitlines() if x.strip()]
+          assert len(recs)==2
+          r=recs[1]
+          profile=r.get("attention_kernel_profile")
+          if profile is not None:
+              print("P0_KERNEL_PROFILE",json.dumps(profile,sort_keys=True))
+          else:
+              print("P0_KERNEL_PROFILE_UNAVAILABLE",r.get("attention_kernel_profile_error"))
+          assert profile is not None or r.get("attention_kernel_profile_error"), "Profiler produced no kernel data or failure explanation"
+          PY
+      - name: Upload profiler-only diagnostics and logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p0-kernel-identity
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            p0-kernel.log
+            /cache/ltx25/results/hunyuan15-p0-kernel-${{ github.run_id }}-attempt${{ github.run_attempt }}/p0/diagnostic/diagnostic.json
+            /cache/ltx25/results/hunyuan15-p0-kernel-${{ github.run_id }}-attempt${{ github.run_attempt }}/p0/diagnostic/trace/requests.jsonl
+            /cache/ltx25/results/hunyuan15-p0-kernel-${{ github.run_id }}-attempt${{ github.run_attempt }}/p0/diagnostic/generation.log

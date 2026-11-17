@@ -1,0 +1,139 @@
+name: Hunyuan 1.5 V100 P4 SDPA CUDA event attribution
+
+on:
+  push:
+    branches:
+      - optimization/hunyuan15-v100-fp16
+    paths:
+      - .github/workflow-triggers/hunyuan15-p4-attention-events-run.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  cpu-safety:
+    name: Branch scope and P4 event measurement unit gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify scope, syntax, and deferred-event guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = optimization/hunyuan15-v100-fp16
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          python3 -m py_compile \
+            benchmarks/hunyuan15_fp16/p0_trace.py \
+            benchmarks/hunyuan15_fp16/p0_hot_queue.py \
+            benchmarks/hunyuan15_fp16/p4_attention_compare.py \
+            benchmarks/hunyuan15_fp16/test_p4_attention_events.py \
+            shared/attention.py models/hyvideo/modules/models.py
+          python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_p4_attention_events.py
+          python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_p0_hot.py
+          python3 - <<'PY'
+          from pathlib import Path
+          workflow=Path(".github/workflows/hunyuan15-v100-p4-attention-events.yml").read_text()
+          assert "      - .github/workflow-triggers/hunyuan15-p4-attention-events-run.txt" in workflow
+          assert "      - optimization/hunyuan15-v100-fp16" in workflow
+          assert not any(x in ("  schedule:","  pull_request:") for x in workflow.splitlines())
+          trace=Path("benchmarks/hunyuan15_fp16/p0_trace.py").read_text()
+          assert "p4_attention_summarize" in trace and "p4_attention_end" in trace
+          print("P4_NARROW_BRANCH_AND_NO_PER_CALL_SYNC_PASS")
+          PY
+
+  v100-events:
+    name: Offline fixed-MMGP1 control and dual-level SDPA CUDA events
+    needs: cpu-safety
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 95
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      P4_ROOT: /cache/ltx25/results/hunyuan15-p4-attention-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      PYTHONPATH: .
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_DATASETS_OFFLINE: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      GRADIO_ANALYTICS_ENABLED: 'False'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Idle-GPU, V100 capability and cached-FP16 preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          test -x "$HUNYUAN15_PYTHON"
+          nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv,noheader
+          nvidia-smi --query-gpu=name --format=csv,noheader | grep -q V100
+          ACTIVE="$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+' || true)"
+          if [ -n "$ACTIVE" ]; then echo "GPU busy, abort P4: $ACTIVE" >&2; exit 1; fi
+          test -s /cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints/hunyuanvideo1.5_480p_t2v_fp16.safetensors
+          test -s /cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1/converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors
+          "$HUNYUAN15_PYTHON" - <<'PY'
+          import torch
+          if torch.cuda.get_device_capability() != (7,0):
+              raise SystemExit("P4 requires a V100 SM70; unexpected CUDA device")
+          e=torch.cuda.Event(enable_timing=True)
+          e.record()
+          torch.cuda.synchronize()
+          print("P4_V100_EVENTS_SUPPORTED",round(e.elapsed_time(e),6))
+          PY
+          echo P4_IDLE_FP16_PREFLIGHT_PASS
+      - name: Control then CUDA events, one warmup and five hot generations each
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$P4_ROOT"
+          for EVENTS in 0 1; do
+            if [ "$EVENTS" = 0 ]; then ARM=control; else ARM=events; fi
+            echo "P4_ARM_BEGIN $ARM" | tee "p4-$ARM.log"
+            HUNYUAN15_TEST_OUT="$P4_ROOT/$ARM" "$HUNYUAN15_PYTHON" -u \
+              benchmarks/hunyuan15_fp16/p0_hot_queue.py --p4-events "$EVENTS" \
+              2>&1 | tee -a "p4-$ARM.log"
+            grep -Fq P4_ATTENTION_ARM_PASS "p4-$ARM.log"
+            test -s "$P4_ROOT/$ARM/p4/events_$EVENTS/baseline.json"
+            echo "P4_ARM_COMPLETE $ARM" | tee -a "p4-$ARM.log"
+          done
+      - name: Summarize GPU stream attention time and unchanged video parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p4_attention_compare.py "$P4_ROOT" | tee p4-report.log
+          grep -Fq P4_SDPA_EVENT_REPORT p4-report.log
+          test -s "$P4_ROOT/p4_attention_report.json"
+      - name: Preserve raw traces, reports and logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p4-attention-event-reports
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            p4-*.log
+            /cache/ltx25/results/hunyuan15-p4-attention-${{ github.run_id }}-attempt${{ github.run_attempt }}/p4_attention_report.json
+            /cache/ltx25/results/hunyuan15-p4-attention-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p4/*/baseline.json
+            /cache/ltx25/results/hunyuan15-p4-attention-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p4/*/trace/requests.jsonl
+            /cache/ltx25/results/hunyuan15-p4-attention-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p4/*/generation.log
+      - name: Preserve control and instrumented MP4 clips
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p4-attention-event-videos
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: /cache/ltx25/results/hunyuan15-p4-attention-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p4/*/videos/*.mp4

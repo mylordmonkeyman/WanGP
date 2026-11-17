@@ -16,7 +16,7 @@ No work is authorized on `main` or the source research branch.
 | One warm-up + five hot requests | **Measured** | Hot E2E 34.609 / 34.818 / 34.684 / 34.631 / 34.651 s; median 34.651 s, MAD 0.034 s |
 | Model and MMGP identity | **Measured, MMGP residency incomplete** | 54 blocks on CPU after requests; stable offload identity; read-only pool/transfer snapshots added for P1B |
 | Hot offload-inclusive denoise | **Provisional 19.657 s median** | Early transformer preloads and H2D still require attribution; do not promote as verified inclusive-denoise time |
-| Q/K pre-RMSNorm safety and FP32 reference | **Measured one seed; more seeds pending** | 864 tensor observations, maximum |Q/K| 44.5, zero FP16-square threshold violations, max sampled FP32 reference difference 0.03578 |
+| Q/K pre-RMSNorm safety and FP32 reference | **Measured one seed; more seeds pending** | 864 tensor observations, maximum abs(Q/K) 44.5, zero FP16-square threshold violations, max sampled FP32 reference difference 0.03578 |
 | Attention dispatch shapes and lengths | **Measured; kernel profiling queued** | 216 SDPA calls, Q/K [1,14159,16,128], 14,040 video + 119 text tokens; kernel identity pending |
 | VAE tile geometry and executed decoder calls | **Measured** | Runtime module FP16; 256px/64-frame preset 1, overlap .25, 15 decoder calls; arithmetic dtype finer probe pending |
 | Separate cold one-video reference | **Measured** | Whole-process 68.9 s, request time 49.891 s |

@@ -7820,6 +7820,23 @@ def generate_media(
     else:
         VAE_tile_size = None
 
+    # Research-only P3C: use stock VAE geometry unless an explicitly tagged
+    # native-FP16 Hunyuan model and 384/512px trial request are both present.
+    # Baseline requests remain byte-for-byte unmodified in their geometry.
+    if os.environ.get("HUNYUAN15_P3C_TRACE") == "1":
+        from shared.hunyuan15_p3c_tile_policy import resolve_custom_vae_tiles
+        original_vae_tiles = VAE_tile_size
+        VAE_tile_size, p3c_info = resolve_custom_vae_tiles(
+            model_def, base_model_type, wan_model.vae,
+            original_vae_tiles,
+            os.environ.get("HUNYUAN15_P3C_SPATIAL_TILE", ""),
+            output_width=width, output_height=height, video_length=video_length,
+        )
+        print("HUNYUAN15_P3C_TILE_SELECTED " + json.dumps({
+            "model_type": model_type, "tile": VAE_tile_size,
+            "overridden": p3c_info is not None, "predicted": p3c_info,
+        }, sort_keys=True), flush=True)
+
     trans = get_transformer_model(wan_model)
     trans2 = get_transformer_model(wan_model, 2)
     audio_sampling_rate = 16000

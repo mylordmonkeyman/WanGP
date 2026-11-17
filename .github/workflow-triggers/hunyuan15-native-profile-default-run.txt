@@ -1,0 +1,1 @@
+Explicit user-authorized native-Hunyuan-FP16 MMGP profile 1 default proof. Check actual selected default without --profile, one warmup plus one hot generation in a single persistent process. Run after queued VAE trial completes through shared V100 concurrency lock. No changes to BF16 models or main.

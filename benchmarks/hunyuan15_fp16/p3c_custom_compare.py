@@ -99,7 +99,8 @@ def summarize(root:Path):
     base=arms["256"]
     if base["status"]!="complete":
         raise RuntimeError("P3C fixed 256px native-FP16 baseline failed")
-    baseline=frame_md5(base["clips"][1]["clip"])
+    baseline_clips = list(base["clips"])  # Preserve source clips before stripping report payload
+    baseline=frame_md5(baseline_clips[1]["clip"])
     if len(baseline)!=33:raise RuntimeError("Baseline is not 33 decoded frames")
     for arm in arms.values():
         if arm["status"]=="complete":
@@ -112,8 +113,8 @@ def summarize(root:Path):
                 if len(hashes)!=33:raise RuntimeError(f"Wrong frame count for {clip['clip']}")
                 item={"mismatched_decoded_h264_frames":sum(a!=b for a,b in zip(baseline,hashes))}
                 if arm is not base:
-                    item["psnr_h264_db"]=_ffmpeg_quality(base["clips"][index]["clip"],clip["clip"],"psnr")
-                    item["ssim_h264"]=_ffmpeg_quality(base["clips"][index]["clip"],clip["clip"],"ssim")
+                    item["psnr_h264_db"]=_ffmpeg_quality(baseline_clips[index]["clip"],clip["clip"],"psnr")
+                    item["ssim_h264"]=_ffmpeg_quality(baseline_clips[index]["clip"],clip["clip"],"ssim")
                 pairwise.append(item)
             arm["frame_comparisons"]=pairwise
             del arm["clips"]

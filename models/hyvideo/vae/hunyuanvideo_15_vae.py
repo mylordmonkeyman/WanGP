@@ -17,6 +17,7 @@
 
 from shared.utils.phase_progress import vae_decoding_progress, set_phase_status
 import math
+import os
 from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 
@@ -488,6 +489,9 @@ class Decoder(nn.Module):
 
     def forward(self, z: Tensor) -> Tensor:
         """Forward pass through the decoder."""
+        if os.environ.get("HUNYUAN15_P0_DIAGNOSTIC") == "1":
+            from benchmarks.hunyuan15_fp16 import p0_trace
+            p0_trace.record_vae_decoder_call(z)
 
         # z to block_in
         repeats = self.block_out_channels[0] // (self.z_channels)
@@ -891,6 +895,9 @@ class AutoencoderKLConv3D(ModelMixin, ConfigMixin):
 
     def decode(self, z: Tensor, return_dict: bool = True, generator=None):
 
+        if os.environ.get("HUNYUAN15_P0_DIAGNOSTIC") == "1":
+            from benchmarks.hunyuan15_fp16 import p0_trace
+            p0_trace.record_vae_config(self, z)
         tiles = z.shape[0] if self.use_slicing else 1
         if self.use_temporal_tiling and z.shape[2] > self.tile_latent_min_tsize:
             tiles *= len(range(0, z.shape[2], int(self.tile_latent_min_tsize * (1 - self.tile_overlap_factor))))

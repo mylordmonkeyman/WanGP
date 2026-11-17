@@ -77,6 +77,30 @@ jobs:
           test -s /cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints/hunyuanvideo1.5_480p_t2v_fp16.safetensors
           test -s /cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1/converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors
           echo P2B_V100_PREFLIGHT_PASS
+      - name: GPU numeric microgate for MLP 4/2/1 chunk parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" - <<'PY'
+          import torch
+          from models.hyvideo.modules.mlp_layers import MLP
+          torch.manual_seed(20261117)
+          model=MLP(in_channels=64,hidden_channels=128,dtype=torch.float16,device="cuda").eval()
+          inp=torch.randn((1,191,64),dtype=torch.float16,device="cuda")
+          outs={}
+          with torch.inference_mode():
+              for d in (4,2,1):
+                  x=inp.clone()
+                  model.apply_(x,divide=d)
+                  outs[d]=x
+          for d in (2,1):
+              error=(outs[d]-outs[4]).abs().max().item()
+              finite=torch.isfinite(outs[d]).all().item()
+              print("P2B_MICRO_GATE",{"divide":d,"max_abs_error":error,"finite":finite})
+              if not finite or error>0.1:
+                  raise SystemExit("P2B_NUMERIC_PARITY_FAILED")
+          print("P2B_NUMERIC_PARITY_PASS")
+          PY
       - name: Test baseline divide4, candidate2, candidate1 serially
         shell: bash
         run: |

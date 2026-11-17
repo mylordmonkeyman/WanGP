@@ -177,14 +177,20 @@ def main():
     parser.add_argument("--profile", type=int, choices=(0, 1, 3), default=0)
     parser.add_argument("--p1b", action="store_true", help="Isolated MMGP-profile experiment; does not overwrite P0")
     parser.add_argument("--p3b", action="store_true", help="Isolated existing VAE preset experiment; no VAE code change")
+    parser.add_argument("--p3c", action="store_true", help="Isolated custom 384/512px VAE tiling, fixed native MMGP1 default")
+    parser.add_argument("--p3c-spatial", type=int, choices=(256, 384, 512), default=256)
     parser.add_argument("--vae-config", type=int, choices=(0,1,2,3), default=0)
     args = parser.parse_args()
     if args.native_default_smoke and (args.cold_only or args.diagnostic or args.p1b or args.p3b or args.changed_prompt or args.vae_config != 0 or args.profile != 0):
         parser.error("--native-default-smoke requires otherwise unmodified baseline settings")
     if args.cold_only and (args.diagnostic or args.changed_prompt):
         parser.error("--cold-only cannot be combined with other run modes")
-    if args.p1b and args.p3b:
-        parser.error("--p1b and --p3b are independent experiments")
+    if sum((args.p1b,args.p3b,args.p3c)) > 1:
+        parser.error("--p1b, --p3b and --p3c are independent experiments")
+    if not args.p3c and args.p3c_spatial != 256:
+        parser.error("--p3c-spatial requires --p3c")
+    if args.p3c and (args.cold_only or args.diagnostic or args.changed_prompt or args.native_default_smoke or args.profile != 0 or args.vae_config != 0):
+        parser.error("--p3c has a fixed 1 warmup plus 5 hot runs, default MMGP1 and auto VAE config")
     if args.p3b and (args.cold_only or args.diagnostic or args.changed_prompt or args.profile != 0):
         parser.error("--p3b holds MMGP profile 0 and fixed five-hot sampling")
     if not args.p3b and args.vae_config != 0:
@@ -194,11 +200,12 @@ def main():
     if not args.p1b and args.profile != 0:
         parser.error("Nonbaseline MMGP profiles require --p1b")
     measured = 0 if args.cold_only else (1 if args.diagnostic or args.native_default_smoke else 5)
-    out = (base.OUT / "native_default" if args.native_default_smoke else
+    out = (base.OUT / "p3c" / ("spatial_" + str(args.p3c_spatial)) if args.p3c else
+           base.OUT / "native_default" if args.native_default_smoke else
            base.OUT / "p1b" / ("profile_" + str(args.profile)) if args.p1b else
            base.OUT / "p3b" / ("vae_config_" + str(args.vae_config)) if args.p3b else
            OUT / ("cold" if args.cold_only else "diagnostic" if args.diagnostic else "changed_prompt" if args.changed_prompt else "hot"))
-    values = prepare(out, measured, args.changed_prompt, profile=args.profile, vae_config=args.vae_config)
+    values = prepare(out, measured, args.changed_prompt, profile=1 if args.p3c else args.profile, vae_config=args.vae_config)
     if args.plan_only:
         print("P0_PLAN_PASS " + json.dumps({
             "output": str(out), "tasks": len(values),
@@ -221,6 +228,15 @@ def main():
         "WAN2GP_LTX2_SKIP_BAKED_LORA_MIGRATION": "1",
         "OMP_NUM_THREADS": "8",
     })
+    if args.p3c:
+        env["HUNYUAN15_P3C_TRACE"] = "1"
+        if args.p3c_spatial != 256:
+            env["HUNYUAN15_P3C_SPATIAL_TILE"] = str(args.p3c_spatial)
+        else:
+            env.pop("HUNYUAN15_P3C_SPATIAL_TILE", None)
+    else:
+        env.pop("HUNYUAN15_P3C_TRACE", None)
+        env.pop("HUNYUAN15_P3C_SPATIAL_TILE", None)
     command = [
         base.PYTHON, "-u", "wgp.py", "--offline",
         "--config", str(out / "config"), "--process", str(out / "settings.json"),
@@ -229,7 +245,7 @@ def main():
         "--lora-config", str(out / "lora_paths.json"),
         "--no-prevent-power-throttling", "--verbose", "1",
     ]
-    if not args.native_default_smoke:
+    if not (args.native_default_smoke or args.p3c):
         command[command.index("--attention"):command.index("--attention")] = ["--profile", str(args.profile)]
     print("P0_EXECUTION " + json.dumps({
         "command": command, "tasks": len(values),
@@ -264,7 +280,19 @@ def main():
         (out / "cold.json").write_text(json.dumps(report, indent=2) + "\n")
         print("P0_COLD_REFERENCE_PASS " + json.dumps(report, sort_keys=True), flush=True)
         return
-    report = collect(out, measured, args.diagnostic, profile=1 if args.native_default_smoke else args.profile, vae_config=args.vae_config)
+    report = collect(out, measured, args.diagnostic,
+                     profile=1 if args.native_default_smoke or args.p3c else args.profile,
+                     vae_config=args.vae_config)
+    if args.p3c:
+        report["p3c_spatial_tile_requested"] = args.p3c_spatial
+        (out / "baseline.json").write_text(json.dumps(report, indent=2) + "\n")
+        print("P3C_HOT_VAE_PASS " + json.dumps({
+            "tile_px": args.p3c_spatial,
+            "median_hot_e2e": report["request_e2e_median_seconds"],
+            "samples": report["request_e2e_samples_seconds"],
+            "peak_vram_gib": round(report["peak_vram_bytes"] / 2**30, 3),
+            "fixed_native_default_profile": 1,
+        }, sort_keys=True), flush=True)
     if args.native_default_smoke:
         trace = out / "trace" / "requests.jsonl"
         records = [json.loads(line) for line in trace.read_text().splitlines() if line.strip()]

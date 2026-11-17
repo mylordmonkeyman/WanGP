@@ -9975,6 +9975,7 @@ def process_tasks_cli(queue, state):
                     if os.environ.get("HUNYUAN15_P0_TRACE_DIR"):
                         from benchmarks.hunyuan15_fp16 import p0_trace
                         p0_trace.begin(task_no, filtered_params.get("model_type"), filtered_params.get("prompt"), filtered_params.get("seed"))
+                        p0_trace.record_request_begin_mmgp(offloadobj)
                         p0_started = True
                     generate_media(task, send_cmd, plugin_data=plugin_data, **filtered_params)
                     if p0_started:

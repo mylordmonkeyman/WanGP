@@ -200,6 +200,15 @@ def end(model, offloadobj, error=None):
     record["cuda_allocated_bytes"] = torch.cuda.memory_allocated()
     record["cuda_reserved_bytes"] = torch.cuda.memory_reserved()
     record["cuda_peak_allocated_bytes"] = torch.cuda.max_memory_allocated()
+    # Process RSS is observed, not a machine-wide RAM allocation estimate.
+    try:
+        proc_lines = Path("/proc/self/status").read_text().splitlines()
+        for line in proc_lines:
+            if line.startswith(("VmRSS:", "VmHWM:", "VmPin:")):
+                name, value = line.split(":", 1)
+                record["process_" + name.lower() + "_kib"] = int(value.strip().split()[0])
+    except (OSError, ValueError, IndexError):
+        pass
     try:
         from mmgp import offload
         record["resolved_attention"] = offload.shared_state.get("_attention")

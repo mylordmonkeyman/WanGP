@@ -73,6 +73,87 @@ def mark(name, details=None):
     _active["events"].append(event)
 
 
+
+def p4_attention_begin(qkv, kind):
+    """Record a CUDA event on the current stream, without host/GPU synchronization.
+
+    kind is "pay_attention" or "sdpa_core". This is gated to the existing
+    native-FP16 P0 request trace and an explicit P4 experiment environment flag.
+    Event timing is instrumentation, not an uninstrumented hot wall-time.
+    """
+    if (_active is None or
+            os.environ.get("HUNYUAN15_P4_ATTENTION_EVENTS") != "1"):
+        return None
+    if kind not in ("pay_attention", "sdpa_core"):
+        raise ValueError("Unexpected P4 attention event kind")
+    import torch
+    start = torch.cuda.Event(enable_timing=True)
+    start.record(torch.cuda.current_stream())
+    entry = {
+        "kind": kind,
+        "start": start,
+        "shape": tuple(qkv[0].shape),
+        "dtype": str(qkv[0].dtype),
+        "host_begin": time.perf_counter(),
+    }
+    _active.setdefault("_p4_attention_events", []).append(entry)
+    return entry
+
+
+def p4_attention_end(entry):
+    """Finalize the event asynchronously; consume elapsed time only at request end."""
+    if entry is None:
+        return
+    import torch
+    stop = torch.cuda.Event(enable_timing=True)
+    stop.record(torch.cuda.current_stream())
+    entry["stop"] = stop
+    entry["host_ms"] = (time.perf_counter() - entry["host_begin"]) * 1000
+
+
+def p4_attention_summarize(entries, request_seconds):
+    """Called *after* the existing request-end CUDA synchronization."""
+    import statistics
+    if not entries:
+        return {"status": "no_events"}
+    summary = {}
+    for kind in ("pay_attention", "sdpa_core"):
+        group = [e for e in entries if e["kind"] == kind]
+        if not group:
+            raise RuntimeError("P4 attention events missing kind: " + kind)
+        if any("stop" not in e for e in group):
+            raise RuntimeError("P4 attention events contain unfinished intervals")
+        values = [e["start"].elapsed_time(e["stop"]) for e in group]
+        hosts = [e["host_ms"] for e in group]
+        if any(v < 0 for v in values) or any(v < 0 for v in hosts):
+            raise RuntimeError("P4 negative event/host timing")
+        summary[kind] = {
+            "count": len(group),
+            "gpu_stream_total_ms": round(sum(values), 6),
+            "gpu_stream_median_call_ms": round(statistics.median(values), 6),
+            "gpu_stream_max_call_ms": round(max(values), 6),
+            "host_call_total_ms": round(sum(hosts), 6),
+            "host_call_median_ms": round(statistics.median(hosts), 6),
+            "first_shape": list(group[0]["shape"]),
+            "dtype": group[0]["dtype"],
+        }
+    outer = summary["pay_attention"]
+    inner = summary["sdpa_core"]
+    if outer["count"] != inner["count"]:
+        raise RuntimeError("P4 mismatched outer/core call count")
+    if outer["count"] != 216:
+        raise RuntimeError("P4 expected 54 blocks x 4 steps = 216 attention calls, got " + str(outer["count"]))
+    return {
+        "status": "P4_ATTENTION_EVENTS_RECORDED",
+        "intervals": summary,
+        "request_seconds": request_seconds,
+        "sdpa_stream_fraction_of_request": round(inner["gpu_stream_total_ms"] / (1000 * request_seconds), 6),
+        "pay_attention_stream_fraction_of_request": round(outer["gpu_stream_total_ms"] / (1000 * request_seconds), 6),
+        "method": "CUDA events on current stream enclosing SDPA call and pay_attention wrapper; existing single request-end sync; no per-call synchronization",
+        "caution": "GPU stream intervals are not an Nsight kernel-name trace; Python host call totals are not additive to GPU stream totals",
+    }
+
+
 def record_qk(block, stream, q, k, q_norm, k_norm):
     """Diagnostic-only pre-RMSNorm reductions; transfer scalars after timing."""
     if _active is None or not _DIAGNOSTIC:
@@ -285,6 +366,10 @@ def end(model, offloadobj, error=None, effective_profile=None):
             record["mmgp_bulk_move_block_delta_is_not_h2d_bytes"] = True
     record["pin_pool_reuse_verified"] = False
     record["h2d_bytes_verified"] = False
+    if os.environ.get("HUNYUAN15_P4_ATTENTION_EVENTS") == "1":
+        intervals = record.pop("_p4_attention_events", [])
+        record["p4_attention"] = p4_attention_summarize(
+            intervals, record["hot_request_seconds"])
     events = {e["name"]: e["at"] for e in record["events"]}
     phases = {}
     for name, begin_name, end_name in (

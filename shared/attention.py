@@ -456,6 +456,22 @@ def _sage_rows_head_dim(q, softmax_scale):
     return sage1_core.padded_head_dim(head_dim, q.device) is not None and (softmax_scale is None or head_dim not in sage1_core.head_dims(q.device))
 
 
+
+def _length_scalar(lengths, index=0):
+    """Get length from existing CUDA tensor or a prevalidated CPU integer.
+
+    On normal tensor input this intentionally retains the original .item()
+    behavior. Native Hunyuan FP16 can opt into a Python integer list prepared
+    once by the outer transformer forward, avoiding GPU sync per block.
+    """
+    value = lengths[index]
+    if isinstance(value, int):
+        return value
+    if isinstance(value, torch.Tensor):
+        return value.item()
+    return int(value)
+
+
 def pay_attention(
     qkv_list,
     dropout_p=0.,
@@ -565,8 +581,8 @@ def pay_attention(
             return o
     elif (q_lens != None or k_lens != None) and attn in ("sage2", "sage3", "sdpa"):
         assert b == 1
-        szq = q_lens[0].item() if q_lens != None else lq
-        szk = k_lens[0].item() if k_lens != None else lk
+        szq = _length_scalar(q_lens) if q_lens != None else lq
+        szk = _length_scalar(k_lens) if k_lens != None else lk
         final_padding = lq - szq
         q = q[:, :szq]
         k = k[:, :szk]
@@ -594,8 +610,8 @@ def pay_attention(
             cu_seqlens_q=get_cu_seqlens(b, q_lens, lq) 
             cu_seqlens_k=get_cu_seqlens(b, k_lens, lk) 
         else:
-            szq = q_lens[0].item() if q_lens != None else lq
-            szk = k_lens[0].item() if k_lens != None else lk
+            szq = _length_scalar(q_lens) if q_lens != None else lq
+            szk = _length_scalar(k_lens) if k_lens != None else lk
             if szq != lq or szk != lk:
                 cu_seqlens_q = torch.tensor([0, szq, lq], dtype=torch.int32, device=q.device)
                 cu_seqlens_k = torch.tensor([0, szk, lk], dtype=torch.int32, device=q.device)
@@ -682,8 +698,8 @@ def pay_attention(
             attn_mask = BlockDiagonalPaddedKeysMask.from_seqlens([lq] * b , lk , list(k_lens) ) 
             x = memory_efficient_attention(q, k, v, attn_bias= attn_mask )
         elif b == 1:
-            szq = q_lens[0].item() if q_lens != None else lq
-            szk = k_lens[0].item() if k_lens != None else lk
+            szq = _length_scalar(q_lens) if q_lens != None else lq
+            szk = _length_scalar(k_lens) if k_lens != None else lk
             attn_mask = BlockDiagonalPaddedKeysMask.from_seqlens([szq, lq - szq ] , lk , [szk, 0] ) 
             x = memory_efficient_attention(q, k, v, attn_bias= attn_mask )
         else:

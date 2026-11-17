@@ -66,8 +66,15 @@ class NativeFP16ProfileTests(unittest.TestCase):
         for name in ("load_models", "generate_media"):
             matches=[node for fn,node in uses if fn==name]
             self.assertGreaterEqual(len(matches), 1, f"missing {name} model-aware profile")
-            self.assertTrue(all(len(node.args)>=3 for node in matches),
-                            f"{name} omitted model_type in memory-profile resolution")
+            # The media pipeline also calls compute_profile for an independent
+            # postprocessing/upsampler model; only calls selecting the main
+            # requested output_type should receive the main model_type.
+            primary=[node for node in matches if len(node.args)>=2
+                     and isinstance(node.args[1],ast.Name)
+                     and node.args[1].id=="output_type"]
+            self.assertGreaterEqual(len(primary), 1, f"missing {name} primary profile")
+            self.assertTrue(all(len(node.args)>=3 for node in primary),
+                            f"{name} omitted model_type for primary model cache/load")
 
 
 if __name__=="__main__":

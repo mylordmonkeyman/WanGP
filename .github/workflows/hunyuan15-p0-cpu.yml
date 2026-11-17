@@ -13,6 +13,7 @@ on:
       - benchmarks/hunyuan15_fp16/test_*.py
       - wgp.py
       - shared/attention.py
+      - shared/hunyuan15_p3c_tile_policy.py
       - models/hyvideo/modules/models.py
       - models/hyvideo/vae/hunyuanvideo_15_vae.py
       - models/hyvideo/diffusion/pipelines/pipeline_hunyuan_video.py
@@ -46,6 +47,9 @@ jobs:
             benchmarks/hunyuan15_fp16/p2c_latent_policy.py \
             benchmarks/hunyuan15_fp16/p2a_compare.py \
             benchmarks/hunyuan15_fp16/p3b_preset_compare.py \
+            benchmarks/hunyuan15_fp16/p3c_custom_compare.py \
+            benchmarks/hunyuan15_fp16/test_p3c_tile_policy.py \
+            shared/hunyuan15_p3c_tile_policy.py \
             benchmarks/hunyuan15_fp16/test_p0_hot.py \
             benchmarks/hunyuan15_fp16/test_p2c_latent_policy.py \
             wgp.py shared/attention.py models/hyvideo/modules/models.py \

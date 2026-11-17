@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Verify strict pinned ancestry
         run: |
           set -euo pipefail
@@ -46,12 +47,15 @@ jobs:
             models/hyvideo/diffusion/pipelines/pipeline_hunyuan_video.py
       - name: Run CPU-only reference and numeric tests
         run: python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_p0_hot.py
-      - name: Confirm V100 workflow has manual trigger only
+      - name: Confirm V100 workflow has only a narrow branch trigger
         run: |
           python3 - <<'PY'
           from pathlib import Path
           s = Path(".github/workflows/hunyuan15-v100-fp16-p0-hot.yml").read_text()
           assert "workflow_dispatch:" in s
-          assert "  push:" not in s and "  schedule:" not in s
-          print("NO_AUTOMATIC_V100_RUNS_PASS")
+          assert "  push:" in s and "  workflow_dispatch:" in s
+          assert "      - optimization/hunyuan15-v100-fp16" in s
+          assert "      - .github/workflow-triggers/hunyuan15-p0-run.txt" in s
+          assert "  schedule:" not in s and "  pull_request:" not in s
+          print("NARROW_BRANCH_TRIGGER_PASS")
           PY

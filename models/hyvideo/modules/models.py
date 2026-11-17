@@ -2,6 +2,7 @@
 # Community License Agreement (https://github.com/Tencent-Hunyuan/HunyuanVideo/blob/main/LICENSE.txt). Modified for WanGP.
 # Modifications Copyright (c) 2025-2026 DeepBeepMeep - part of WanGP, WanGP Community License 2.0 (see LICENSE.txt)
 from typing import Any, List, Tuple, Optional, Union, Dict
+import os
 from einops import rearrange
 
 import torch
@@ -222,6 +223,10 @@ class MMDoubleStreamBlock(nn.Module):
         img_v = self.img_attn_v(img_modulated).view(*shape)
         del img_modulated
 
+        if getattr(self, "native_fp16", False) and os.environ.get("HUNYUAN15_P0_DIAGNOSTIC") == "1":
+            from benchmarks.hunyuan15_fp16 import p0_trace
+            p0_trace.record_qk(self, "image", img_q, img_k,
+                               self.img_attn_q_norm, self.img_attn_k_norm)
         # Apply QK-Norm if needed
         self.img_attn_q_norm.apply_(img_q).to(img_v)
         img_q_len = img_q.shape[1]
@@ -249,6 +254,10 @@ class MMDoubleStreamBlock(nn.Module):
                 txt_qkv, "B L (K H D) -> K B L H D", K=3, H=self.heads_num
             )
             del txt_qkv
+        if getattr(self, "native_fp16", False) and os.environ.get("HUNYUAN15_P0_DIAGNOSTIC") == "1":
+            from benchmarks.hunyuan15_fp16 import p0_trace
+            p0_trace.record_qk(self, "text", txt_q, txt_k,
+                               self.txt_attn_q_norm, self.txt_attn_k_norm)
         # Apply QK-Norm if needed.
         self.txt_attn_q_norm.apply_(txt_q).to(txt_v)
         self.txt_attn_k_norm.apply_(txt_k).to(txt_v)

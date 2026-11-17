@@ -179,14 +179,20 @@ def main():
     parser.add_argument("--p3b", action="store_true", help="Isolated existing VAE preset experiment; no VAE code change")
     parser.add_argument("--p3c", action="store_true", help="Isolated custom 384/512px VAE tiling, fixed native MMGP1 default")
     parser.add_argument("--p3c-spatial", type=int, choices=(256, 384, 512), default=256)
+    parser.add_argument("--p2b", action="store_true", help="Native-FP16 image MLP chunks, fixed default MMGP1")
+    parser.add_argument("--p2b-divide", type=int, choices=(4,2,1), default=4)
     parser.add_argument("--vae-config", type=int, choices=(0,1,2,3), default=0)
     args = parser.parse_args()
-    if args.native_default_smoke and (args.cold_only or args.diagnostic or args.p1b or args.p3b or args.changed_prompt or args.vae_config != 0 or args.profile != 0):
+    if args.native_default_smoke and (args.cold_only or args.diagnostic or args.p1b or args.p3b or args.p3c or args.p2b or args.changed_prompt or args.vae_config != 0 or args.profile != 0):
         parser.error("--native-default-smoke requires otherwise unmodified baseline settings")
     if args.cold_only and (args.diagnostic or args.changed_prompt):
         parser.error("--cold-only cannot be combined with other run modes")
-    if sum((args.p1b,args.p3b,args.p3c)) > 1:
-        parser.error("--p1b, --p3b and --p3c are independent experiments")
+    if sum((args.p1b,args.p3b,args.p3c,args.p2b)) > 1:
+        parser.error("--p1b, --p3b, --p3c and --p2b are independent experiments")
+    if not args.p2b and args.p2b_divide != 4:
+        parser.error("--p2b-divide requires --p2b")
+    if args.p2b and (args.cold_only or args.diagnostic or args.changed_prompt or args.profile != 0 or args.vae_config != 0):
+        parser.error("--p2b fixes profile1 and sampling and uses one warmup plus five hot runs")
     if not args.p3c and args.p3c_spatial != 256:
         parser.error("--p3c-spatial requires --p3c")
     if args.p3c and (args.cold_only or args.diagnostic or args.changed_prompt or args.native_default_smoke or args.profile != 0 or args.vae_config != 0):
@@ -200,12 +206,13 @@ def main():
     if not args.p1b and args.profile != 0:
         parser.error("Nonbaseline MMGP profiles require --p1b")
     measured = 0 if args.cold_only else (1 if args.diagnostic or args.native_default_smoke else 5)
-    out = (base.OUT / "p3c" / ("spatial_" + str(args.p3c_spatial)) if args.p3c else
+    out = (base.OUT / "p2b" / ("divide_" + str(args.p2b_divide)) if args.p2b else
+           base.OUT / "p3c" / ("spatial_" + str(args.p3c_spatial)) if args.p3c else
            base.OUT / "native_default" if args.native_default_smoke else
            base.OUT / "p1b" / ("profile_" + str(args.profile)) if args.p1b else
            base.OUT / "p3b" / ("vae_config_" + str(args.vae_config)) if args.p3b else
            OUT / ("cold" if args.cold_only else "diagnostic" if args.diagnostic else "changed_prompt" if args.changed_prompt else "hot"))
-    values = prepare(out, measured, args.changed_prompt, profile=1 if args.p3c else args.profile, vae_config=args.vae_config)
+    values = prepare(out, measured, args.changed_prompt, profile=1 if args.p3c or args.p2b else args.profile, vae_config=args.vae_config)
     if args.plan_only:
         print("P0_PLAN_PASS " + json.dumps({
             "output": str(out), "tasks": len(values),
@@ -237,6 +244,10 @@ def main():
     else:
         env.pop("HUNYUAN15_P3C_TRACE", None)
         env.pop("HUNYUAN15_P3C_SPATIAL_TILE", None)
+    if args.p2b and args.p2b_divide != 4:
+        env["HUNYUAN15_P2B_MLP_DIVIDE"] = str(args.p2b_divide)
+    else:
+        env.pop("HUNYUAN15_P2B_MLP_DIVIDE", None)
     command = [
         base.PYTHON, "-u", "wgp.py", "--offline",
         "--config", str(out / "config"), "--process", str(out / "settings.json"),
@@ -245,7 +256,7 @@ def main():
         "--lora-config", str(out / "lora_paths.json"),
         "--no-prevent-power-throttling", "--verbose", "1",
     ]
-    if not (args.native_default_smoke or args.p3c):
+    if not (args.native_default_smoke or args.p3c or args.p2b):
         command[command.index("--attention"):command.index("--attention")] = ["--profile", str(args.profile)]
     print("P0_EXECUTION " + json.dumps({
         "command": command, "tasks": len(values),
@@ -281,7 +292,7 @@ def main():
         print("P0_COLD_REFERENCE_PASS " + json.dumps(report, sort_keys=True), flush=True)
         return
     report = collect(out, measured, args.diagnostic,
-                     profile=1 if args.native_default_smoke or args.p3c else args.profile,
+                     profile=1 if args.native_default_smoke or args.p3c or args.p2b else args.profile,
                      vae_config=args.vae_config)
     if args.p3c:
         report["p3c_spatial_tile_requested"] = args.p3c_spatial
@@ -292,6 +303,15 @@ def main():
             "samples": report["request_e2e_samples_seconds"],
             "peak_vram_gib": round(report["peak_vram_bytes"] / 2**30, 3),
             "fixed_native_default_profile": 1,
+        }, sort_keys=True), flush=True)
+    if args.p2b:
+        report["p2b_mlp_divide_requested"] = args.p2b_divide
+        (out / "baseline.json").write_text(json.dumps(report, indent=2) + "\n")
+        print("P2B_HOT_MLP_PASS " + json.dumps({
+            "divide": args.p2b_divide,
+            "median_hot_e2e": report["request_e2e_median_seconds"],
+            "samples": report["request_e2e_samples_seconds"],
+            "peak_vram_gib": round(report["peak_vram_bytes"] / 2**30, 3),
         }, sort_keys=True), flush=True)
     if args.native_default_smoke:
         trace = out / "trace" / "requests.jsonl"

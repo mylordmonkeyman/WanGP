@@ -1,0 +1,2 @@
+Authorized serialized V100 A/B/B/A repeat: 0,1,1,0, one independent warmup and five hot runs per arm, plus decoded H.264 frame parity.
+Offline checkpoints and LoRA unchanged; keep optimization off by default. Run only when GPU idle; share v100-serialized-optimization-experiments lock with kernel profiler.

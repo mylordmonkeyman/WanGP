@@ -44,6 +44,36 @@ adoption criterion.
 - H.264 decoded frame equality supports this fixed case, but is not lossless
   latent/parity testing or a proof of longer-sequence stability.
 
+## User-directed default decision — engineering exception
+
+On November 16, 2026, the user explicitly directed that **MMGP profile 1
+become the default for native-FP16 Hunyuan 1.5** despite the initially
+inconclusive full A/B/B/A adoption noise gate. This is a user-authorized
+engineering exception, **not a claim that the performance/statistical
+qualification criteria were satisfied**.
+
+Only the three finetunes with `hunyuan15_native_fp16=true` on
+`optimization/hunyuan15-v100-fp16` carry `default_mmgp_profile: 1`.
+`wgp.py::compute_profile` applies this model-scoped default to both the
+**load** and **loaded-profile reuse/cache** decision, avoiding inadvertent
+reconstruction between successive generations. Explicit per-request memory
+profile overrides and `--profile 0` (including the historical P0/P1
+benchmark configurations) retain priority. Original BF16 Hunyuan,
+unrelated WanGP models, `main` and research branches are unchanged.
+
+**Cost:** profile 1 uses about **25 GiB pinned host RAM**, compared with
+about **32 MiB** for profile 0. Benchmark gains were **2.06% in the initial
+0/1/3 screen** and **1.53% in the balanced 0/1/1/0 repeat**; the latter
+did *not* pass the prescribed statistical noise gate. That caveat
+persists even though the default is now selected.
+
+**Verification:** Model-scoped CPU policy tests are passing. Runtime
+two-video GPU verification without any explicit CLI profile selection is
+queued at https://github.com/mylordmonkeyman/WanGP/actions/runs/44023325587
+behind the serialized P3B VAE preset experiment. Until that run succeeds,
+classify production-path default activation as *configured, runtime
+confirmation pending*.
+
 ## Next gates
 
 Balanced independent sessions 0,1,1,0 are being tested via

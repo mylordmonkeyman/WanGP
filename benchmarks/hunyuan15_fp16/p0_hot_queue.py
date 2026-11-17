@@ -131,6 +131,7 @@ def collect(out: Path, expected: int, diagnostic: bool, *, profile=0, vae_config
         "requested_attention": "sdpa",
         "effective_mmgp_profile_requested": profile,
         "effective_vae_config_requested": vae_config,
+        "p2a_cpu_seqlens_requested": os.environ.get("HUNYUAN15_P2A_CPU_SEQLENS", "0") == "1",
         "mmgp_bulk_move_block_deltas": [r.get("mmgp_bulk_move_block_delta") for r in results],
         "mmgp_end_snapshots": [r.get("mmgp_end") for r in results],
         "resolved_attention": records[-1]["resolved_attention"],

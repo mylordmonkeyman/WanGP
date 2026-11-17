@@ -53,7 +53,7 @@ def settings(prompt=None):
     return result
 
 
-def prepare(out: Path, measured: int, changed_prompt=False):
+def prepare(out: Path, measured: int, changed_prompt=False, *, profile=0):
     if measured < 0:
         raise ValueError("Measured generation count cannot be negative")
     # Only the prompt changes, never the sampling configuration.
@@ -70,7 +70,7 @@ def prepare(out: Path, measured: int, changed_prompt=False):
         "transformer_quantization": "bf16",  # WanGP unquantized selector
         "text_encoder_quantization": "int8",
         "transformer_types": [EXPECTED_MODEL],
-        "profile": 0, "video_profile": 0,
+        "profile": profile, "video_profile": profile,
         "attention_mode": "sdpa", "compile": "disabled",
         "vae_config": 0,
         "preload_model_policy": [],  # Must load through the first CLI task.
@@ -95,7 +95,7 @@ def md_spread(samples):
     return statistics.median(abs(x - center) for x in samples)
 
 
-def collect(out: Path, expected: int, diagnostic: bool):
+def collect(out: Path, expected: int, diagnostic: bool, *, profile=0):
     path = out / "trace" / "requests.jsonl"
     records = [json.loads(s) for s in path.read_text().splitlines() if s.strip()]
     if len(records) != expected + 1:
@@ -129,6 +129,9 @@ def collect(out: Path, expected: int, diagnostic: bool):
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "effective_settings": settings(),
         "requested_attention": "sdpa",
+        "effective_mmgp_profile_requested": profile,
+        "mmgp_bulk_move_block_deltas": [r.get("mmgp_bulk_move_block_delta") for r in results],
+        "mmgp_end_snapshots": [r.get("mmgp_end") for r in results],
         "resolved_attention": records[-1]["resolved_attention"],
         "process_ids": [r["pid"] for r in records],
         "stable_pipeline_and_transformer": True,
@@ -168,12 +171,19 @@ def main():
     parser.add_argument("--changed-prompt", action="store_true")
     parser.add_argument("--cold-only", action="store_true")
     parser.add_argument("--plan-only", action="store_true")
+    parser.add_argument("--profile", type=int, choices=(0, 1, 3), default=0)
+    parser.add_argument("--p1b", action="store_true", help="Isolated MMGP-profile experiment; does not overwrite P0")
     args = parser.parse_args()
     if args.cold_only and (args.diagnostic or args.changed_prompt):
         parser.error("--cold-only cannot be combined with other run modes")
+    if args.p1b and (args.cold_only or args.diagnostic or args.changed_prompt):
+        parser.error("--p1b runs a fixed warm-up + five measured hot requests only")
+    if not args.p1b and args.profile != 0:
+        parser.error("Nonbaseline MMGP profiles require --p1b")
     measured = 0 if args.cold_only else (1 if args.diagnostic else 5)
-    out = OUT / ("cold" if args.cold_only else "diagnostic" if args.diagnostic else "changed_prompt" if args.changed_prompt else "hot")
-    values = prepare(out, measured, args.changed_prompt)
+    out = (base.OUT / "p1b" / ("profile_" + str(args.profile)) if args.p1b else
+           OUT / ("cold" if args.cold_only else "diagnostic" if args.diagnostic else "changed_prompt" if args.changed_prompt else "hot"))
+    values = prepare(out, measured, args.changed_prompt, profile=args.profile)
     if args.plan_only:
         print("P0_PLAN_PASS " + json.dumps({
             "output": str(out), "tasks": len(values),
@@ -200,7 +210,7 @@ def main():
         base.PYTHON, "-u", "wgp.py", "--offline",
         "--config", str(out / "config"), "--process", str(out / "settings.json"),
         "--output-dir", str(out / "videos"),
-        "--profile", "0", "--attention", "sdpa", "--fp16",
+        "--profile", str(args.profile), "--attention", "sdpa", "--fp16",
         "--lora-config", str(out / "lora_paths.json"),
         "--no-prevent-power-throttling", "--verbose", "1",
     ]
@@ -237,12 +247,12 @@ def main():
         (out / "cold.json").write_text(json.dumps(report, indent=2) + "\n")
         print("P0_COLD_REFERENCE_PASS " + json.dumps(report, sort_keys=True), flush=True)
         return
-    report = collect(out, measured, args.diagnostic)
+    report = collect(out, measured, args.diagnostic, profile=args.profile)
     print("P0_PERSISTENT_QUEUE_PASS " + json.dumps({
         "median_hot_e2e": report["request_e2e_median_seconds"],
         "samples": report["request_e2e_samples_seconds"],
         "stable_model": report["stable_pipeline_and_transformer"],
-        "diagnostic": args.diagnostic,
+        "diagnostic": args.diagnostic, "profile": args.profile,
     }, sort_keys=True), flush=True)
 
 

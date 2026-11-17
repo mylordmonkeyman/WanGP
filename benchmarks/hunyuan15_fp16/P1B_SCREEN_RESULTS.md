@@ -76,11 +76,16 @@ confirmation pending*.
 
 ## Next gates
 
-Balanced independent sessions 0,1,1,0 are being tested via
+The balanced 0,1,1,0 session completed successfully:
 https://github.com/mylordmonkeyman/WanGP/actions/runs/44019180939
-(five hot generations per session, first full warmup discarded).
-Further gating: verify memory under 97 frames, confirm H2D bytes/waits,
-monitor system RAM pressure with other models present, and save lossless
-frame/latent probes before considering a default profile change.
+(five hot generations per session, first full warmup discarded). The
+aggregate 1.53% gain remained statistically inconclusive.
 
-**No MMGP profile has been promoted. No changes to `main` or research branch.**
+The user nevertheless selected profile 1 as the default for tagged
+native-FP16 finetunes **on this optimization branch only**. Outstanding
+risk checks include 97-frame peak-memory stress, actual H2D bytes/waits,
+pinned-RAM pressure with other resident models, and lossless decoded
+frame/latent probes. Such checks are follow-up verification, not
+prerequisites being falsely claimed as passed.
+
+**No changes to `main`, the source research branch, or BF16 defaults.**

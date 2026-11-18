@@ -1,0 +1,22 @@
+{
+  "model": {
+    "name": "Hunyuan 1.5 I2V 720p - V100 native FP16 (EXPERIMENT)",
+    "architecture": "hunyuan_1_5_i2v",
+    "description": "Hunyuan Video 1.5 original Comfy-Org 720p I2V native FP16 transformer; trial-only model for V100 smoke and cross-model LightX2V rank-32 LoRA compatibility; no alternate quantization.",
+    "dtype": "fp16",
+    "hunyuan15_native_fp16": true,
+    "auto_quantize": false,
+    "profiles_dir": [
+      ""
+    ],
+    "URLs": [
+      "https://huggingface.co/Comfy-Org/Hunyuan-Video-1.5/resolve/main/split_files/diffusion_models/hunyuanvideo1.5_720p_i2v_fp16.safetensors"
+    ],
+    "default_mmgp_profile": 1
+  },
+  "resolution": "1280x720",
+  "video_length": 33,
+  "num_inference_steps": 4,
+  "guidance_scale": 1,
+  "flow_shift": 8
+}

@@ -15,6 +15,8 @@ on:
       - wgp.py
       - shared/attention.py
       - shared/hunyuan15_p3c_tile_policy.py
+      - shared/hunyuan15_vae384_default.py
+      - shared/cli_args.py
       - shared/hunyuan15_p2b_mlp_policy.py
       - models/hyvideo/modules/models.py
       - models/hyvideo/vae/hunyuanvideo_15_vae.py
@@ -55,6 +57,9 @@ jobs:
             benchmarks/hunyuan15_fp16/p4_attention_compare.py \
             benchmarks/hunyuan15_fp16/test_p3c_tile_policy.py \
             shared/hunyuan15_p3c_tile_policy.py \
+            shared/hunyuan15_vae384_default.py \
+            shared/cli_args.py \
+            benchmarks/hunyuan15_fp16/test_vae384_default.py \
             benchmarks/hunyuan15_fp16/test_p0_hot.py \
             benchmarks/hunyuan15_fp16/test_p2c_latent_policy.py \
             wgp.py shared/attention.py models/hyvideo/modules/models.py \

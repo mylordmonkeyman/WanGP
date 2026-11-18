@@ -118,7 +118,8 @@ jobs:
               "$HUNYUAN15_PYTHON" - "$MEMLOG" <<'PY'
           import sys
           from pathlib import Path
-          from benchmarks.hunyuan15_fp16.p3d_balanced_compare import read_memory
+          sys.path.insert(0, "benchmarks/hunyuan15_fp16")
+          from p3d_balanced_compare import read_memory
           used,free=read_memory(Path(sys.argv[1]))
           print("P3D_REAL_DEVICE_MEMORY",{"peak_used_mib":used,"lowest_free_mib":free})
           if free < 4096:

@@ -1,0 +1,70 @@
+name: Hunyuan 1.5 V100 four-model FP16 cache and disk inventory
+
+on:
+  push:
+    branches:
+      - optimization/hunyuan15-v100-fp16
+    paths:
+      - .github/workflows/hunyuan15-v100-fourway-inventory.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 10
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Check four native FP16 model files, converted LoRA, free disk and downloader
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvidia-smi -L
+          df -h /cache/ltx25 /cache/ltx25/results
+          "$HUNYUAN15_PYTHON" - <<'PY'
+          import os,json,shutil,importlib.util
+          from pathlib import Path
+          roots=[Path('/cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints'),
+                 Path('/cache/ltx25/models'),Path('/opt/ltx25/checkpoints')]
+          names={
+            't2v_480':'hunyuanvideo1.5_480p_t2v_fp16.safetensors',
+            'i2v_480':'hunyuanvideo1.5_480p_i2v_step_distilled_fp16.safetensors',
+            't2v_720':'hunyuanvideo1.5_720p_t2v_fp16.safetensors',
+            'i2v_720':'hunyuanvideo1.5_720p_i2v_fp16.safetensors',
+          }
+          checkpoints={}
+          for key,name in names.items():
+              seen=[{'path':str(p),'bytes':p.stat().st_size}
+                    for root in roots if (p:=root/name).is_file()]
+              checkpoints[key]={'found':any(x['bytes']>15_000_000_000 for x in seen),'locations':seen}
+          converted=(Path('/cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1') /
+              'converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors')
+          original=(roots[0]/'loras/hunyuanvideo1.5_t2v_480p_lightx2v_4step_lora_rank_32_bf16.safetensors')
+          st=shutil.disk_usage(str(roots[0].parent))
+          result={'checkpoints':checkpoints,'converted_lora':{'path':str(converted),'exists':converted.is_file(),'bytes':converted.stat().st_size if converted.is_file() else 0},
+             'original_lora':{'path':str(original),'exists':original.is_file()},
+             'free_bytes':st.free,'hf_hub_installed':importlib.util.find_spec('huggingface_hub') is not None,
+             'hf_cli':shutil.which('hf'),'requests_available':importlib.util.find_spec('requests') is not None,
+             'cache_writable':os.access(roots[0],os.W_OK),
+             'bar_png_present':Path('benchmarks/ltx25_convrot/inputs/profile_i2v_1024x576.png.png').is_file()}
+          print('HUNYUAN15_FOURWAY_INVENTORY '+json.dumps(result,sort_keys=True),flush=True)
+          Path('hunyuan15-fourway-inventory.json').write_text(json.dumps(result,indent=2)+'\n')
+          PY
+      - name: Keep inventory report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-fourway-inventory
+          retention-days: 14
+          if-no-files-found: warn
+          path: hunyuan15-fourway-inventory.json

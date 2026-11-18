@@ -7820,22 +7820,36 @@ def generate_media(
     else:
         VAE_tile_size = None
 
-    # Research-only P3C: use stock VAE geometry unless an explicitly tagged
-    # native-FP16 Hunyuan model and 384/512px trial request are both present.
-    # Baseline requests remain byte-for-byte unmodified in their geometry.
+    # Keep P3C's explicit A/B geometry independent of the production default:
+    # a requested 256px baseline must remain the original VAE configuration.
     if os.environ.get("HUNYUAN15_P3C_TRACE") == "1":
         from shared.hunyuan15_p3c_tile_policy import resolve_custom_vae_tiles
-        original_vae_tiles = VAE_tile_size
+        requested_tile = (os.environ.get("HUNYUAN15_P3C_SPATIAL_TILE", "")
+                          if args.hunyuan15_vae_384 else "")
         VAE_tile_size, p3c_info = resolve_custom_vae_tiles(
             model_def, base_model_type, wan_model.vae,
-            original_vae_tiles,
-            os.environ.get("HUNYUAN15_P3C_SPATIAL_TILE", ""),
+            VAE_tile_size, requested_tile,
             output_width=width, output_height=height, video_length=video_length,
         )
         print("HUNYUAN15_P3C_TILE_SELECTED " + json.dumps({
             "model_type": model_type, "tile": VAE_tile_size,
             "overridden": p3c_info is not None, "predicted": p3c_info,
         }, sort_keys=True), flush=True)
+    else:
+        # Only tagged native-FP16 Hunyuan 1.5 T2V/I2V with the original
+        # high-memory auto 256px VAE preset gets the validated 384px default.
+        # The CLI --no-hunyuan15-vae-384 flag preserves the exact stock preset.
+        from shared.hunyuan15_vae384_default import resolve_hunyuan15_vae384_default
+        VAE_tile_size, applied_vae384 = resolve_hunyuan15_vae384_default(
+            model_def, base_model_type, getattr(wan_model, "vae", None),
+            VAE_tile_size, enabled=args.hunyuan15_vae_384,
+            vae_config=vae_config,
+        )
+        if applied_vae384:
+            print("HUNYUAN15_VAE384_DEFAULT " + json.dumps({
+                "model_type": model_type, "tile": VAE_tile_size,
+                "mode": "native_fp16_auto",
+            }, sort_keys=True), flush=True)
 
     trans = get_transformer_model(wan_model)
     trans2 = get_transformer_model(wan_model, 2)

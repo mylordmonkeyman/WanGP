@@ -41,7 +41,7 @@ def load(root:Path, session:str, tile:int):
     if len(report["clips"])!=6 or len(report["request_e2e_samples_seconds"])!=5:
         raise ValueError("P3D missing clips or measurements")
     for clip in report["clips"]:
-        if clip.get("frames") != 33:
+        if clip.get("decoded_frames") != 33:
             raise ValueError("P3D clip is not 33 frames: "+str(clip))
     runtime=json_messages(folder/"generation.log",TRACE_MARK)
     selected=json_messages(folder/"generation.log",TILE_MARK)

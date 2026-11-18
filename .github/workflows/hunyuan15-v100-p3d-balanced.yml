@@ -1,0 +1,161 @@
+name: Hunyuan 1.5 V100 P3D balanced 256 vs 384 VAE confirmation
+
+on:
+  push:
+    branches:
+      - optimization/hunyuan15-v100-fp16
+    paths:
+      - .github/workflow-triggers/hunyuan15-p3d-balanced-run.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  cpu-safety:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify branch, pinned ancestor, Python and ABBA test
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = optimization/hunyuan15-v100-fp16
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          python3 -m py_compile wgp.py shared/hunyuan15_p3c_tile_policy.py \
+            models/hyvideo/vae/hunyuanvideo_15_vae.py \
+            benchmarks/hunyuan15_fp16/p0_hot_queue.py \
+            benchmarks/hunyuan15_fp16/p3d_balanced_compare.py \
+            benchmarks/hunyuan15_fp16/test_p3d_balanced_compare.py
+          python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_p3d_balanced_compare.py
+          python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_p3c_tile_policy.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path(".github/workflows/hunyuan15-v100-p3d-balanced.yml").read_text()
+          assert "      - .github/workflow-triggers/hunyuan15-p3d-balanced-run.txt" in s
+          assert "      - optimization/hunyuan15-v100-fp16" in s
+          assert "cancel-in-progress: false" in s
+          assert not any(x in ("  schedule:","  pull_request:") for x in s.splitlines())
+          print("P3D_NARROW_GPU_TRIGGER_PASS")
+          PY
+
+  v100-balanced:
+    needs: cpu-safety
+    name: Four serial 6-clip sessions A256-B384-B384-A256 with fixed MMGP1
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 130
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      P3D_ROOT: /cache/ltx25/results/hunyuan15-p3d-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      PYTHONPATH: .
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_DATASETS_OFFLINE: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      GRADIO_ANALYTICS_ENABLED: 'False'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Idle V100 and original full-FP16 cached checkpoint preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$HUNYUAN15_PYTHON"
+          git merge-base --is-ancestor 7b4c3f5ab3595eff14450eeb2549779931ede405 HEAD
+          nvidia-smi --query-gpu=name,compute_cap,memory.total,memory.free --format=csv,noheader
+          nvidia-smi --query-gpu=name --format=csv,noheader | grep -q V100
+          ACTIVE="$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -E '^[[:space:]]*[0-9]+' || true)"
+          if [ -n "$ACTIVE" ]; then echo "GPU occupied; no new trial: $ACTIVE" >&2; exit 1; fi
+          test -s /cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints/hunyuanvideo1.5_480p_t2v_fp16.safetensors
+          test -s /cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1/converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors
+          command -v ffmpeg
+          echo P3D_IDLE_OFFLINE_V100_PASS
+      - name: Run balanced ABBA and log real GPU memory independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$P3D_ROOT"
+          for ARM in a1:256 b1:384 b2:384 a2:256; do
+            SESSION="${ARM%%:*}"
+            TILE="${ARM##*:}"
+            echo "P3D_BEGIN $SESSION tile=$TILE" | tee -a p3d-trials.log
+            MEMLOG="$P3D_ROOT/nvidia_${SESSION}_${TILE}.csv"
+            nvidia-smi --query-gpu=timestamp,memory.used,memory.free \
+              --format=csv,noheader,nounits -lms 1000 >"$MEMLOG" \
+              2>"$P3D_ROOT/nvidia_${SESSION}_${TILE}-stderr.log" &
+            MONITOR=$!
+            set +e
+            HUNYUAN15_TEST_OUT="$P3D_ROOT/${SESSION}_${TILE}" \
+              "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p0_hot_queue.py \
+              --p3c --p3c-spatial "$TILE" \
+              2>&1 | tee "p3d-${SESSION}-${TILE}.log"
+            EXIT="${PIPESTATUS[0]}"
+            set -e
+            kill "$MONITOR" 2>/dev/null || true
+            wait "$MONITOR" 2>/dev/null || true
+            echo "$EXIT" >"$P3D_ROOT/${SESSION}-exit.txt"
+            echo "P3D_END $SESSION tile=$TILE exit=$EXIT" | tee -a p3d-trials.log
+            if [ "$EXIT" -ne 0 ]; then
+              echo "P3D generation failed; no further arms" >&2
+              exit "$EXIT"
+            fi
+            grep -Fq "P3C_HOT_VAE_PASS" "p3d-${SESSION}-${TILE}.log"
+            # Hardware VRAM safety: do not run a second candidate or further
+            # sessions if monitored peak leaves under 4 GiB of free memory.
+            if [ "$TILE" = 384 ]; then
+              "$HUNYUAN15_PYTHON" - "$MEMLOG" <<'PY'
+          import sys
+          from pathlib import Path
+          from benchmarks.hunyuan15_fp16.p3d_balanced_compare import read_memory
+          used,free=read_memory(Path(sys.argv[1]))
+          print("P3D_REAL_DEVICE_MEMORY",{"peak_used_mib":used,"lowest_free_mib":free})
+          if free < 4096:
+              raise SystemExit("P3D_STOP_LOW_REAL_GPU_FREE_VRAM")
+          PY
+            fi
+          done
+      - name: Evaluate 20 hot runs, decoder calls, device VRAM, decoded quality
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p3d_balanced_compare.py "$P3D_ROOT" \
+            | tee p3d-summary.log
+          grep -Fq P3D_BALANCED_REPORT p3d-summary.log
+          test -s "$P3D_ROOT/p3d_balanced_summary.json"
+      - name: Retain complete raw reports and monitoring records on any failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p3d-balanced-reports
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            p3d-*.log
+            /cache/ltx25/results/hunyuan15-p3d-${{ github.run_id }}-attempt${{ github.run_attempt }}/*-exit.txt
+            /cache/ltx25/results/hunyuan15-p3d-${{ github.run_id }}-attempt${{ github.run_attempt }}/nvidia_*.csv
+            /cache/ltx25/results/hunyuan15-p3d-${{ github.run_id }}-attempt${{ github.run_attempt }}/nvidia_*-stderr.log
+            /cache/ltx25/results/hunyuan15-p3d-${{ github.run_id }}-attempt${{ github.run_attempt }}/p3d_balanced_summary.json
+            /cache/ltx25/results/hunyuan15-p3d-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p3c/*/baseline.json
+            /cache/ltx25/results/hunyuan15-p3d-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p3c/*/trace/requests.jsonl
+            /cache/ltx25/results/hunyuan15-p3d-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p3c/*/generation.log
+      - name: Preserve original ABBA videos for independent fidelity checks
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p3d-balanced-clips
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: /cache/ltx25/results/hunyuan15-p3d-${{ github.run_id }}-attempt${{ github.run_attempt }}/*/p3c/*/videos/*.mp4

@@ -1,0 +1,75 @@
+name: Hunyuan 1.5 V100 stage missing 720p native FP16 checkpoints
+
+on:
+  push:
+    branches: [optimization/hunyuan15-v100-fp16]
+    paths: [.github/workflows/hunyuan15-v100-720p-fp16-stage.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  stage-public-fp16-models:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 150
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      HF_HUB_DOWNLOAD_TIMEOUT: '180'
+      HF_HUB_ETAG_TIMEOUT: '30'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      HUNYUAN15_STAGE_ROOT: /cache/ltx25/results/hunyuan15-fourway-fp16-checkpoints
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Download public 720p I2V and T2V FP16 models without conversions
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HUNYUAN15_PYTHON" -u - <<'PY' 2>&1 | tee hunyuan15-720p-stage.log
+          import json,os,shutil,time
+          from pathlib import Path
+          from huggingface_hub import hf_hub_download
+          from safetensors import safe_open
+          root=Path(os.environ['HUNYUAN15_STAGE_ROOT'])
+          root.mkdir(parents=True,exist_ok=True)
+          probe=root/'.writetest'
+          probe.write_text('writable')
+          probe.unlink()
+          names=['hunyuanvideo1.5_720p_t2v_fp16.safetensors',
+                 'hunyuanvideo1.5_720p_i2v_fp16.safetensors']
+          source='Comfy-Org/Hunyuan-Video-1.5'
+          report={'models':{},'root':str(root)}
+          for name in names:
+              dst=root/name
+              if not dst.is_file() or dst.stat().st_size < 15_000_000_000:
+                  print('HUNYUAN15_STAGE_BEGIN '+name,flush=True)
+                  temp=Path(hf_hub_download(repo_id=source,
+                      filename='split_files/diffusion_models/'+name,
+                      local_dir=str(root)))
+                  if temp.stat().st_size < 15_000_000_000:
+                      raise RuntimeError('Downloaded FP16 checkpoint incomplete: '+str(temp))
+                  os.replace(temp,dst)
+              with safe_open(str(dst),framework='pt',device='cpu') as sf:
+                  keys=list(sf.keys())
+                  hdr={'tensor_count':len(keys),'sample_keys':keys[:4],
+                       'sample_dtypes':list({str(sf.get_slice(k).get_shape())[:120] for k in keys[:3]})}
+              report['models'][name]={'file':str(dst),'bytes':dst.stat().st_size,**hdr}
+              print('HUNYUAN15_STAGE_PASS '+json.dumps({name:report['models'][name]}),flush=True)
+          Path('hunyuan15-720p-stage-summary.json').write_text(json.dumps(report,indent=2)+'\n')
+          PY
+      - name: Retain staging logs and checkpoint inventory
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-720p-fp16-staging-report
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            hunyuan15-720p-stage.log
+            hunyuan15-720p-stage-summary.json

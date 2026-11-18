@@ -81,6 +81,7 @@ def parse_wgp_args(config_filename: str, argv: Sequence[str] | None = None):
     add("--listen", action="store_true", help="Server accessible on local network")
     add("--attention", type=str, default="", help="attention mode")
     add("--vae-config", type=str, default="", help="vae config mode")
+    add("--hunyuan15-vae-384", action=argparse.BooleanOptionalAction, default=True, help="Native-FP16 Hunyuan 1.5: use 384px VAE spatial tiles with the high-memory auto VAE preset (default). Use --no-hunyuan15-vae-384 for original 256px tiles.")
     add("--process", type=str, default="", help="Process a saved queue (.zip) or settings file (.json) without launching the web UI")
     add("--offline", action="store_true", help="Never download anything: use only the files already on this computer; a missing file stops the operation with an error")
     add("--deepy-server", action="store_true", help="Serve the Deepy chat and media galleries without the Gradio UI")

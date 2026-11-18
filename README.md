@@ -1,5 +1,13 @@
 # WanGP
 
+## Hunyuan Video 1.5 native-FP16 V100 defaults (optimization branch)
+
+For the fork's **native-FP16 Hunyuan 1.5 T2V/I2V variants**, the high-memory **Auto** VAE preset now uses **384px spatial tiles** (24 latent pixels), rather than the stock 256px (16 latent pixels). Temporal tiling stays at 64 frames, with 25% overlap. The change applies only when Auto originally selects the stock 256px/64-frame preset; smaller-memory presets, explicitly selected VAE presets, and other models are unchanged.
+
+**Disable this optimization:** start WanGP with `--no-hunyuan15-vae-384`. For example: `python wgp.py --fp16 --no-hunyuan15-vae-384`. By default `--hunyuan15-vae-384` is enabled. CLI flags take effect when the WanGP process starts; restart to change them. P3C's explicit benchmarking override remains independent, so its 256px reference arm is still 256px.
+
+**Validation:** 832×480, 33-frame native-FP16 T2V with MMGP profile 1, 4-step LoRA, four A/B/B/A sessions (20 hot runs): median E2E 33.964s (256px) vs 33.269s (384px), **2.05% faster**, minimum H.264 PSNR 48.02 dB and SSIM 0.9926; at least 21.7 GiB device VRAM free. See [balanced benchmark](https://github.com/mylordmonkeyman/WanGP/actions/runs/44336009502). Longer T2V, I2V, and perceptual VAE seam quality have not yet been separately validated; use the opt-out if these workloads show artifacts or memory pressure.
+
 ## This fork: LTX-2.5 acceleration on NVIDIA V100 (SM70)
 
 This fork retains WanGP's models and UI, while accelerating **LTX-2.5 Distilled/Dev with INT8 ConvRot checkpoints** on the Tesla V100. Eligible ConvRot linears use **Candidate E** (FP32 Radix-4 Hadamard rotation, transient INT8→FP16 cast, cuBLAS Tensor Core GEMM, GPU-side scaling/range correction, BF16 output). A reusable scratch workspace avoids permanent duplicate FP16 weights, and ineligible operations fall back to WanGP. A separate **Stage 2 transient FP16 Quanto-GEMM** path is enabled by default on V100; Stage 1 selective FP16 remains off by default. These kernels are SM70-specific, not a blanket speedup for every WanGP model or GPU.

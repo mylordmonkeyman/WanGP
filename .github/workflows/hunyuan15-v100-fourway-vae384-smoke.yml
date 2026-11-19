@@ -34,6 +34,14 @@ jobs:
             benchmarks/hunyuan15_fp16/v100_fourway_vae384_smoke.py
           python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_vae384_default.py
           python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'benchmarks/hunyuan15_fp16')
+          import v100_fourway_vae384_smoke as smoke
+          assert len(smoke.CASES) == 4
+          assert smoke.OUT.name.startswith('hunyuan15-fourway-smoke-')
+          print('HUNYUAN15_FOURWAY_MODULE_IMPORT_PASS')
+          PY
+          python3 - <<'PY'
           import json
           from pathlib import Path
           expected={

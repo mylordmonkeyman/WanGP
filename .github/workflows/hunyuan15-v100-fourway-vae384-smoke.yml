@@ -1,0 +1,104 @@
+name: Hunyuan 1.5 V100 480/720 T2V/I2V 384px default versus opt-out smoke
+
+# Explicit single user-requested trigger. Do not run on ordinary code pushes.
+on:
+  push:
+    branches:
+      - optimization/hunyuan15-v100-fp16
+    paths:
+      - .github/workflow-triggers/hunyuan15-fourway-smoke-run.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  cpu-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify exact branch, native-FP16 finetunes, CLI default and smoke harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = optimization/hunyuan15-v100-fp16
+          python3 -m py_compile \
+            wgp.py shared/cli_args.py shared/hunyuan15_vae384_default.py \
+            benchmarks/hunyuan15_fp16/v100_fourway_vae384_smoke.py
+          python3 -m unittest discover -v -s benchmarks/hunyuan15_fp16 -p test_vae384_default.py
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          expected={
+             'hunyuan15_v100_t2v_720_fp16_experiment':'hunyuan_1_5_t2v',
+             'hunyuan15_v100_i2v_720_fp16_experiment':'hunyuan_1_5_i2v',
+          }
+          for name,architecture in expected.items():
+              d=json.loads((Path('finetunes')/(name+'.json')).read_text())
+              assert d['model']['hunyuan15_native_fp16'] is True
+              assert d['model']['dtype']=='fp16'
+              assert d['model']['architecture']==architecture
+              assert d['resolution']=='1280x720'
+          print('HUNYUAN15_FOURWAY_CPU_GATE_PASS')
+          PY
+
+  v100-smoke:
+    needs: cpu-gate
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 240
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      HUNYUAN15_FOURWAY_OUT: /cache/ltx25/results/hunyuan15-fourway-smoke-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      GRADIO_ANALYTICS_ENABLED: 'False'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_DATASETS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify runner, stage files, adapter and idle GPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvidia-smi -L
+          test -s /cache/ltx25/results/hunyuan15-fourway-fp16-checkpoints/hunyuanvideo1.5_720p_t2v_fp16.safetensors
+          test -s /cache/ltx25/results/hunyuan15-fourway-fp16-checkpoints/hunyuanvideo1.5_720p_i2v_fp16.safetensors
+          test -s /cache/ltx25/results/hunyuan15-fp16-downloaded-checkpoints/hunyuanvideo1.5_480p_t2v_fp16.safetensors
+          test -s /cache/ltx25/models/hunyuanvideo1.5_480p_i2v_step_distilled_fp16.safetensors
+          test -s /cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1/converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors
+      - name: Generate 8 serial FP16 LightX2V bar videos (4 models x VAE default/disable)
+        shell: bash
+        run: |
+          set -o pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/v100_fourway_vae384_smoke.py \
+            2>&1 | tee hunyuan15-fourway-smoke.log
+      - name: Retain 8 comparison MP4s in one download archive
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-fourway-all-videos
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: ${{ env.HUNYUAN15_FOURWAY_OUT }}/videos/*.mp4
+      - name: Retain per-case logs, selected config and final report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-fourway-smoke-reports
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            hunyuan15-fourway-smoke.log
+            ${{ env.HUNYUAN15_FOURWAY_OUT }}/summary.json
+            ${{ env.HUNYUAN15_FOURWAY_OUT }}/*/generation.log
+            ${{ env.HUNYUAN15_FOURWAY_OUT }}/*/settings.json
+            ${{ env.HUNYUAN15_FOURWAY_OUT }}/*/result.json

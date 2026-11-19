@@ -201,7 +201,7 @@ def generate(mode,res,model_type,checkpoint,resolution,variant):
         raise RuntimeError("Did not exercise native FP16 model path")
     if "Hunyuan 1.5 experimental loader: unpacked 216 Comfy QKV tensors" not in log:
         raise RuntimeError("Hunyuan Comfy QKV adapter not exercised")
-    if "HUNYUAN15_VAE384_DEFAULT" in log != (variant=="default384"):
+    if ("HUNYUAN15_VAE384_DEFAULT" in log) != (variant=="default384"):
         raise RuntimeError("VAE 384 default/opt-out did not match requested variant")
     if (f"Loading Model '{checkpoint}'" not in log
         and str(find_checkpoint(checkpoint)) not in log):

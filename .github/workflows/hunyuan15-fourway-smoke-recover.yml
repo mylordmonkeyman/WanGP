@@ -1,0 +1,107 @@
+name: Recover Hunyuan 1.5 V100 four-model MP4s after runner interruption
+
+on:
+  push:
+    branches: [optimization/hunyuan15-v100-fp16]
+    paths: [.github/workflows/hunyuan15-fourway-smoke-recover.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Inspect persistent source and rescue every completed video without rerunning inference
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RECOVER_ACTIVE_PROCESSES"
+          ps -eo pid,etimes,args | grep -E '[R]unner.Worker|[w]gp.py' | head -30 || true
+          python3 -u - <<'PY' 2>&1 | tee hunyuan15-fourway-recovery.log
+          import json,shutil,subprocess
+          from pathlib import Path
+          root=Path("/cache/ltx25/results/hunyuan15-fourway-smoke-44425831072-attempt1")
+          out=Path("recovered-videos");out.mkdir(exist_ok=True)
+          logs=Path("recovered-logs");logs.mkdir(exist_ok=True)
+          summary={'source_run':44425831072,'root':str(root),'root_exists':root.is_dir(),
+                   'recovered':{},'missing':[],'invalid':{},'logs':[]}
+          if not root.is_dir():
+              print("HUNYUAN15_RECOVERY_SOURCE_MISSING "+str(root))
+          for mode in ('t2v','i2v'):
+              for res in ('480p','720p'):
+                  for variant in ('stock256','default384'):
+                      label=f'{mode}_{res}_{variant}'
+                      target=f'hunyuan15-{mode}-{res}-{variant}-fp16-lightx2v.mp4'
+                      paths=[root/'videos'/target]
+                      paths.extend(sorted((root/label/'videos').rglob('*.mp4'))
+                                   if (root/label/'videos').is_dir() else [])
+                      source=next((p for p in paths if p.is_file() and p.stat().st_size>1024),None)
+                      if source is None:
+                          summary['missing'].append(label)
+                          print('HUNYUAN15_RECOVER_MISSING '+label)
+                      else:
+                          copy=out/target
+                          shutil.copy2(source,copy)
+                          probe=subprocess.run(['ffprobe','-v','error','-select_streams','v:0',
+                                '-count_frames','-show_entries','stream=width,height,nb_read_frames,codec_name',
+                                '-of','json',str(copy)],capture_output=True,text=True,timeout=180)
+                          try:
+                              stream=json.loads(probe.stdout)['streams'][0]
+                              expected=(832,480) if res=='480p' else (1280,720)
+                              passed=probe.returncode==0 and (stream['width'],stream['height'])==expected and int(stream.get('nb_read_frames','0'))==33
+                          except Exception:
+                              passed=False
+                              stream={'stdout':probe.stdout[-250:],'stderr':probe.stderr[-250:]}
+                          info={'source':str(source),'bytes':copy.stat().st_size,
+                                'video':str(copy),'stream':stream,'valid':passed}
+                          summary['recovered'][label]=info
+                          print('HUNYUAN15_RECOVERED '+json.dumps({'label':label,**info}),flush=True)
+                          if not passed:
+                              summary['invalid'][label]='FFprobe did not decode 33 frames at expected resolution'
+                      base=root/label
+                      for file in ('generation.log','settings.json','result.json'):
+                          candidate=base/file
+                          if candidate.is_file():
+                              destination=logs/label
+                              destination.mkdir(parents=True,exist_ok=True)
+                              shutil.copy2(candidate,destination/file)
+                              summary['logs'].append(str(candidate))
+          if (root/'summary.json').is_file():
+              shutil.copy2(root/'summary.json',logs/'original-summary.json')
+          Path('recovery-summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+          print('HUNYUAN15_FOURWAY_RECOVERY_REPORT '+json.dumps({
+              'success_count':sum(x['valid'] for x in summary['recovered'].values()),
+              'recovered':sorted(summary['recovered']),
+              'missing':summary['missing'],'invalid':summary['invalid'],
+              'root_exists':summary['root_exists']}),flush=True)
+          PY
+      - name: Upload recovered completed MP4s in one ZIP
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-fourway-recovered-all-videos
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: recovered-videos/*.mp4
+      - name: Upload diagnostics including per-case log files and summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-fourway-recovery-logs
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            hunyuan15-fourway-recovery.log
+            recovery-summary.json
+            recovered-logs/**

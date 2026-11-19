@@ -6,7 +6,20 @@ For the fork's **native-FP16 Hunyuan 1.5 T2V/I2V variants**, the high-memory **A
 
 **Disable this optimization:** start WanGP with `--no-hunyuan15-vae-384`. For example: `python wgp.py --fp16 --no-hunyuan15-vae-384`. By default `--hunyuan15-vae-384` is enabled. CLI flags take effect when the WanGP process starts; restart to change them. P3C's explicit benchmarking override remains independent, so its 256px reference arm is still 256px.
 
-**Validation:** 832×480, 33-frame native-FP16 T2V with MMGP profile 1, 4-step LoRA, four A/B/B/A sessions (20 hot runs): median E2E 33.964s (256px) vs 33.269s (384px), **2.05% faster**, minimum H.264 PSNR 48.02 dB and SSIM 0.9926; at least 21.7 GiB device VRAM free. See [balanced benchmark](https://github.com/mylordmonkeyman/WanGP/actions/runs/44336009502). Longer T2V, I2V, and perceptual VAE seam quality have not yet been separately validated; use the opt-out if these workloads show artifacts or memory pressure.
+**Validation:** 832×480, 33-frame native-FP16 T2V with MMGP profile 1, 4-step LoRA, four A/B/B/A sessions (20 hot runs): median E2E 33.964s (256px) vs 33.269s (384px), **2.05% faster**, minimum H.264 PSNR 48.02 dB and SSIM 0.9926; at least 21.7 GiB device VRAM free. See [balanced benchmark](https://github.com/mylordmonkeyman/WanGP/actions/runs/44336009502). Longer 97-/241-frame generation and direct perceptual seam inspection have **not** yet been validated.
+
+**Four-model smoke (2026-11-18):** Native FP16 checkpoints, the same converted LightX2V 4-step rank-32 LoRA, 33 frames, MMGP profile 1, and 256px versus default 384px VAE. All eight output MP4s are verified in the [complete eight-video artifact](https://github.com/mylordmonkeyman/WanGP/actions/runs/44431043551) (the initial seven were recovered from [the interrupted run](https://github.com/mylordmonkeyman/WanGP/actions/runs/44429583104)). Comparisons are H.264-to-H.264 PSNR/SSIM, not independent perceptual scoring:
+
+| Test | Output size | 256px vs. 384px PSNR / SSIM | Interpretation |
+| --- | --- | --- | --- |
+| T2V 480p | 832×480 | 48.02 dB / 0.9926 | Close output parity |
+| T2V 720p | 1280×720 | 47.89 dB / 0.9929 | Close output parity |
+| I2V 480p | 848×480 (WanGP auto-adjusted) | **31.81 dB / 0.9792** | Large divergence toward later frames |
+| I2V 720p | 1280×720 | **35.66 dB / 0.9807** | Larger divergence than T2V |
+
+**I2V caveat:** For Hunyuan 1.5, WanGP sets the VAE tile size *before* encoding the start image and later decoding the video. Thus the 384px setting changes I2V conditioning, not merely decoding performance. Its impact has **not** passed the T2V output-parity threshold. Until a decoder-only tiling strategy is tested, use `--no-hunyuan15-vae-384` for I2V where fidelity to the original VAE output matters. The default remains opt-out-enabled in the optimization branch as requested; it has **not** been merged to `main`.
+
+**Runner interruption:** The initial eight-case matrix was interrupted by an abrupt Ubuntu host reboot at 2026-11-19 00:18 UTC, during the last 720p I2V 384px decode. Previous-boot logs did not report kernel panic, host OOM, or NVIDIA Xid. A guarded one-case retry [passed](https://github.com/mylordmonkeyman/WanGP/actions/runs/44431043551) with host GPU peaks 69°C, 288.84 W, 19.63 GiB VRAM used. The reboot cause remains unknown.
 
 ## This fork: LTX-2.5 acceleration on NVIDIA V100 (SM70)
 

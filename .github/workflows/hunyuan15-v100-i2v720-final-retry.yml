@@ -1,0 +1,103 @@
+name: Hunyuan 1.5 V100 final I2V 720p 384px monitored retry and all-eight MP4 archive
+
+on:
+  push:
+    branches: [optimization/hunyuan15-v100-fp16]
+    paths: [.github/workflow-triggers/hunyuan15-final-i2v720-retry.txt]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  cpu-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Check one-case retry scope and Python imports without touching GPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = optimization/hunyuan15-v100-fp16
+          python3 -m py_compile benchmarks/hunyuan15_fp16/v100_i2v720_final_monitored_retry.py \
+            benchmarks/hunyuan15_fp16/v100_fourway_vae384_smoke.py \
+            wgp.py shared/hunyuan15_vae384_default.py
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0,'benchmarks/hunyuan15_fp16')
+          from v100_i2v720_final_monitored_retry import CASE, inspect_video
+          assert CASE[:2] == ('i2v','720p')
+          assert CASE[2] == 'hunyuan15_v100_i2v_720_fp16_experiment'
+          assert CASE[3] == 'hunyuanvideo1.5_720p_i2v_fp16.safetensors'
+          print('HUNYUAN15_FINAL_ONE_CASE_CPU_GATE_PASS')
+          PY
+
+  gpu-one-case:
+    needs: cpu-gate
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 60
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+      HUNYUAN15_FOURWAY_OUT: /cache/ltx25/results/hunyuan15-final-i2v720-${{ github.run_id }}-attempt${{ github.run_attempt }}
+      PYTHONPATH: benchmarks/hunyuan15_fp16
+      GRADIO_ANALYTICS_ENABLED: 'False'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      HF_DATASETS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify recovered MP4s and GPU free memory before single-case trial
+        shell: bash
+        run: |
+          set -euo pipefail
+          nvidia-smi -L
+          nvidia-smi --query-gpu=memory.free,temperature.gpu,power.draw --format=csv,noheader
+          df -h /cache/ltx25/results
+          test -s /cache/ltx25/results/hunyuan15-fourway-fp16-checkpoints/hunyuanvideo1.5_720p_i2v_fp16.safetensors
+          test -s /cache/ltx25/results/hunyuan15-fourway-smoke-44425831072-attempt1/videos/hunyuan15-i2v-720p-stock256-fp16-lightx2v.mp4
+          test -s /cache/ltx25/results/hunyuan15-converted-lora-43951751237-attempt1/converted_loras/hunyuan15_t2v_lightx2v4_rank32_wangp_qkv_split_bf16.safetensors
+          "$HUNYUAN15_PYTHON" - <<'PY'
+          import subprocess
+          out=subprocess.check_output(['nvidia-smi','--query-gpu=memory.free',
+                 '--format=csv,noheader,nounits'],text=True).splitlines()
+          if not out or int(out[0].strip())<28000:
+              raise RuntimeError('Insufficient free VRAM for isolated 720p retry: '+repr(out))
+          print('HUNYUAN15_720P_RETRY_GPU_VRAM_PREFLIGHT_PASS',out[0])
+          PY
+      - name: Recover ONLY final I2V 720p 384px video with persistent GPU and RAM monitoring
+        shell: bash
+        run: |
+          set -o pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/v100_i2v720_final_monitored_retry.py \
+            2>&1 | tee hunyuan15-i2v720-final-retry.log
+          grep -Fq HUNYUAN15_EIGHT_MP4S_VERIFIED hunyuan15-i2v720-final-retry.log
+      - name: Upload all eight completed comparison videos in one ZIP
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-480-720-t2v-i2v-vae256-384-all-eight-videos
+          retention-days: 21
+          compression-level: 0
+          if-no-files-found: warn
+          path: ${{ env.HUNYUAN15_FOURWAY_OUT }}/all-eight-videos/*.mp4
+      - name: Preserve persistent GPU power and temperature monitor, one-case log and final quality report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-final-i2v720-384px-gpu-monitor-and-quality
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            hunyuan15-i2v720-final-retry.log
+            ${{ env.HUNYUAN15_FOURWAY_OUT }}/host-monitor.csv
+            ${{ env.HUNYUAN15_FOURWAY_OUT }}/recovery-final-summary.json
+            ${{ env.HUNYUAN15_FOURWAY_OUT }}/i2v_720p_default384/generation.log

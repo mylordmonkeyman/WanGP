@@ -1,0 +1,68 @@
+name: Hunyuan 1.5 V100 P5 exact-shape SDPA layout screen
+
+on:
+  push:
+    branches: [optimization/hunyuan15-v100-fp16]
+    paths: [.github/workflow-triggers/hunyuan15-p5-attention-layout-run.txt]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v100-serialized-optimization-experiments
+  cancel-in-progress: false
+
+jobs:
+  cpu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: P5 safe scope and syntax
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = optimization/hunyuan15-v100-fp16
+          python3 -m py_compile benchmarks/hunyuan15_fp16/p5_attention_layout_microbench.py
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'benchmarks/hunyuan15_fp16')
+          import p5_attention_layout_microbench as b
+          assert b.SHAPES[0][0] == 14159
+          assert b.HEADS == 16 and b.DIM == 128
+          print("P5_EXACT_TRACE_SHAPE_CPU_GATE_PASS")
+          PY
+
+  v100:
+    needs: cpu
+    runs-on: [self-hosted, linux, x64, v100, sm70, ltx25]
+    timeout-minutes: 25
+    env:
+      HUNYUAN15_PYTHON: /opt/venvs/ltx25-cu128/bin/python
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify V100 and do not affect other GPU runs
+        run: |
+          set -euo pipefail
+          nvidia-smi -L
+          nvidia-smi --query-compute-apps=pid,used_gpu_memory --format=csv,noheader
+      - name: Run exact-shape SDPA layout and available xFormers comparisons
+        run: |
+          set -o pipefail
+          "$HUNYUAN15_PYTHON" -u benchmarks/hunyuan15_fp16/p5_attention_layout_microbench.py \
+            --output p5-attention-layout-report.json --include-720-estimate \
+            2>&1 | tee p5-attention-layout.log
+      - name: Preserve microbench logs and report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hunyuan15-p5-attention-layout-results
+          retention-days: 21
+          if-no-files-found: warn
+          path: |
+            p5-attention-layout.log
+            p5-attention-layout-report.json

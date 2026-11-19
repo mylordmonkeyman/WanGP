@@ -24,8 +24,9 @@ import v100_bar_video_smoke as base
 ROOT = base.ROOT
 CACHE = base.CACHE
 PYTHON = base.PYTHON
-OUT = Path(os.environ.get("HUNYUAN15_FOURWAY_OUT", str(CACHE / "results" / "hunyuan15-fourway-smoke-" +
-    os.environ.get("GITHUB_RUN_ID", "manual") + "-attempt" + os.environ.get("GITHUB_RUN_ATTEMPT", "1"))))
+OUT = Path(os.environ.get("HUNYUAN15_FOURWAY_OUT",
+    str(CACHE / "results" / ("hunyuan15-fourway-smoke-" +
+    os.environ.get("GITHUB_RUN_ID", "manual") + "-attempt" + os.environ.get("GITHUB_RUN_ATTEMPT", "1")))))
 STAGED = CACHE / "results" / "hunyuan15-fourway-fp16-checkpoints"
 CACHED = base.WRITABLE_CHECKPOINTS
 LORA = (CACHE / "results" / "hunyuan15-converted-lora-43951751237-attempt1" /
